@@ -178,3 +178,51 @@ main {
 footer {
     flex-shrink: 0; /* Asegura que el footer no se comprima */
 }
+
+/* --- Paginación de clientes (añadido para la tabla de clientes.html) --- */
+/* El texto de estado de la paginación no debe encogerse ni romper el layout
+   cuando cambia el número de página. */
+#info-pagina {
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+/* Aspecto atenuado y cursor claro cuando un botón de paginación no aplica
+   (primera o última página). El estado disabled lo pone clientes.js. */
+.btn-outline-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* --- Buscador de clientes (solo interfaz; la lógica la hará otro compañero) ---
+   Campo redondeado, borde fino y una lupa gris dentro, a la izquierda, imitando
+   el diseño de Figma. */
+.buscador-clientes {
+    position: relative;
+}
+.buscador-clientes .buscador-icono {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    transform: translateY(-50%);
+    color: #9ca3af;          /* gris del icono */
+    pointer-events: none;    /* que no estorbe al hacer clic en el campo */
+}
+.buscador-clientes .buscador-input {
+    width: 100%;
+    padding: 0.85rem 1rem 0.85rem 2.75rem;  /* hueco a la izquierda para la lupa */
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 1rem;
+    color: var(--text-main);
+    background-color: var(--white);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.buscador-clientes .buscador-input::placeholder {
+    color: #9ca3af;          /* placeholder gris, como en la imagen */
+}
+.buscador-clientes .buscador-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+}

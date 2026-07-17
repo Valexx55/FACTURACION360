@@ -222,16 +222,3 @@ puede cambiar desde fuera. Con `@RequestParam` ese valor llega por la URL.
   `?limite=25` da 25). El valor se **acota a 1–100** para que nadie pida `?limite=999999` y sature
   la BD. *(Alternativa más "REST": `@Validated` + `@Min/@Max` devolviendo `400`, pero necesita el
   manejador de errores del TODO B; por eso de momento acotamos.)*
-
-### E. ¿Rate limiting / filters? — decisión: por ahora **NO** (documentado a propósito)
-**Concepto**: un **filter** es una "aduana" por la que pasa **toda** petición antes de llegar al
-controller; sirve para cosas transversales (logging, medir tiempos, CORS, autenticación). El
-**rate limiting** es un caso concreto: contar peticiones por IP/usuario y **cortar** (devolver
-`429 Too Many Requests`) si se pasan de un límite, para frenar abusos o ataques de denegación (DoS).
-- **Cómo (si hiciera falta)**: un `OncePerRequestFilter` + una librería como **Bucket4j** que
-  lleva la cuenta por IP.
-- **Por qué NO ahora**: es un proyecto **interno de clase**, **no una API pública** en Internet,
-  así que no hay abuso del que defenderse → sería **complejidad sin beneficio** (principio *YAGNI*:
-  "no lo implementes hasta que de verdad haga falta").
-- **Cuándo SÍ**: si la API se publicara o la usaran terceros. Un filter **solo de logging/tiempos**
-  sí podría añadirse ya como "nice to have", pero tampoco es imprescindible.

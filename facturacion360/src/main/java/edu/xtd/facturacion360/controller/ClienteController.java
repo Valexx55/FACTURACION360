@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 
 /**
  * En esta claes, recibimos las peticiones HTTP relativas a los clientes
+ * y le devolvemos su correspondiente respuesta
  * 
  * MÉTODO HTTP - OPERACIÓN LÓGICA - OPERACIÓN SQL
  * 

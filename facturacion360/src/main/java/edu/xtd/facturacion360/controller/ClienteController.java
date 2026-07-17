@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteRequest;
 import edu.xtd.facturacion360.dto.ClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
@@ -38,15 +40,28 @@ import jakarta.validation.Valid;
 @RequestMapping("/cliente")
 public class ClienteController {
 
+	// Cuántos clientes devuelve "listar-ultimos" (los 10 más recientes).
+	private static final int LIMITE_ULTIMOS = 10;
+
 	@Autowired
 	ClienteService clienteService;
+
+	@Autowired
+	ClienteMapper clienteMapper;
 
 	@GetMapping("/listar-ultimos")
 	public ResponseEntity<List<ClienteResponse>> listarUltimos() {
 
-		ResponseEntity<List<ClienteResponse>> respuesta = null;
+		// 1) Pedimos al service los últimos clientes (objetos de dominio).
+		List<Cliente> ultimos = clienteService.listarUltimos(LIMITE_ULTIMOS);
 
-		return respuesta;
+		// 2) Los traducimos a ClienteResponse (lo que ve el navegador).
+		List<ClienteResponse> respuesta = ultimos.stream()
+				.map(clienteMapper::toResponse)
+				.toList();
+
+		// 3) 200 OK con la lista en el cuerpo.
+		return ResponseEntity.ok(respuesta);
 	}
 
 	@GetMapping("/{id}")

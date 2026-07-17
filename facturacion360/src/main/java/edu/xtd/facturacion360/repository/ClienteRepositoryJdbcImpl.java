@@ -22,8 +22,12 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository{
 
 	@Override
 	public List<Cliente> findUltimos(int limite) {
-		// TODO Auto-generated method stub
-		return null;
+		// Los 'limite' clientes dados de alta más recientemente: id más alto primero.
+		// El troceado (LIMIT) lo hace MySQL, no Java. El '?' evita inyección SQL.
+		String sql = "SELECT id_cliente, nombre_razon_social, nif_cif, direccion, codigo_postal, "
+				+ "poblacion, provincia, telefono, email, fecha_alta "
+				+ "FROM cliente ORDER BY id_cliente DESC LIMIT ?";
+		return jdbcTemplate.query(sql, clienteRowMapper, limite);
 	}
 
 	@Override

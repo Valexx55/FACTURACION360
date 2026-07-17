@@ -1,10 +1,18 @@
 # Clientes: acceso a datos — JPA vs SQL manual
 
-> Documento para decidir con el profesor **cómo accedemos a la base de datos** en la
-> parte de clientes (listar los 10 últimos + paginación). Ahora mismo funciona con
-> **Spring Data JPA + H2**, pero como en clase estamos aprendiendo **SQL**, planteamos
-> si conviene escribir el SQL a mano. Aquí está la comparación y **exactamente qué
-> habría que cambiar** en cada caso.
+> ✅ **DECISIÓN FINAL (ya implementada): JDBC Template + MySQL**, siguiendo la estructura
+> por capas que subió el profe a `master` (paquetes `controller / dto / repository /
+> service`, con interfaz + Impl). Se **descartó JPA/H2**. Mi parte implementada es
+> `GET /cliente/listar-ultimos` (los 10 últimos, **sin paginación**, siguiendo su diseño).
+> Para levantar la BD en tu PC, ejecuta `facturacion360/src/main/resources/docu/bd_facturacion.sql`.
+>
+> ⚠️ Incoherencia detectada en los materiales del profe: el `ESQUEMA ER.png` usa
+> `nombre_razon_social` y `pais`, pero el record `Cliente` usa `nombre` y no tiene `pais`.
+> Reconciliado en `ClienteRowMapper` (mapea `nombre_razon_social → nombre`, ignora `pais`).
+> Conviene comentarlo con el profe para unificarlo.
+>
+> El resto del documento es el **análisis didáctico** que llevó a esta decisión (JPA vs SQL
+> manual) y sigue siendo útil para entender los conceptos.
 
 ---
 

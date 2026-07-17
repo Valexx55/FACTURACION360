@@ -179,21 +179,6 @@ footer {
     flex-shrink: 0; /* Asegura que el footer no se comprima */
 }
 
-/* --- Paginación de clientes (añadido para la tabla de clientes.html) --- */
-/* El texto de estado de la paginación no debe encogerse ni romper el layout
-   cuando cambia el número de página. */
-#info-pagina {
-    font-size: 0.95rem;
-    white-space: nowrap;
-}
-
-/* Aspecto atenuado y cursor claro cuando un botón de paginación no aplica
-   (primera o última página). El estado disabled lo pone clientes.js. */
-.btn-outline-secondary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
 /* --- Buscador de clientes (solo interfaz; la lógica la hará otro compañero) ---
    Campo redondeado, borde fino y una lupa gris dentro, a la izquierda, imitando
    el diseño de Figma. */

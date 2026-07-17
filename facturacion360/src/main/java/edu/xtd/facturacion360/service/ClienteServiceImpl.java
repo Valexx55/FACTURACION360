@@ -16,8 +16,8 @@ public class ClienteServiceImpl implements ClienteService{
 
 	@Override
 	public List<Cliente> listarUltimos(int limite) {
-		// TODO Auto-generated method stub
-		return null;
+		// La regla de negocio ("los últimos N") delega en el repositorio.
+		return clienteRepository.findUltimos(limite);
 	}
 
 	@Override

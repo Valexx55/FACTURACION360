@@ -1,55 +1,38 @@
 /*
  * clientes.js
  * -----------
- * Rellena la tabla de clientes con datos que pide al backend por fetch y
- * gestiona la paginación (de 10 en 10).
+ * Pide al backend los últimos clientes y los pinta en la tabla.
  *
- * Arquitectura (por qué está organizado así):
- *  - UNA función de datos (cargarClientes) que pide una página al API.
- *  - Funciones de pintado (pintarFilas, pintarPaginacion) que SOLO tocan el DOM
- *    a partir de lo recibido. Separar "pedir" de "pintar" hace el código fácil
- *    de seguir y de depurar.
- *  - El único estado que guardamos entre clics es la página actual; el backend
- *    ya nos manda el resto de metadatos (total de páginas, si hay anterior...).
- *  - Usamos el <template> del HTML como molde: clonarlo es más rápido y seguro
- *    que construir <tr> concatenando cadenas.
+ * Endpoint (arquitectura del profe, con JDBC): GET /cliente/listar-ultimos
+ * Devuelve una LISTA simple de ClienteResponse (sin paginación):
+ *   { idCliente, nombre, nifCif, direccion, codigoPostal, poblacion,
+ *     provincia, telefono, email, fechaAlta }
+ *
+ * Idea: separar "pedir" (cargarClientes) de "pintar" (pintarFilas). Usamos el
+ * <template> del HTML como molde y textContent (no innerHTML) para que un nombre
+ * con < o & no pueda inyectar HTML.
  */
 
-// Ruta relativa: al servir el HTML desde el propio Spring Boot, "/api/clientes"
-// apunta al mismo origen y no hay problemas de CORS.
-const API_CLIENTES = "/api/clientes";
-const TAMANO_PAGINA = 10;
+// Ruta relativa: el HTML lo sirve el propio Spring Boot, así que apunta al mismo
+// origen y no hay problemas de CORS.
+const API_LISTAR_ULTIMOS = "/cliente/listar-ultimos";
 
-// Guardamos una sola vez las referencias del DOM que usamos repetidamente.
+// Referencias del DOM que usamos.
 const cuerpoTabla = document.getElementById("tabla-clientes");
 const plantillaFila = document.getElementById("fila-cliente-template");
-const btnRecientes = document.getElementById("btn-recientes");
-const btnAntiguos = document.getElementById("btn-antiguos");
-const infoPagina = document.getElementById("info-pagina");
 
-// Único estado que necesitamos mantener entre pulsaciones de botón.
-let paginaActual = 0;
-
-/**
- * Pide una página de clientes al backend y dispara el repintado.
- * @param {number} pagina índice de página (0 = los 10 más recientes)
- */
-async function cargarClientes(pagina) {
+/** Pide los últimos clientes al backend y dispara el repintado. */
+async function cargarClientes() {
     try {
-        const respuesta = await fetch(
-            `${API_CLIENTES}?pagina=${pagina}&tamano=${TAMANO_PAGINA}`
-        );
+        const respuesta = await fetch(API_LISTAR_ULTIMOS);
 
         // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
         if (!respuesta.ok) {
             throw new Error(`El servidor respondió ${respuesta.status}`);
         }
 
-        const datos = await respuesta.json();
-
-        paginaActual = datos.paginaActual;
-        pintarFilas(datos.contenido);
-        pintarPaginacion(datos);
+        const clientes = await respuesta.json(); // es una lista (array)
+        pintarFilas(clientes);
     } catch (error) {
         mostrarError(error);
     }
@@ -57,12 +40,12 @@ async function cargarClientes(pagina) {
 
 /**
  * Vacía el <tbody> y lo rellena clonando el <template> por cada cliente.
- * @param {Array<Object>} clientes DTOs {id, nombre, cif, email, telefono}
+ * @param {Array<Object>} clientes lista de ClienteResponse
  */
 function pintarFilas(clientes) {
     cuerpoTabla.replaceChildren(); // limpia la tabla sin usar innerHTML
 
-    if (clientes.length === 0) {
+    if (!Array.isArray(clientes) || clientes.length === 0) {
         mostrarMensaje("No hay clientes que mostrar.");
         return;
     }
@@ -71,33 +54,17 @@ function pintarFilas(clientes) {
         // Clonamos el contenido del template (un <tr> completo con sus <td>).
         const fila = plantillaFila.content.cloneNode(true);
 
-        // textContent (y no innerHTML): el navegador escapa el texto, de modo
-        // que un nombre con < o & no puede romper la página ni inyectar HTML.
+        // textContent escapa el texto: seguro frente a nombres con < o &.
         fila.querySelector(".cliente-nombre").textContent = cliente.nombre;
-        fila.querySelector(".cliente-cif").textContent = cliente.cif;
+        fila.querySelector(".cliente-cif").textContent = cliente.nifCif;
         fila.querySelector(".cliente-email").textContent = cliente.email;
         fila.querySelector(".cliente-telefono").textContent = cliente.telefono;
 
         // Guardamos el id en la fila por si los botones de acción lo necesitan.
-        fila.querySelector("tr").dataset.clienteId = cliente.id;
+        fila.querySelector("tr").dataset.clienteId = cliente.idCliente;
 
         cuerpoTabla.appendChild(fila);
     }
-}
-
-/**
- * Ajusta los botones y el texto de estado según los metadatos de la página.
- * @param {Object} datos PaginaClientesDTO recibido del backend
- */
-function pintarPaginacion(datos) {
-    // "Más recientes" lleva a la página anterior (índice menor) y "Más antiguos"
-    // a la siguiente. El backend nos dice si cada una existe.
-    btnRecientes.disabled = !datos.hayAnterior;
-    btnAntiguos.disabled = !datos.haySiguiente;
-
-    const numeroHumano = datos.paginaActual + 1; // las personas cuentan desde 1
-    infoPagina.textContent =
-        `Página ${numeroHumano} de ${datos.totalPaginas} · ${datos.totalElementos} clientes`;
 }
 
 /** Pinta una fila que ocupa toda la tabla con un mensaje informativo. */
@@ -116,13 +83,7 @@ function mostrarMensaje(texto) {
 function mostrarError(error) {
     console.error("No se pudieron cargar los clientes:", error);
     mostrarMensaje("No se pudieron cargar los clientes. Inténtalo de nuevo.");
-    btnRecientes.disabled = true;
-    btnAntiguos.disabled = true;
 }
 
-// --- Enlazado de eventos ---
-btnRecientes.addEventListener("click", () => cargarClientes(paginaActual - 1));
-btnAntiguos.addEventListener("click", () => cargarClientes(paginaActual + 1));
-
-// Primera carga: los 10 clientes más recientes.
-cargarClientes(0);
+// Carga inicial: los últimos clientes.
+cargarClientes();

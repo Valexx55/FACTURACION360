@@ -71,19 +71,6 @@
             </table>
         </div>
 
-        <!-- Paginación: clientes.js activa/desactiva los botones según la página.
-             aria-live="polite" hace que un lector de pantalla anuncie el cambio. -->
-        <nav aria-label="Paginación de clientes"
-             class="d-flex justify-content-between align-items-center mt-3">
-            <button id="btn-recientes" type="button" class="btn btn-outline-secondary" disabled>
-                <i class="fa-solid fa-chevron-left"></i> Más recientes
-            </button>
-            <span id="info-pagina" class="text-muted" aria-live="polite"></span>
-            <button id="btn-antiguos" type="button" class="btn btn-outline-secondary">
-                Más antiguos <i class="fa-solid fa-chevron-right"></i>
-            </button>
-        </nav>
-
         <!-- Plantilla oculta: su contenido NO se renderiza hasta que JS lo clona.
              Puede vivir en cualquier punto del documento; lo dejamos junto a la
              tabla que rellena para que se lea a la vez. -->

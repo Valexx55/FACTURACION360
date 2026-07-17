@@ -1,0 +1,33 @@
+HISTORIAL COMANDOS GIT
+
+operación: volver a la versión ec5f0f5
+con la última instrucción subimos los cambios y borramos los commits
+posteriores en el repositorio remoto (origin)
+
+git checkout master
+git fetch origin
+git reset --hard ec5f0f5
+git push --force-with-lease origin master
+
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/
+
+para borrar ficheros que no queremos seguir y actualizar el .gitignore
+
+1) editar el gitnore, añadiendo lo que no queremos que siga (.vscode/ y .project)
+sacamos del control del versiones a estos ficheros
+
+git rm -r --cached .vscode
+git rm -r --cached .project
+
+y actualizamos
+
+git add .
+git commit -m "Actualziar gitignore"
+git push origin master
+
+
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/
+*/*/*//*/*/*/*/*/*/*/*/*/*/*/*//*/*/*/*/*/*/*/*/*/

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import edu.xtd.facturacion360.dto.Cliente;
@@ -40,8 +41,9 @@ import jakarta.validation.Valid;
 @RequestMapping("/cliente")
 public class ClienteController {
 
-	// Cuántos clientes devuelve "listar-ultimos" (los 10 más recientes).
-	private static final int LIMITE_ULTIMOS = 10;
+	// Límites permitidos para el parámetro 'limite' (evita que pidan una barbaridad).
+	private static final int LIMITE_MIN = 1;
+	private static final int LIMITE_MAX = 100;
 
 	@Autowired
 	ClienteService clienteService;
@@ -50,10 +52,15 @@ public class ClienteController {
 	ClienteMapper clienteMapper;
 
 	@GetMapping("/listar-ultimos")
-	public ResponseEntity<List<ClienteResponse>> listarUltimos() {
+	public ResponseEntity<List<ClienteResponse>> listarUltimos(
+			@RequestParam(defaultValue = "10") int limite) {
+
+		// 0) Validación: acotamos el valor pedido a [1, 100] para no saturar la BD
+		//    (si no mandan 'limite', llega 10 por el defaultValue).
+		int limiteSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, limite));
 
 		// 1) Pedimos al service los últimos clientes (objetos de dominio).
-		List<Cliente> ultimos = clienteService.listarUltimos(LIMITE_ULTIMOS);
+		List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
 
 		// 2) Los traducimos a ClienteResponse (lo que ve el navegador).
 		List<ClienteResponse> respuesta = ultimos.stream()

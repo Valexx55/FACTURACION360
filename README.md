@@ -206,20 +206,22 @@ controller sin BD).
 - **Por qué es relevante**: detectan roturas al cambiar código, **documentan** el comportamiento
   esperado y aíslan cada capa. Dan confianza (y nota).
 
-### D. `limite` como `@RequestParam` (quitar el "número mágico")
+### D. `limite` como `@RequestParam` (quitar el "número mágico") — ✅ IMPLEMENTADO
 **Concepto**: un "número mágico" es un valor fijo escrito en el código (aquí, el `10`) que no se
 puede cambiar desde fuera. Con `@RequestParam` ese valor llega por la URL.
-- **Cómo**:
+- **Cómo (ya hecho en `ClienteController.listarUltimos`)**:
   ```java
   @GetMapping("/listar-ultimos")
   public ResponseEntity<List<ClienteResponse>> listarUltimos(
           @RequestParam(defaultValue = "10") int limite) {
-      // ... clienteService.listarUltimos(limite) ...
+      int limiteSeguro = Math.max(1, Math.min(100, limite)); // acotado a [1, 100]
+      // ... clienteService.listarUltimos(limiteSeguro) ...
   }
   ```
 - **Por qué es relevante**: **flexibilidad sin romper nada** (`/listar-ultimos` sigue dando 10;
-  `?limite=25` da 25). Conviene **validar** el rango (p. ej. 1–100) para que nadie pida
-  `?limite=999999` y sature la BD.
+  `?limite=25` da 25). El valor se **acota a 1–100** para que nadie pida `?limite=999999` y sature
+  la BD. *(Alternativa más "REST": `@Validated` + `@Min/@Max` devolviendo `400`, pero necesita el
+  manejador de errores del TODO B; por eso de momento acotamos.)*
 
 ### E. ¿Rate limiting / filters? — decisión: por ahora **NO** (documentado a propósito)
 **Concepto**: un **filter** es una "aduana" por la que pasa **toda** petición antes de llegar al

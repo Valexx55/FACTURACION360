@@ -121,4 +121,18 @@ document.querySelectorAll('.btn-eliminar').forEach(boton => {
   });
 });
 
+// Buscamos el botón "Añadir Cliente"
+const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
+
+botonAnadirCliente.addEventListener('click', () => {
+  console.log('Hiciste clic en Añadir Cliente');
+  
+  // Limpiamos el formulario dentro del modal
+  const formularioCliente = document.querySelector('#clienteModal form');
+  if (formularioCliente) {
+    formularioCliente.reset();
+  }
+});
+;
+
 

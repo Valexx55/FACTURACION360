@@ -87,3 +87,38 @@ function mostrarError(error) {
 
 // Carga inicial: los últimos clientes.
 cargarClientes();
+
+
+// 1. Botón VER
+document.querySelectorAll('.btn-ver').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id; 
+    
+    console.log('Ver cliente:', idCliente);
+    // Aquí ejecutas tu función, p. ej.: abrirModalVer(idCliente);
+  });
+});
+
+// 2. Botón EDITAR
+document.querySelectorAll('.btn-editar').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id;
+    
+    console.log('Editar cliente:', idCliente);
+    // Aquí ejecutas tu función, p. ej.: abrirModalEditar(idCliente);
+  });
+});
+
+// 3. Botón ELIMINAR
+document.querySelectorAll('.btn-eliminar').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id;
+    
+    if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
+      console.log('Eliminar cliente:', idCliente);
+      // Aquí ejecutas tu llamada API o función: eliminarCliente(idCliente);
+    }
+  });
+});
+
+

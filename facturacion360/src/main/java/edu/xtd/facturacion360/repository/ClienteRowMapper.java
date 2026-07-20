@@ -20,16 +20,14 @@ public class ClienteRowMapper implements RowMapper<Cliente>{
 	@Override
 	public Cliente mapRow(ResultSet rs, int rowNum) throws SQLException {
 		// Convertimos cada columna de la fila en un campo del record Cliente.
-		// OJO: en la tabla la columna se llama 'nombre_razon_social' (según el
-		// ESQUEMA ER) y aquí la volcamos en el campo 'nombre' del record.
-		// La columna 'pais' de la tabla no existe en el record, así que no se mapea.
+		
 		java.sql.Date fechaAlta = rs.getDate("fecha_alta");
 		return new Cliente(
 				rs.getInt("id_cliente"),
-				rs.getString("nombre_razon_social"),
+				rs.getString("nombre"),
 				rs.getString("nif_cif"),
 				rs.getString("direccion"),
-				rs.getString("codigo_postal"),
+				rs.getString("codigopostal"),
 				rs.getString("poblacion"),
 				rs.getString("provincia"),
 				rs.getString("telefono"),

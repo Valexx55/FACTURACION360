@@ -15,13 +15,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteRequest;
 import edu.xtd.facturacion360.dto.ClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
 /**
- * En esta claes, recibimos las peticiones HTTP relativas a los clientes
+ * En esta claes, recibimos las peticiones HTTP relativas ClienteServiceImpl.javaa los clientes
  * y le devolvemos su correspondiente respuesta
  * 
  * MÉTODO HTTP - OPERACIÓN LÓGICA - OPERACIÓN SQL
@@ -66,11 +67,48 @@ public class ClienteController {
 	}
 
 	@PutMapping("/{id}")
-	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
-			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {
-		ResponseEntity<ClienteResponse> respuesta = null;
+	public ResponseEntity<ClienteResponse> actualizar(
+	        @PathVariable int id,
+	        @Valid @RequestBody ClienteRequest clienteRequest,
+	        BindingResult bindingResult) {
 
-		return respuesta;
+	    if (bindingResult.hasErrors()) {
+	        return ResponseEntity.badRequest().build();
+	    }
+
+	    Cliente cliente = new Cliente(
+	            id,
+	            clienteRequest.nombre(),
+	            clienteRequest.nifCif(),
+	            clienteRequest.direccion(),
+	            clienteRequest.codigoPostal(),
+	            clienteRequest.poblacion(),
+	            clienteRequest.provincia(),
+	            clienteRequest.telefono(),
+	            clienteRequest.email(),
+	            null
+	    );
+
+	    Cliente actualizado = clienteService.actualizar(id, cliente);
+
+	    if (actualizado == null) {
+	        return ResponseEntity.notFound().build();
+	    }
+
+	    ClienteResponse response = new ClienteResponse(
+	            actualizado.idCliente(),
+	            actualizado.nombre(),
+	            actualizado.nifCif(),
+	            actualizado.direccion(),
+	            actualizado.codigoPostal(),
+	            actualizado.poblacion(),
+	            actualizado.provincia(),
+	            actualizado.telefono(),
+	            actualizado.email(),
+	            actualizado.fechaAlta()
+	    );
+
+	    return ResponseEntity.ok(response);
 	}
 	
 	

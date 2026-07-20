@@ -59,15 +59,13 @@ body {
     object-fit: contain;
 }
 
-/* Forzar a que el menú de enlaces se vaya completamente a la derecha */
+/* Forzar a que el menú de enlaces se vaya completamente a la derecha sin márgenes */
 .navbar-nav {
-    margin-left: auto; 
+    margin: 0; 
     display: flex;
     flex-direction: row;
     align-items: center;
     list-style: none;
-    margin-top: 0;
-    margin-bottom: 0;
     padding-left: 0;
 }
 
@@ -239,7 +237,7 @@ footer {
     }
     
     .navbar-nav {
-        margin-left: 0;
+        margin: 0;
         flex-direction: column;
         gap: 0.5rem;
     }

@@ -10,15 +10,14 @@ import org.springframework.stereotype.Repository;
 import edu.xtd.facturacion360.dto.Cliente;
 
 @Repository
-public class ClienteRepositoryJdbcImpl implements ClienteRepository{
-	
-	//con este objeto, accedemos a base de datos
+public class ClienteRepositoryJdbcImpl implements ClienteRepository {
+
+	// con este objeto, accedemos a base de datos
 	@Autowired
 	JdbcTemplate jdbcTemplate;
-	
+
 	@Autowired
 	ClienteRowMapper clienteRowMapper;
-
 
 	@Override
 	public List<Cliente> findUltimos(int limite) {
@@ -46,8 +45,15 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository{
 
 	@Override
 	public boolean deleteById(int id) {
-		// TODO Auto-generated method stub
-		return false;
+		boolean borrarOk = false;
+		String instruccionBorrar = "DELETE FROM clientes where idcliente = ?;";
+		
+			int filasborradas = jdbcTemplate.update(instruccionBorrar, id);
+			if (filasborradas == 1) {
+				borrarOk = true;
+			}
+
+		return borrarOk;
 	}
 
 }

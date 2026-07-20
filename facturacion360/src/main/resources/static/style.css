@@ -222,7 +222,73 @@ footer {
     flex-shrink: 0; /* Asegura que el footer no se comprima */
 }
 
+/* --- Buscador de clientes (solo interfaz; la lógica la hará otro compañero) ---
+   Campo redondeado, borde fino y una lupa gris dentro, a la izquierda, imitando
+   el diseño de Figma. */
+/* --- Buscador de clientes animado --- */
+.buscador-clientes {
+    position: relative;
+    width: 50px;  /* Tamaño inicial (solo el círculo de la lupa) */
+    height: 50px; /* Alto fijo para que sea un círculo perfecto */
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Transición suave */
+    /* margin: 0 auto; Si quieres que esté centrado al estar cerrado, descomenta esto */
+}
 
+/* Clase que añadiremos con JS para expandirlo */
+.buscador-clientes.expandido {
+    width: 100%; /* Puedes bajarlo a 90% si no quieres que ocupe absolutamente todo */
+    max-width: 800px; /* Límite para pantallas muy grandes */
+}
+
+.buscador-clientes .buscador-input {
+    width: 100%;
+    height: 100%;
+    padding: 0 1rem 0 3.2rem;  /* Hueco a la izquierda para la lupa */
+    border: 1px solid #cbd5e1;
+    border-radius: 25px; /* Forma de píldora para que se vea bien cerrado y abierto */
+    font-size: 1rem;
+    color: var(--text-main);
+    background-color: var(--white);
+    outline: none;
+    cursor: pointer; /* Cursor de mano cuando está cerrado */
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Ocultar el texto del placeholder cuando está cerrado para que no sobresalga */
+.buscador-clientes .buscador-input::placeholder {
+    color: transparent;
+    transition: color 0.2s ease;
+}
+
+/* Mostrar el placeholder cuando está abierto */
+.buscador-clientes.expandido .buscador-input::placeholder {
+    color: #9ca3af;
+    transition-delay: 0.15s; /* Pequeño retardo para que el texto aparezca tras abrirse */
+}
+
+/* Ajustes cuando está enfocado y abierto */
+.buscador-clientes.expandido .buscador-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+    cursor: text;
+}
+
+/* Icono (Lupa) */
+.buscador-clientes .buscador-icono {
+    position: absolute;
+    top: 50%;
+    left: 17px; /* Calculado para quedar justo en el centro del círculo de 50px */
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+/* Efecto: la lupa se vuelve del color primario al abrirse */
+.buscador-clientes.expandido .buscador-icono {
+    color: var(--primary-color);
+}
 /* ==========================================
    RESPONSIVE
    ========================================== */

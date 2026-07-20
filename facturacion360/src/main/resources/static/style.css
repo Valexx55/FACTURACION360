@@ -54,7 +54,7 @@ body {
 
 /* Control del tamaño de la imagen del logo */
 .navbar-brand .logo {
-    height: 150px; /* Ajusta la altura según lo necesites */
+    height: 60px; /* Ajusta la altura según lo necesites */
     width: auto;
     object-fit: contain;
 }

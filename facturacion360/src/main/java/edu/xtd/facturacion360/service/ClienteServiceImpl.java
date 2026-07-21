@@ -48,6 +48,8 @@ public class ClienteServiceImpl implements ClienteService{
 		// el flujo, map(clienteMapper::toResponse) transforma cada elemento (clienteMapper::toResponse
 		// es una referencia a método = la lambda c -> clienteMapper.toResponse(c)) y toList() recoge
 		// el resultado en una List nueva.
+		// Sin '::' sería map(c -> clienteMapper.toResponse(c)); y sin streams, un bucle for con add().
+		// Usamos '::'+streams por ser más corto y legible (a cambio de que hay que conocer streams).
 		List<ClienteResponse> contenido = clientes.stream().map(clienteMapper::toResponse).toList();
 
 		boolean hayAnterior  = pagina > 0;                   // hay anterior salvo en la página 0

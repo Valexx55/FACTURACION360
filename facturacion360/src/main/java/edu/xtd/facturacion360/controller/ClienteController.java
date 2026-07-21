@@ -88,6 +88,19 @@ public class ClienteController {
 			//      - clienteMapper::toResponse es una REFERENCIA A MÉTODO: atajo de la lambda
 			//        (cliente) -> clienteMapper.toResponse(cliente).
 			//      - toList():  recoge los resultados en una List<ClienteResponse> nueva.
+			//
+			//    Lo mismo SIN la referencia a método (::), con una lambda explícita:
+			//        ultimos.stream().map(cliente -> clienteMapper.toResponse(cliente)).toList();
+			//    Y SIN streams, con un bucle for de toda la vida:
+			//        List<ClienteResponse> respuesta = new ArrayList<>();
+			//        for (Cliente c : ultimos) { respuesta.add(clienteMapper.toResponse(c)); }
+			//
+			//    ¿Por qué preferimos '::' + streams?
+			//      + Más corto y legible: se lee casi como una frase ("convierte cada cliente a response").
+			//      + Menos código repetitivo: no hay que crear la lista ni llamar a add() en cada vuelta,
+			//        así que hay menos sitios donde equivocarse.
+			//      - Contras: si no conoces streams/lambdas cuesta más leerlo al principio, y depurar
+			//        "dentro" del map es algo menos directo que poner un breakpoint en un for.
 			List<ClienteResponse> respuesta = ultimos.stream()
 					.map(clienteMapper::toResponse)
 					.toList();

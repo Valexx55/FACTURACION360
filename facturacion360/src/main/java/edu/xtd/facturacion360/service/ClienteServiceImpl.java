@@ -40,8 +40,8 @@ public class ClienteServiceImpl implements ClienteService{
 
 	@Override
 	public void eliminar(int id) {
-		// TODO Auto-generated method stub
 		
+		this.clienteRepository.deleteById(id);
 	}
 	
 	//TODO: valorar la programación del método privado validarCifUnico mirar el Diagrama de Clases

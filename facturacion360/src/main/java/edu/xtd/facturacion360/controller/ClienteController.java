@@ -24,15 +24,13 @@ import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
 /**
- * En esta claes, recibimos las peticiones HTTP relativas a los clientes
- * y le devolvemos su correspondiente respuesta
+ * En esta claes, recibimos las peticiones HTTP relativas a los clientes y le
+ * devolvemos su correspondiente respuesta
  * 
  * MÉTODO HTTP - OPERACIÓN LÓGICA - OPERACIÓN SQL
  * 
- * GET - LEER - SELECT 
- * POST - CREAR - INSERT 
- * PUT - MODIFICAR - UPDATE 
- * DELETE - BORRAR - DELETE
+ * GET - LEER - SELECT POST - CREAR - INSERT PUT - MODIFICAR - UPDATE DELETE -
+ * BORRAR - DELETE
  * 
  * 
  */
@@ -94,24 +92,15 @@ public class ClienteController {
 
 		return respuesta;
 	}
-	
-	
+
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> eliminar(@PathVariable int id) {
 		ResponseEntity<Void> respuesta = null;
 
+		this.clienteService.eliminar(id);
+		respuesta = ResponseEntity.ok(null);
+
 		return respuesta;
 	}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 
 }

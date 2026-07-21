@@ -1,0 +1,72 @@
+PROTOCOLO GIT
+
+Vamos a trabajar con el flujo "Feature Branch" que consiste en que cada
+programador del equipo, hace sus mejoras en una rama local nueva, y cuando tenga
+los cambios, los sube para pedir su integración con Master (Pull Request)
+
+1)PARTIMOS DE LA ÚLITMA VERSIÓN
+
+git checkout master
+git pull --ff-only origin master
+
+2)CREAMOS NUESTRA RAMA DE MEJORA "FEAUTURE"
+
+git checkout -b <ramaDesarollo>
+
+3)VAMOS HACIENDO NUESTRO TRABAJO SOBRE ESA RAMA
+
+git add .
+git commit -m "Implementa el alta de clientes"
+
+HACER DEMO ANTES DE SUBIR LA RAMA
+
+4)CUANDO LA HEMOS PROBADO Y ESTÁ BIEN, LA SUBIMOS
+
+git push -u origin feature/alta-cliente
+
+5)EN GITHUB, NOS APARECERÁ LA PETICIÓN DE PULL REQUEST
+
+Se describe la PR con un título, se describen los cambios
+Se explica como testear la nueva funcionalidad
+Se asigna un revisor - Val siempre
+Se crea la Pull Request
+
+Y HASTA AQUÍ LA MISIÓN DEL DESARROLLADOR
+
+6) EL REVISOR, RECIBE UN AVISO Y ACTUALIZA SU REPO
+
+git fetch origin
+git checkout <rama>
+
+7) OPCIONALMENTE, AÑADE SUS CORRECCIONES
+
+git add .
+git commit -m <mensaje de corrección>PR
+git push -u origin <rama>
+
+8) ACTUALIZAMOS LOS CAMBIOS OCURRIDOS EN MASTER CON LA RAMA
+
+git fetch origin
+git merge origin/master
+
+y se resuelven concliftos se hubiera* (se pide documentar el cambio en un fichero, pero es de uso interno de git)
+
+git add .
+git commit -m "Resuelve conflictos con master"
+git push
+
+9) En github, finalmente, APROBAMOS con MERGE PULL REQUEST
+
+lo que deja una secuencia de los cambios en cada rama hasta su integración
+
+10) Opcional, podría ir borrando las ramas feature tanto local como remotamente
+
+git push origin --delete <rama>
+git branch -d <rama>
+
+11) ACTUALIZAMOS LA VERSIÓN LOCAL CON LA REMOTA
+
+    git checkout master
+    git pull 
+
+

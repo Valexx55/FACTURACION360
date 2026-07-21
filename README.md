@@ -237,6 +237,21 @@ puede cambiar desde fuera. Con `@RequestParam` ese valor llega por la URL.
   la BD. *(Alternativa más "REST": `@Validated` + `@Min/@Max` devolviendo `400`, pero necesita el
   manejador de errores del TODO B; por eso de momento acotamos.)*
 
+### E. Renombrar la rama a `Angel_listar_ultimos` (pendiente, flujo git)
+
+Cambio de flujo (no afecta al código): renombrar la rama de trabajo a un nombre más descriptivo.
+Como la rama ya está en el remoto, son tres pasos (estando en la rama):
+```bash
+# 1. Renombrar la rama LOCAL
+git branch -m Angel_listar_ultimos
+
+# 2. Subir la rama con el nombre nuevo y fijar su seguimiento (upstream)
+git push -u origin Angel_listar_ultimos
+
+# 3. Borrar la rama vieja del remoto (solo si no hay una PR abierta sobre ella)
+git push origin --delete Angel
+```
+
 ---
 
 ## Para los compañeros: avisar cuando cambie un cliente

@@ -109,7 +109,16 @@ public class ClienteController {
 			log.info("listar-ultimos devuelve {} clientes", respuesta.size());
 			respuestaHttp = ResponseEntity.ok(respuesta);
 		} catch (DataAccessException e) {
-			// 4) Fallo hablando con la BD: lo registramos en el log y devolvemos 500.
+			// 4) Fallo hablando con la BD: lo registramos en el log y devolvemos 500 con el
+			//    cuerpo VACÍO (.build()).
+			//    Alternativa: mandar también un mensaje con .body(...) para que el frontend lo
+			//    muestre, p. ej.:
+			//        ResponseEntity.internalServerError().body("No se pudieron cargar los clientes");
+			//    y en clientes.js leerlo (await respuesta.text() / .json()) y pintarlo en la tabla.
+			//    OJO: el mensaje debe ser GENÉRICO y seguro (NUNCA la excepción 'e', que expondría
+			//    detalles internos de la BD). Y lo más limpio para dar mensajes uniformes en TODOS
+			//    los endpoints es un @RestControllerAdvice (ver TODO B en el README) en vez de
+			//    repetir el .body(...) en cada catch.
 			log.error("Error al listar los ultimos clientes", e);
 			respuestaHttp = ResponseEntity.internalServerError().build();
 		}

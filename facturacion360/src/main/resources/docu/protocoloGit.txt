@@ -18,6 +18,8 @@ git checkout -b <ramaDesarollo>
 git add .
 git commit -m "Implementa el alta de clientes"
 
+HACER DEMO ANTES DE SUBIR LA RAMA
+
 4)CUANDO LA HEMOS PROBADO Y ESTÁ BIEN, LA SUBIMOS
 
 git push -u origin feature/alta-cliente
@@ -62,6 +64,9 @@ lo que deja una secuencia de los cambios en cada rama hasta su integración
 git push origin --delete <rama>
 git branch -d <rama>
 
+11) ACTUALIZAMOS LA VERSIÓN LOCAL CON LA REMOTA
 
+    git checkout master
+    git pull 
 
 

@@ -121,6 +121,21 @@ La app se conecta a `jdbc:mysql://localhost:3306/bd_facturacion` (root/root, en
 `email`, `fecha_alta`. Necesitas esa BD arrancada y con datos. *(El script de ejemplo que
 tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 
+## Cómo testear
+
+1. Tener **MySQL** arrancado con la BD `bd_facturacion` y la tabla `clientes` con datos.
+2. Desde `facturacion360/`: `./mvnw spring-boot:run`.
+3. **Listar últimos**: `GET http://localhost:8080/cliente/listar-ultimos` → `200` + lista JSON.
+   Probar los límites: `?limite=3` → 3; `?limite=500` → 100 (acotado); `?limite=0` → 1.
+4. **Paginación**: `GET http://localhost:8080/cliente/listar-pagina?pagina=0&tamano=10` → `200` con
+   `contenido` + metadatos (`paginaActual`, `totalPaginas`, `hayAnterior`, `haySiguiente`).
+5. **Frontend**: abrir `http://localhost:8080/clientes.html` → la tabla se rellena y los botones
+   **"Más recientes" / "Más antiguos"** cambian de página; el texto muestra "Página X de Y".
+6. **Refresco automático**: en la consola del navegador ejecutar
+   `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → la tabla se recarga sola.
+7. **Logs y errores**: mira la consola (`GET /cliente/...`, `listarUltimos(...) -> N`); si paras
+   MySQL y repites, la respuesta es `500` y aparece un `log.error`.
+
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 
 Los nombres de tabla/columnas están escritos "a mano" en el SQL, así que **deben coincidir en

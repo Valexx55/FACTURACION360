@@ -1,8 +1,9 @@
-# Clientes — Listar últimos (nuestra parte)
+# Clientes — Listar últimos
 
-Nuestra parte del proyecto: mostrar en la tabla de `clientes.html` **los últimos clientes**
-dados de alta, pidiéndolos al backend por `fetch`. Está hecha con **JDBC Template + MySQL**,
-siguiendo la arquitectura por capas que subió el profe a `master`.
+Muestra en la tabla de `clientes.html` **los últimos clientes**
+dados de alta, pidiéndolos al backend por `fetch`.
+Está hecha con **JDBC Template + MySQL**,
+siguiendo la arquitectura por capas que subió el Val a `master`.
 
 ## Qué hace
 
@@ -21,14 +22,14 @@ Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)
 
 | Capa | Fichero | Responsabilidad |
 |------|---------|-----------------|
-| Controller | `controller/ClienteController.java` | Recibe el HTTP y devuelve `200 OK` con la lista. |
-| Service | `service/ClienteServiceImpl.java` | Lógica de negocio ("los últimos N"). |
-| Repository | `repository/ClienteRepositoryJdbcImpl.java` | Habla con la BD (SQL). |
-| RowMapper | `repository/ClienteRowMapper.java` | Convierte una fila de la BD en un `Cliente`. |
-| DTOs | `dto/Cliente.java`, `dto/ClienteResponse.java` | Objeto de dominio y objeto de salida. |
-| Mapper | `dto/ClienteMapper.java` | Convierte `Cliente` → `ClienteResponse`. |
+| **Controller** | `controller/ClienteController.java` | Recibe la petición HTTP, valida el `limite`, orquesta la llamada y devuelve `200 OK` (o `500` si algo falla). |
+| **Service** | `service/ClienteService` (interfaz) + `ClienteServiceImpl` | La lógica de negocio ("los últimos N"). Separa el controller del acceso a datos. |
+| **Repository** | `repository/ClienteRepository` (interfaz) + `ClienteRepositoryJdbcImpl` | Habla con la BD: ejecuta el SQL con `JdbcTemplate`. |
+| **RowMapper** | `repository/ClienteRowMapper.java` | Convierte cada fila del `ResultSet` en un objeto `Cliente`. |
+| **DTOs** | `dto/Cliente` (dominio) · `dto/ClienteResponse` (salida JSON) | Los datos: lo que se maneja dentro vs. lo que se envía al navegador. |
+| **Mapper** | `dto/ClienteMapper.java` | Traduce `Cliente` (dominio) → `ClienteResponse` (JSON). |
 
-## Cómo lo hemos hecho (pieza a pieza)
+## Cómo lo hemos hecho 
 
 1. **`ClienteRepositoryJdbcImpl.findUltimos(limite)`** — ejecuta con `JdbcTemplate`:
    ```sql
@@ -36,9 +37,18 @@ Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)
           poblacion, provincia, telefono, email, fecha_alta
    FROM clientes ORDER BY idcliente DESC LIMIT ?
    ```
-   El `idcliente` es autoincremental, así que el más alto = el más reciente. El troceado
-   (`LIMIT`) lo hace MySQL. El `?` es un parámetro (evita inyección SQL). El resultado se
-   guarda en una variable, se **loguea** (SLF4J) y se devuelve.
+   - **`ORDER BY idcliente DESC`**: `idcliente` es **autoincremental** (la BD asigna un número
+     mayor a cada alta nueva), así que ordenar de mayor a menor equivale a ir **del más reciente
+     al más antiguo**, sin necesitar una columna de fecha.
+   - **`LIMIT ?`**: de esa lista ya ordenada, nos quedamos solo con los primeros `limite`. El
+     troceado lo hace **MySQL, no Java**, así que es eficiente aunque la tabla tenga miles de filas.
+   - **El `?` evita la inyección SQL**: `JdbcTemplate` usa un *PreparedStatement*, donde el valor
+     de `limite` viaja a la BD **aparte** del texto SQL y **nunca se interpreta como código**. Si
+     en cambio pegáramos el valor dentro del `String` (`... LIMIT " + limite`), un valor malicioso
+     podría "colar" instrucciones SQL extra; con `?` el dato y la instrucción van por separado y
+     eso es imposible.
+
+   El resultado se guarda en una variable, se **loguea** (SLF4J) y se devuelve.
 2. **`ClienteRowMapper.mapRow`** — construye un `Cliente` leyendo cada columna del `ResultSet`.
 3. **`ClienteServiceImpl.listarUltimos(limite)`** — delega en el repositorio (aquí viviría la
    regla de negocio si se complicara).
@@ -170,7 +180,8 @@ Lo trocea MySQL (no Java), así que es eficiente aunque haya miles de filas.
 ## TODO — Mejoras de calidad (de la auditoría)
 
 Mejoras para dejar la parte más profesional. Aunque quizá no las implementemos, conviene
-**entenderlas**. Algunas **cambian el esqueleto del profe**, así que habría que acordarlas con él.
+**entenderlas**.
+
 
 ### A. Decisiones de estilo: inyección de dependencias y forma del `return`
 
@@ -184,35 +195,39 @@ recibir en el **atributo** o en el **constructor**:
 | | `@Autowired` en campo *(actual, patrón del profe)* | Por constructor *(`private final` + constructor)* |
 |---|---|---|
 | **Pros** | Menos código, muy directo. | Campos `final` (**inmutables**); dependencias **a la vista**; **testeable sin Spring** (le pasas dobles). |
-| **Contras** | El campo **no puede ser `final`** (mutable); dependencias "ocultas"; testear necesita Spring o reflexión. | Un poco más de código; **cambia el patrón del profe**. |
+| **Contras** | El campo **no puede ser `final`** (es mutable); las dependencias quedan "**ocultas**" (hay que leer toda la clase); testear necesita Spring o reflexión. | Un poco **más de código**; **cambia el patrón del profe** (hay que acordarlo). |
 
 ```java
-// por constructor:
+// Ejemplo por constructor:
 private final ClienteService clienteService;
 public ClienteController(ClienteService s) { this.clienteService = s; }
 ```
 > **Decisión**: mantenemos **inyección por campo** para seguir el patrón del profe. Migrar a
 > constructor sería trivial si se acuerda con él.
 
-**2) Forma del `return`: guardar en variable (patrón del profe, lo que usamos) vs. `return` directo.**
+
+**2) Forma del `return`: guardar en variable vs. `return` directo.**
 
 | | Variable → log → `return` *(actual)* | `return` directo *(como lo teníamos antes)* |
 |---|---|---|
 | **Pros** | Puedes **inspeccionar y loguear** el valor antes de devolverlo; en el depurador pones un breakpoint en el `return` y **ves la variable**; encaja con logs y `try/catch`. | Más corto y conciso. |
-| **Contras** | Un poco más verboso. | **No puedes ver ni loguear** el valor sin partir la expresión; **depurar es más incómodo** (no hay variable donde mirar). |
+| **Contras** | Un poco **más verboso** (una línea extra). | **No puedes ver ni loguear** el valor sin partir la expresión; **depurar es más incómodo** (no hay variable donde poner el ojo). |
 
 ```java
-// actual (variable):                antes (directo):
+// Ejemplo: 
 List<Cliente> c = repo.findUltimos(l);   return repo.findUltimos(l);
 log.debug("-> {}", c.size());
 return c;
 ```
-> **Decisión**: usamos el patrón del profe (variable) sobre todo porque **facilita el log y el
+> **Decisión**: usamos el patrón variable sobre todo porque **facilita el log y el
 > depurado** (poder mirar el valor justo antes de devolverlo).
+
+
 
 ### B. Manejo de errores centralizado (`@RestControllerAdvice`)
 **Concepto**: cuando un endpoint lanza una excepción, Spring puede **desviarla** a una clase
-"guardiana" que decide qué responder, en vez de soltar el error por defecto. Es como un `catch`
+"guardiana" que decide qué responder, en vez de soltar el error por defecto. 
+Es como un `catch`
 global para todos los controllers.
 - **Cómo**: una clase con métodos `@ExceptionHandler`, uno por tipo de error:
   ```java
@@ -225,7 +240,8 @@ global para todos los controllers.
   }
   ```
 - **Por qué es relevante**: hoy, si MySQL falla, el navegador recibe una **traza interna fea**
-  (con detalles que no deberían salir). Con esto das respuestas **limpias y uniformes** y no
+  (con detalles que no deberían salir).
+  Con esto das respuestas **limpias y uniformes** y no
   repites `try/catch` en cada endpoint.
 
 ### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`)

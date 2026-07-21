@@ -34,8 +34,7 @@ public class ClienteMapper {
 						cliente.email(),
 						cliente.fechaAlta());
 			}
-			System.out.println("Cliente2ClienteResponse " + clienteResponse);
-		
+
 		return clienteResponse;
 	}
 }

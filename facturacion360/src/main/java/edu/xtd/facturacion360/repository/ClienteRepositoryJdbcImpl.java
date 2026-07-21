@@ -25,17 +25,24 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 
 	@Override
 	public List<Cliente> findUltimos(int limite) {
-		// SQL: los 'limite' clientes con idcliente más alto (= dados de alta más
-		// recientemente). El ORDER BY y el LIMIT los resuelve la BASE DE DATOS, no Java,
-		// así que es eficiente aunque haya miles de filas. El '?' es un parámetro que
-		// Spring sustituye por 'limite' de forma segura (evita inyección SQL).
+		// SQL de la consulta, explicado pieza a pieza:
+		//  - ORDER BY idcliente DESC: 'idcliente' es AUTOINCREMENTAL, es decir, la BD le asigna
+		//    un número mayor a cada cliente nuevo. Por eso ordenar de mayor a menor (DESC) equivale
+		//    a ordenar del más reciente al más antiguo, SIN necesitar una columna de fecha.
+		//  - LIMIT ?: de esa lista ya ordenada, nos quedamos solo con los primeros 'limite'. El
+		//    troceado lo hace MySQL (no Java), así que es eficiente aunque la tabla tenga miles de filas.
+		//  - El '?' es un PARÁMETRO (placeholder). JdbcTemplate lo ejecuta con un PreparedStatement:
+		//    el valor de 'limite' viaja a la BD APARTE del texto SQL, así que NUNCA se interpreta
+		//    como código. Eso evita la INYECCIÓN SQL: si en su lugar concatenáramos el valor dentro
+		//    del String (" ... LIMIT " + limite), un valor malicioso podría "colar" SQL extra; con
+		//    '?' es imposible porque el dato y la instrucción van por separado.
 		String sql = "SELECT idcliente, nombre, nif_cif, direccion, codigopostal, "
 				+ "poblacion, provincia, telefono, email, fecha_alta "
 				+ "FROM clientes ORDER BY idcliente DESC LIMIT ?";
 
-		// jdbcTemplate.query ejecuta el SELECT y usa clienteRowMapper para convertir
-		// cada fila del ResultSet en un objeto Cliente. Guardamos la lista en una
-		// variable para poder loguearla antes de devolverla.
+		// jdbcTemplate.query ejecuta el SELECT, sustituye el '?' por 'limite' de forma segura y
+		// usa clienteRowMapper para convertir CADA fila del ResultSet en un objeto Cliente.
+		// Guardamos la lista en una variable para poder loguearla (y depurarla) antes del return.
 		List<Cliente> clientes = jdbcTemplate.query(sql, clienteRowMapper, limite);
 		log.debug("findUltimos({}) -> {} filas", limite, clientes.size());
 		return clientes;

@@ -121,7 +121,7 @@ body {
 
 .feature-card-coming-soon {
     background: #f1f5f9;       /* Fondo gris muy claro */
-    border: 3px dashed #cbd5e1; /* Borde punteado visible */
+    border: 3px dashed #5cf69c; /* Borde punteado visible */
     border-radius: 12px;       /* Un poco más redondeado para suavizar el aspecto */
     padding: 4rem 3rem;
     text-align: center;

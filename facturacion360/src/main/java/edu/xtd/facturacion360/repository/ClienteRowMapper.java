@@ -19,20 +19,29 @@ public class ClienteRowMapper implements RowMapper<Cliente>{
 
 	@Override
 	public Cliente mapRow(ResultSet rs, int rowNum) throws SQLException {
-		// Convertimos cada columna de la fila en un campo del record Cliente.
-		
+		// Spring llama a este método UNA VEZ POR CADA FILA del ResultSet. Leemos cada
+		// columna por su nombre y construimos el objeto Cliente correspondiente.
+		// (No ponemos log aquí a propósito: al ejecutarse por cada fila, inundaría la
+		//  consola. Los logs van en el repositorio / servicio / controller.)
+
+		// fecha_alta llega como java.sql.Date y el record usa LocalDate: convertimos
+		// controlando el caso null (por si la columna viniera vacía).
 		java.sql.Date fechaAlta = rs.getDate("fecha_alta");
-		return new Cliente(
-				rs.getInt("idcliente"),
-				rs.getString("nombre"),
-				rs.getString("nif_cif"),
-				rs.getString("direccion"),
-				rs.getString("codigopostal"),
-				rs.getString("poblacion"),
-				rs.getString("provincia"),
-				rs.getString("telefono"),
-				rs.getString("email"),
-				fechaAlta != null ? fechaAlta.toLocalDate() : null);
+
+		// Cada columna de la tabla 'clientes' -> su campo del record Cliente.
+		Cliente cliente = new Cliente(
+				rs.getInt("idcliente"),          // idcliente     -> idCliente
+				rs.getString("nombre"),          // nombre        -> nombre
+				rs.getString("nif_cif"),         // nif_cif       -> nifCif
+				rs.getString("direccion"),       // direccion     -> direccion
+				rs.getString("codigopostal"),    // codigopostal  -> codigoPostal
+				rs.getString("poblacion"),       // poblacion     -> poblacion
+				rs.getString("provincia"),       // provincia     -> provincia
+				rs.getString("telefono"),        // telefono      -> telefono
+				rs.getString("email"),           // email         -> email
+				fechaAlta != null ? fechaAlta.toLocalDate() : null); // fecha_alta -> fechaAlta
+
+		return cliente;
 	}
 
 }

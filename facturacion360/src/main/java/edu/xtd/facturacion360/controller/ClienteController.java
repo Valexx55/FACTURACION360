@@ -65,7 +65,7 @@ public class ClienteController {
 				.map(clienteMapper::toResponse)
 				.toList();
 
-		// 3) 200 OK con la lista en el cuerpo.
+
 		return ResponseEntity.ok(respuesta);
 	}
 

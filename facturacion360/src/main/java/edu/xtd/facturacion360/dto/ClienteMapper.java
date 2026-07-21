@@ -16,10 +16,14 @@ public class ClienteMapper {
 	}
 
 	
+	// Convierte el Cliente de dominio (lo que sale de la BD) en un ClienteResponse (lo que viaja
+	// al navegador como JSON). Tener un DTO de salida separado desacopla la entidad interna del
+	// contrato con el frontend: podemos cambiar el modelo por dentro sin romper la API.
+	// Si 'cliente' es null (p. ej. no encontrado), devolvemos null en vez de reventar.
 	public ClienteResponse toResponse (Cliente cliente)
 	{
 		ClienteResponse clienteResponse = null;
-		
+
 			if (cliente!=null)
 			{
 				clienteResponse = new ClienteResponse(

@@ -16,10 +16,11 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteRepositoryJdbcImpl.class);
 
-	// con este objeto, accedemos a base de datos
+	// con este objeto, accedemos a base de datos (ejecuta el SQL contra MySQL)
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
+	// convierte cada fila del ResultSet en un objeto Cliente (lo usa jdbcTemplate.query)
 	@Autowired
 	ClienteRowMapper clienteRowMapper;
 
@@ -40,8 +41,14 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 				+ "poblacion, provincia, telefono, email, fecha_alta "
 				+ "FROM clientes ORDER BY idcliente DESC LIMIT ?";
 
-		// jdbcTemplate.query ejecuta el SELECT, sustituye el '?' por 'limite' de forma segura y
-		// usa clienteRowMapper para convertir CADA fila del ResultSet en un objeto Cliente.
+		// jdbcTemplate.query(sql, rowMapper, args...) es la sobrecarga para SELECT que devuelven
+		// VARIAS filas. Lo que hace, en orden:
+		//   1) ejecuta el 'sql';
+		//   2) sustituye cada '?' por los 'args' que le pasamos, en orden (aquí solo 'limite'),
+		//      de forma segura (PreparedStatement);
+		//   3) aplica 'clienteRowMapper' a CADA fila del resultado para convertirla en un Cliente;
+		//   4) devuelve un List<Cliente> con todos (lista VACÍA si no hay filas, nunca null).
+		// (Para una única fila se usaría queryForObject(...); para INSERT/UPDATE/DELETE, update(...).)
 		// Guardamos la lista en una variable para poder loguearla (y depurarla) antes del return.
 		List<Cliente> clientes = jdbcTemplate.query(sql, clienteRowMapper, limite);
 		log.debug("findUltimos({}) -> {} filas", limite, clientes.size());

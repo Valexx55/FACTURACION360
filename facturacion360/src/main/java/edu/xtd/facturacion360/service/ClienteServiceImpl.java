@@ -33,8 +33,16 @@ public class ClienteServiceImpl implements ClienteService{
 	 * @return true si el repositorio confirma la inserción; false en caso contrario
 	 */
 	@Override
-	public boolean crear(Cliente cliente) {
-		return clienteRepository.insert(cliente);
+	public Cliente crear(Cliente cliente) {
+		Cliente clienteNuevo = null;
+			
+			clienteNuevo = clienteRepository.insert(cliente);
+			if (clienteNuevo==null)
+			{
+				throw new RuntimeException("Error al insertar cliente " + cliente);
+			}
+		
+		return clienteNuevo;
 	}
 
 	@Override

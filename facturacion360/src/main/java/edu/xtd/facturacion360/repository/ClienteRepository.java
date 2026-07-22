@@ -22,7 +22,7 @@ public interface ClienteRepository {
 	 * @param cliente datos del cliente que se va a insertar
 	 * @return true si se inserta correctamente; false en caso contrario
 	 */
-	public boolean insert (Cliente cliente);
+	public Cliente insert (Cliente cliente);
 	
 	public boolean update (Cliente cliente);
 	

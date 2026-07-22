@@ -1,10 +1,12 @@
 package edu.xtd.facturacion360.controller;
 
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -29,10 +31,8 @@ import jakarta.validation.Valid;
  * 
  * MÉTODO HTTP - OPERACIÓN LÓGICA - OPERACIÓN SQL
  * 
- * GET - LEER - SELECT
- * POST - CREAR - INSERT
- * PUT - MODIFICAR - UPDATE
- * DELETE - BORRAR - DELETE
+ * GET - LEER - SELECT POST - CREAR - INSERT PUT - MODIFICAR - UPDATE DELETE -
+ * BORRAR - DELETE
  * 
  * 
  */
@@ -65,25 +65,25 @@ public class ClienteController {
 	}
 
 	/**
-	 * Crea un cliente a partir de los datos recibidos.
-	 * ClienteResponse contiene los datos que se devuelven en la respuesta HTTP.
+	 * Crea un cliente a partir de los datos recibidos. ClienteResponse contiene los
+	 * datos que se devuelven en la respuesta HTTP.
 	 *
 	 * @Valid indica que se debe validar el objeto recibido según las anotaciones de
 	 *        validación definidas en la clase ClienteRequest.
 	 * @RequestBody indica que el objeto ClienteRequest se debe obtener del cuerpo
-	 *              de la petición HTTP.
-	 *              ClienteRequest contiene los datos recibidos en la petición HTTP.
-	 *              BindingResult contiene el resultado de la validación, incluyendo
-	 *              errores si los hubiera.
+	 *              de la petición HTTP. ClienteRequest contiene los datos recibidos
+	 *              en la petición HTTP. BindingResult contiene el resultado de la
+	 *              validación, incluyendo errores si los hubiera.
 	 *
-	 * Devuelve 201 si se crea el cliente, 400 si hay errores de validación y 500 si
-	 * no se consigue guardar.
+	 *              Devuelve 201 si se crea el cliente, 400 si hay errores de
+	 *              validación y 500 si no se consigue guardar.
 	 */
 	@PostMapping
 	public ResponseEntity<ClienteResponse> crear(@Valid @RequestBody ClienteRequest clienteRequest,
 			BindingResult bindingResult) {
 		ResponseEntity<ClienteResponse> respuesta;
-			
+		ClienteResponse clienteResponse = null;
+
 		if (bindingResult.hasErrors()) {
 			logger.error("Cliente recibido con errores");
 			respuesta = ResponseEntity.badRequest().build();
@@ -91,21 +91,21 @@ public class ClienteController {
 			try {
 				logger.debug("Cliente sin errores de validación");
 				Cliente cliente = clienteMapper.toDomain(clienteRequest);
-				boolean clienteCreado = clienteService.crear(cliente);
-			
-				if (clienteCreado) {
-					logger.debug("Cliente creado correctamente");
-					respuesta = ResponseEntity.status(HttpStatus.CREATED).build();
-				} else {
-					logger.error("Fallo creando cliente");
-					respuesta = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-				}
-			} catch (Exception e) {
+				Cliente clienteNuevo = clienteService.crear(cliente);
+
+				logger.debug("Cliente creado correctamente " + clienteNuevo);
+				clienteResponse = clienteMapper.toResponse(clienteNuevo);
+				respuesta = ResponseEntity.status(HttpStatus.CREATED).body(clienteResponse);
+
+			} catch (DuplicateKeyException e) {
+				logger.error("NIF duplicado", e);
+				respuesta = ResponseEntity.status(HttpStatus.CONFLICT).build();
+			}catch (Exception e) {
 				logger.error("Excepción creando cliente", e);
 				respuesta = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 			}
 		}
-	
+
 		return respuesta;
 	}
 
@@ -117,7 +117,6 @@ public class ClienteController {
 		return respuesta;
 	}
 
-	
 	@DeleteMapping("/{id}")
 	public ResponseEntity<Void> eliminar(@PathVariable int id) {
 		ResponseEntity<Void> respuesta = null;

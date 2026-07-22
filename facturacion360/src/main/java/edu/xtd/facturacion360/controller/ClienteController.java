@@ -32,6 +32,13 @@ import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.Hidden;
+
 /**
  * 
  * 
@@ -45,15 +52,14 @@ import jakarta.validation.Valid;
  * 
  * 
  */
+@Tag(name = "Clientes", description = "Operaciones para consultar, crear, actualizar y eliminar clientes")
 
 @RestController
 @RequestMapping("/cliente")
 public class ClienteController {
 
-
 	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
 
-	
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
 
@@ -75,8 +81,11 @@ public class ClienteController {
 	 * @return {@code 200 OK} con la lista de {@link ClienteResponse}; o {@code 500}
 	 *         si falla la BD.
 	 */
+	@Operation(summary = "Lista los últimos clientes", description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100.")
+	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
 	@GetMapping("/listar-ultimos")
-	public ResponseEntity<List<ClienteResponse>> listarUltimos(@RequestParam(defaultValue = "10") int limite) {
+	public ResponseEntity<List<ClienteResponse>> listarUltimos(
+			@Parameter(description = "Número de clientes listados.", example = "10") @RequestParam(defaultValue = "10") int limite) {
 
 		// Declaramos la respuesta al inicio y hacemos UN solo return al final: así la
 		// rellenamos en el try (éxito) o en el catch (error) según cómo vaya la
@@ -142,6 +151,7 @@ public class ClienteController {
 		return respuestaHttp;
 	}
 
+	@Hidden
 	@GetMapping("/{id}")
 	public ResponseEntity<ClienteResponse> obtenerPorId(@PathVariable int id) {
 
@@ -164,6 +174,11 @@ public class ClienteController {
 	 *              Devuelve 201 si se crea el cliente, 400 si hay errores de
 	 *              validación y 500 si no se consigue guardar.
 	 */
+	@Operation(summary = "Crea un cliente", description = "Registra un cliente a partir de los datos recibidos")
+	@ApiResponses({ @ApiResponse(responseCode = "201", description = "Cliente creado correctamente"),
+			@ApiResponse(responseCode = "400", description = "Datos de entrada no válidos"),
+			@ApiResponse(responseCode = "409", description = "Ya existe un cliente con ese NIF/CIF"),
+			@ApiResponse(responseCode = "500", description = "Error interno al crear el cliente") })
 	@PostMapping
 	public ResponseEntity<ClienteResponse> crear(@Valid @RequestBody ClienteRequest clienteRequest,
 			BindingResult bindingResult) {
@@ -195,6 +210,7 @@ public class ClienteController {
 		return respuesta;
 	}
 
+	@Hidden
 	@PutMapping("/{id}")
 	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
 			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {
@@ -221,8 +237,11 @@ public class ClienteController {
 		return respuesta;
 	}
 
+	@Operation(summary = "Elimina un cliente", description = "Elimina el cliente identificado por su ID")
+	@ApiResponse(responseCode = "200", description = "Cliente eliminado correctamente")
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> eliminar(@PathVariable int id) {
+	public ResponseEntity<Void> eliminar(
+			@Parameter(description = "Identificador del cliente", example = "1") @PathVariable int id) {
 		ResponseEntity<Void> respuesta = null;
 		try {
 			this.clienteService.eliminar(id);
@@ -233,7 +252,7 @@ public class ClienteController {
 			respuesta = ResponseEntity.status(HttpStatus.CONFLICT).body(null);
 
 		} catch (ResponseStatusException e) {
-			
+
 			e.printStackTrace();
 			System.err.println("No se ha econtrado cliente con ese id, no se puede borrar");
 			respuesta = ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -241,15 +260,16 @@ public class ClienteController {
 		}
 
 		return respuesta;
-		
+
 		/**
-	     * Endpoint para manejar las peticiones HTTP DELETE (ej: DELETE /clientes/5).
-	     * Se encarga de capturar las posibles excepciones de las capas inferiores 
-	     * y traducirlas a códigos de estado HTTP (200 OK, 404 Not Found, 409 Conflict).
-	     *
-	     * @param id El ID que viene en la URL de la petición.
-	     * @return Una respuesta HTTP (ResponseEntity) indicando el éxito o el tipo de error.
-	     */
+		 * Endpoint para manejar las peticiones HTTP DELETE (ej: DELETE /clientes/5). Se
+		 * encarga de capturar las posibles excepciones de las capas inferiores y
+		 * traducirlas a códigos de estado HTTP (200 OK, 404 Not Found, 409 Conflict).
+		 *
+		 * @param id El ID que viene en la URL de la petición.
+		 * @return Una respuesta HTTP (ResponseEntity) indicando el éxito o el tipo de
+		 *         error.
+		 */
 	}
 
 }

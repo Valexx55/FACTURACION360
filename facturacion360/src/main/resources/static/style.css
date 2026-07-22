@@ -1,0 +1,310 @@
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+:root {
+    --primary-color: #4776f7;
+    --secondary-color: #0ea5e9;
+    --bg-body: #f8fafc;
+    --text-main: #1f2937;
+    --white: #ffffff;
+    --focus-ring: #f59e0b; /* Contraste alto para accesibilidad */
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-body);
+    color: var(--text-main);
+    line-height: 1.7;
+    margin: 0;
+}
+
+/* ==========================================
+   NAVEGACIÓN (Actualizada para alineación)
+   ========================================== */
+/* Asegurar que la barra de navegación tenga el color adecuado */
+.navbar {
+    background-color: #024ebc; /* Un tono azul oscuro elegante */
+    padding: 0.75rem 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* El contenedor interno de tu barra: ¡Aquí es donde achicamos el ancho! */
+.navbar .container, 
+.navbar .container-fluid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 1140px;      /* Modifica este número (ej. 1000px) si lo quieres aún más estrecho */
+    margin: 0 auto;         /* Centra el contenedor */
+    padding-left: 1.5rem;   /* Margen interno para que no pegue al borde en móviles */
+    padding-right: 1.5rem;
+}
+
+/* Estilo para el logo y texto juntos a la izquierda */
+.navbar-brand {
+    font-weight: 700;       /* Corregido: 700 en lugar de 100% */
+    font-size: 1.5rem;
+    letter-spacing: -0.5px;
+    color: #ffffff !important;
+    display: flex;
+    align-items: center;
+    text-decoration: none; /* Quita el subrayado si es un enlace */
+}
+
+/* Control del tamaño de la imagen del logo */
+.navbar-brand .logo {
+    height: 60px; /* Ajusta la altura según lo necesites */
+    width: auto;
+    object-fit: contain;
+}
+
+/* Forzar a que el menú de enlaces se vaya completamente a la derecha sin márgenes */
+.navbar-nav {
+    margin: 0; 
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    list-style: none;
+    padding-left: 0;
+}
+
+/* Estilo para los enlaces de navegación */
+.navbar-nav .nav-link {
+    color: #cbd5e1 !important; /* Gris claro */
+    font-weight: 500;
+    padding: 0.5rem 1rem !important;
+    transition: color 0.3s ease;
+}
+
+/* Efecto al pasar el ratón */
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    color: #ffffff !important; /* Blanco al estar activo o pasar el ratón */
+}
+
+/* ==========================================
+   COMPONENTES Y TARJETAS
+   ========================================== */
+
+/* Contenedor que centra el recuadro */
+.main-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 70vh; /* Ajusta la altura según lo necesites */
+}
+
+/* El recuadro blanco de la imagen */
+.feature-card {
+    background: #f9f9f9; /* El fondo gris muy claro de la imagen */
+    border-radius: 8px;  /* Esquinas ligeramente redondeadas */
+    padding: 4rem 3rem;  /* Mucho espacio interno */
+    text-align: center;
+    border: none;
+    box-shadow: none;    /* Sin sombra, estilo plano como en tu imagen */
+    width: 100%;
+    max-width: 600px;    /* Limita el ancho para que no se estire demasiado */
+}
+
+/* Estilos específicos para el texto */
+.feature-card h3 {
+    color: #0d6efd;      /* El color azul que se ve en la imagen */
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.feature-card p {
+    color: #6c757d;      /* El color gris del subtítulo */
+    font-size: 1.1rem;
+}
+
+.feature-card-coming-soon {
+    background: #f1f5f9;       /* Fondo gris muy claro */
+    border: 3px dashed #cbd5e1; /* Borde punteado visible */
+    border-radius: 12px;       /* Un poco más redondeado para suavizar el aspecto */
+    padding: 4rem 3rem;
+    text-align: center;
+    width: 100%;
+    max-width: 600px;
+}
+
+/* Botones */
+.btn-primary-custom {
+    background-color: var(--secondary-color);
+    color: var(--white);
+    padding: 0.8rem 2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+
+.btn-primary-custom:hover {
+    background-color: #305cfc;
+    color: var(--white);
+}
+
+/* ==========================================
+   ACCESIBILIDAD Y TABLAS
+   ========================================== */
+
+/* Accesibilidad: Indicador de foco */
+:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Color azul para la cabecera de la tabla */
+.table thead.table-primary-custom {
+    background-color: #0d6efd; /* El azul de tu imagen */
+    color: white;
+}
+
+/* Espaciado para los iconos de acción */
+.table td .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 1rem;
+}
+
+.badge {
+    padding: 0.5em 0.8em;
+    font-size: 0.85rem;
+}
+
+/* Botón de Editar (Primario) */
+.btn-primary-custom-table {
+    color: var(--primary-color);
+    transition: all 0.3s ease;
+}
+
+.btn-primary-custom-table:hover {
+    color: #0284c7;
+    background-color: transparent;
+}
+
+/* Botón de Eliminar (Danger) */
+.btn-outline-danger {
+    border: none; /* Quitamos el borde para que quede más limpio en la tabla */
+    color: #ef4444;
+    background-color: transparent;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-danger:hover {
+    background-color: #ef4444;
+    color: #ffffff;
+    border-radius: 4px;
+}
+
+/* Reset básico para accesibilidad */
+img { max-width: 100%; height: auto; }
+
+
+/* ==========================================
+   ESTRUCTURA DE LA PÁGINA (Footer fijo)
+   ========================================== */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1; /* Hace que el contenido ocupe el espacio disponible y empuje el footer */
+}
+
+footer {
+    flex-shrink: 0; /* Asegura que el footer no se comprima */
+}
+
+/* --- Buscador de clientes (solo interfaz; la lógica la hará otro compañero) ---
+   Campo redondeado, borde fino y una lupa gris dentro, a la izquierda, imitando
+   el diseño de Figma. */
+/* --- Buscador de clientes animado --- */
+.buscador-clientes {
+    position: relative;
+    width: 50px;  /* Tamaño inicial (solo el círculo de la lupa) */
+    height: 50px; /* Alto fijo para que sea un círculo perfecto */
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Transición suave */
+    /* margin: 0 auto; Si quieres que esté centrado al estar cerrado, descomenta esto */
+}
+
+/* Clase que añadiremos con JS para expandirlo */
+.buscador-clientes.expandido {
+    width: 100%; /* Puedes bajarlo a 90% si no quieres que ocupe absolutamente todo */
+    max-width: 800px; /* Límite para pantallas muy grandes */
+}
+
+.buscador-clientes .buscador-input {
+    width: 100%;
+    height: 100%;
+    padding: 0 1rem 0 3.2rem;  /* Hueco a la izquierda para la lupa */
+    border: 1px solid #cbd5e1;
+    border-radius: 25px; /* Forma de píldora para que se vea bien cerrado y abierto */
+    font-size: 1rem;
+    color: var(--text-main);
+    background-color: var(--white);
+    outline: none;
+    cursor: pointer; /* Cursor de mano cuando está cerrado */
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Ocultar el texto del placeholder cuando está cerrado para que no sobresalga */
+.buscador-clientes .buscador-input::placeholder {
+    color: transparent;
+    transition: color 0.2s ease;
+}
+
+/* Mostrar el placeholder cuando está abierto */
+.buscador-clientes.expandido .buscador-input::placeholder {
+    color: #9ca3af;
+    transition-delay: 0.15s; /* Pequeño retardo para que el texto aparezca tras abrirse */
+}
+
+/* Ajustes cuando está enfocado y abierto */
+.buscador-clientes.expandido .buscador-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+    cursor: text;
+}
+
+/* Icono (Lupa) */
+.buscador-clientes .buscador-icono {
+    position: absolute;
+    top: 50%;
+    left: 17px; /* Calculado para quedar justo en el centro del círculo de 50px */
+    transform: translateY(-50%);
+    color: #9ca3af;
+    pointer-events: none;
+    transition: color 0.3s ease;
+    z-index: 2;
+}
+
+/* Efecto: la lupa se vuelve del color primario al abrirse */
+.buscador-clientes.expandido .buscador-icono {
+    color: var(--primary-color);
+}
+/* ==========================================
+   RESPONSIVE
+   ========================================== */
+@media (max-width: 768px) {
+    .hero h1 { font-size: 2.5rem; }
+    
+    /* En móviles, los enlaces se acomodan debajo del logo */
+    .navbar .container, 
+    .navbar .container-fluid {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .navbar-nav {
+        margin: 0;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}

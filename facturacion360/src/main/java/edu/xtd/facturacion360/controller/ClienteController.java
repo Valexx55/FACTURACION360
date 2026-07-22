@@ -96,6 +96,7 @@ public class ClienteController {
 		}
 
 		return respuesta;
+		
 		/**
 	     * Endpoint para manejar las peticiones HTTP DELETE (ej: DELETE /clientes/5).
 	     * Se encarga de capturar las posibles excepciones de las capas inferiores 

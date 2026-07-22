@@ -5,7 +5,9 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
@@ -15,9 +17,11 @@ import edu.xtd.facturacion360.repository.ClienteRepository;
 
 @Service
 
+
 public class ClienteServiceImpl implements ClienteService{
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteServiceImpl.class);
+
 
 	@Autowired
 	ClienteRepository clienteRepository;
@@ -105,11 +109,19 @@ public class ClienteServiceImpl implements ClienteService{
 		// Devolvemos el cliente actualizado
 		return clienteActualizado;
 	}
-
+	
+	
 	@Override
 	public void eliminar(int id) {
 
-		this.clienteRepository.deleteById(id);
+
+		boolean borrado = this.clienteRepository.deleteById(id);
+		if (!borrado) {
+			System.err.println("El cliente con ese ID no existe");
+			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Error, No se encontró el cliente");
+
+		}
+
 	}
 
 	// TODO: valorar la programación del método privado validarCifUnico mirar el

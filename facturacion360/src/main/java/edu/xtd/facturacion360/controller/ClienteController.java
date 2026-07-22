@@ -210,7 +210,6 @@ public class ClienteController {
 		return respuesta;
 	}
 
-	@Hidden
 	@PutMapping("/{id}")
 	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
 			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {

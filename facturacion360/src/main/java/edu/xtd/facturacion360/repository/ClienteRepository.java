@@ -12,8 +12,30 @@ import edu.xtd.facturacion360.dto.Cliente;
  */
 public interface ClienteRepository {
 	
+	/**
+	 * Los últimos clientes por id (el más alto primero).
+	 *
+	 * @param limite cuántas filas devolver (LIMIT)
+	 * @return la lista de clientes; vacía si no hay ninguno, nunca {@code null}
+	 */
 	public List<Cliente> findUltimos (int limite);
-	
+
+	/**
+	 * Una página de clientes: 'tamano' filas saltando las primeras 'offset' ({@code LIMIT ? OFFSET ?}).
+	 *
+	 * @param tamano cuántas filas devolver (LIMIT)
+	 * @param offset cuántas filas saltar desde el principio (OFFSET)
+	 * @return la lista de clientes de esa página; vacía si no hay, nunca {@code null}
+	 */
+	public List<Cliente> findPagina (int tamano, int offset);
+
+	/**
+	 * Cuenta el total de clientes de la tabla (para saber cuántas páginas hay).
+	 *
+	 * @return el número total de clientes
+	 */
+	public long contarTotal ();
+
 	public Optional<Cliente> findById (int id);
 	
 	/**

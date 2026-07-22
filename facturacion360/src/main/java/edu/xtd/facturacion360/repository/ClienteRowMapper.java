@@ -9,35 +9,48 @@ import org.springframework.stereotype.Component;
 import edu.xtd.facturacion360.dto.Cliente;
 
 /**
- * Esta clase, convierte un registro de la base de datos en un Cliente
+ * Esta clase convierte un registro de la base de datos en un objeto Cliente.
+ *
+ * Con @Component, Spring crea automáticamente una instancia de esta clase
+ * para poder utilizarla desde el repositorio.
  */
 @Component
-public class ClienteRowMapper implements RowMapper<Cliente>{
+public class ClienteRowMapper implements RowMapper<Cliente> {
 
 	/**
-     * Construye un cliente con los valores de la fila actual.
-     *
-     * @param rs resultado de la consulta posicionado en la fila actual
-     * @param rowNum número de la fila procesada
-     * @return cliente construido con los valores obtenidos
-     * @throws SQLException si no se puede leer alguna columna
-     */
-    @Override
+	 * Convierte la fila ACTUAL del {@link ResultSet} en un objeto {@link Cliente}.
+	 * Spring lo llama automáticamente una vez por cada fila del resultado.
+	 *
+	 * @param rs     el ResultSet posicionado en la fila a convertir (de él leemos las columnas)
+	 * @param rowNum el número de fila (0, 1, 2…); aquí no lo usamos
+	 * @return el {@link Cliente} construido con los datos de esa fila
+	 * @throws SQLException si falla el acceso a alguna columna del ResultSet
+	 */
+	@Override
 	public Cliente mapRow(ResultSet rs, int rowNum) throws SQLException {
-		// Convertimos cada columna de la fila en un campo del record Cliente.
-		
+		// Spring llama a este método UNA VEZ POR CADA FILA del ResultSet. Leemos cada
+		// columna por su nombre y construimos el objeto Cliente correspondiente.
+		// (No ponemos log aquí a propósito: al ejecutarse por cada fila, inundaría la
+		//  consola. Los logs van en el repositorio / servicio / controller.)
+
+		// fecha_alta llega como java.sql.Date y el record usa LocalDate: convertimos
+		// controlando el caso null (por si la columna viniera vacía).
 		java.sql.Date fechaAlta = rs.getDate("fecha_alta");
-		return new Cliente(
-				rs.getInt("idcliente"),
-				rs.getString("nombre"),
-				rs.getString("nif_cif"),
-				rs.getString("direccion"),
-				rs.getString("codigopostal"),
-				rs.getString("poblacion"),
-				rs.getString("provincia"),
-				rs.getString("telefono"),
-				rs.getString("email"),
-				fechaAlta != null ? fechaAlta.toLocalDate() : null);
+
+		// Cada columna de la tabla 'clientes' -> su campo del record Cliente.
+		Cliente cliente = new Cliente(
+				rs.getInt("idcliente"),          // idcliente     -> idCliente
+				rs.getString("nombre"),          // nombre        -> nombre
+				rs.getString("nif_cif"),         // nif_cif       -> nifCif
+				rs.getString("direccion"),       // direccion     -> direccion
+				rs.getString("codigopostal"),    // codigopostal  -> codigoPostal
+				rs.getString("poblacion"),       // poblacion     -> poblacion
+				rs.getString("provincia"),       // provincia     -> provincia
+				rs.getString("telefono"),        // telefono      -> telefono
+				rs.getString("email"),           // email         -> email
+				fechaAlta != null ? fechaAlta.toLocalDate() : null); // fecha_alta -> fechaAlta
+
+		return cliente;
 	}
 
 }

@@ -31,10 +31,21 @@ public class ClienteMapper {
 		return cliente;
 	}
 
+
+	
+	/**
+	 * Convierte el {@link Cliente} de dominio (lo que sale de la BD) en un {@link ClienteResponse}
+	 * (lo que viaja al navegador como JSON). Tener un DTO de salida separado desacopla la entidad
+	 * interna del contrato con el frontend: podemos cambiar el modelo por dentro sin romper la API.
+	 *
+	 * @param cliente el cliente de dominio a convertir; puede ser {@code null}
+	 * @return el {@link ClienteResponse} equivalente, o {@code null} si {@code cliente} es null
+	 */
+
 	public ClienteResponse toResponse (Cliente cliente)
 	{
 		ClienteResponse clienteResponse = null;
-		
+
 			if (cliente!=null)
 			{
 				clienteResponse = new ClienteResponse(
@@ -49,8 +60,7 @@ public class ClienteMapper {
 						cliente.email(),
 						cliente.fechaAlta());
 			}
-			System.out.println("Cliente2ClienteResponse " + clienteResponse);
-		
+
 		return clienteResponse;
 	}
 }

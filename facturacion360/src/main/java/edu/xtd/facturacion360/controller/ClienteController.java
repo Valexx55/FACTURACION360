@@ -27,10 +27,10 @@ import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
 /**
-
+ * 
+ * 
  * Recibe las peticiones HTTP relativas a los clientes y devuelve su respuesta.
-
-
+ * 
  * 
  * MÉTODO HTTP - OPERACIÓN LÓGICA - OPERACIÓN SQL
  * 
@@ -44,7 +44,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/cliente")
 public class ClienteController {
 
-	// Límites permitidos para el parámetro 'limite' (evita que pidan una barbaridad).
+	// Límites permitidos para el parámetro 'limite' (evita que pidan una
+	// barbaridad).
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
 
@@ -52,26 +53,22 @@ public class ClienteController {
 	ClienteService clienteService;
 
 	Logger logger = LoggerFactory.getLogger(ClienteController.class);
-	
+
 	@Autowired
 	ClienteMapper clienteMapper;
 
-
 	@GetMapping("/listar-ultimos")
-	public ResponseEntity<List<ClienteResponse>> listarUltimos(
-			@RequestParam(defaultValue = "10") int limite) {
+	public ResponseEntity<List<ClienteResponse>> listarUltimos(@RequestParam(defaultValue = "10") int limite) {
 
 		// 0) Validación: acotamos el valor pedido a [1, 100] para no saturar la BD
-		//    (si no mandan 'limite', llega 10 por el defaultValue).
+		// (si no mandan 'limite', llega 10 por el defaultValue).
 		int limiteSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, limite));
 
 		// 1) Pedimos al service los últimos clientes (objetos de dominio).
 		List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
 
 		// 2) Los traducimos a ClienteResponse (lo que ve el navegador).
-		List<ClienteResponse> respuesta = ultimos.stream()
-				.map(clienteMapper::toResponse)
-				.toList();
+		List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
 
 		// 3) 200 OK con la lista en el cuerpo.
 		return ResponseEntity.ok(respuesta);
@@ -121,7 +118,7 @@ public class ClienteController {
 			} catch (DuplicateKeyException e) {
 				logger.error("NIF duplicado", e);
 				respuesta = ResponseEntity.status(HttpStatus.CONFLICT).build();
-			}catch (Exception e) {
+			} catch (Exception e) {
 				logger.error("Excepción creando cliente", e);
 				respuesta = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 			}
@@ -133,7 +130,25 @@ public class ClienteController {
 	@PutMapping("/{id}")
 	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
 			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {
+
 		ResponseEntity<ClienteResponse> respuesta = null;
+
+		if (bindingResult.hasErrors()) {
+			respuesta = ResponseEntity.badRequest().build();
+		} else {
+			Cliente cliente = clienteMapper.toDomain(clienteRequest);
+
+			Cliente actualizado = clienteService.actualizar(id, cliente);
+
+			if (actualizado == null) {
+				respuesta = ResponseEntity.notFound().build();
+			} else {
+				ClienteResponse response = clienteMapper.toResponse(actualizado);
+
+				respuesta = ResponseEntity.ok(response);
+			}
+
+		}
 
 		return respuesta;
 	}

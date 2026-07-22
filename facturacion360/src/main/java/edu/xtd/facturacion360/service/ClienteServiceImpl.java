@@ -7,9 +7,10 @@ import org.springframework.stereotype.Service;
 
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.repository.ClienteRepository;
+import java.util.Optional;
 
 @Service
-public class ClienteServiceImpl implements ClienteService{
+public class ClienteServiceImpl implements ClienteService {
 
 	@Autowired
 	ClienteRepository clienteRepository;
@@ -35,28 +36,41 @@ public class ClienteServiceImpl implements ClienteService{
 	@Override
 	public Cliente crear(Cliente cliente) {
 		Cliente clienteNuevo = null;
-			
-			clienteNuevo = clienteRepository.insert(cliente);
-			if (clienteNuevo==null)
-			{
-				throw new RuntimeException("Error al insertar cliente " + cliente);
-			}
-		
+
+		clienteNuevo = clienteRepository.insert(cliente);
+		if (clienteNuevo == null) {
+			throw new RuntimeException("Error al insertar cliente " + cliente);
+		}
+
 		return clienteNuevo;
 	}
 
 	@Override
 	public Cliente actualizar(int id, Cliente cliente) {
-		// TODO Auto-generated method stub
-		return null;
+
+		// Creamos un nuevo objeto Cliente con el id recibido en la URL
+		Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
+				cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(), cliente.email(),
+				cliente.fechaAlta());
+
+		// Llamamos al repositorio para actualizar el cliente en la base de datos
+		boolean updateOK = clienteRepository.update(clienteActualizado);
+
+		if (!updateOK) {
+			clienteActualizado = null;
+		}
+
+		// Devolvemos el cliente actualizado
+		return clienteActualizado;
 	}
 
 	@Override
 	public void eliminar(int id) {
-		
+
 		this.clienteRepository.deleteById(id);
 	}
-	
-	//TODO: valorar la programación del método privado validarCifUnico mirar el Diagrama de Clases
+
+	// TODO: valorar la programación del método privado validarCifUnico mirar el
+	// Diagrama de Clases
 
 }

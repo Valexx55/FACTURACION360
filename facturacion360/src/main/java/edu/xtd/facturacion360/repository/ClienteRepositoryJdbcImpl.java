@@ -109,10 +109,42 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 
 	@Override
 	public boolean update(Cliente cliente) {
-		// TODO Auto-generated method stub
-		return false;
-	}
 
+	    // Sentencia SQL que actualiza los datos de un cliente.
+	    // Solo se modifican los campos editables; la fecha de alta se mantiene.
+	    String sql = """
+	        UPDATE clientes
+	        SET nombre = ?,
+	            nif_cif = ?,
+	            direccion = ?,
+	            codigopostal = ?,
+	            poblacion = ?,
+	            provincia = ?,
+	            telefono = ?,
+	            email = ?
+	        WHERE idcliente = ?
+	        """;
+
+	    // Ejecutamos la sentencia SQL utilizando JdbcTemplate.
+	    // Cada '?' de la consulta se sustituye por el valor correspondiente
+	    // del objeto Cliente.
+	    int filas = jdbcTemplate.update(
+	            sql,
+	            cliente.nombre(),
+	            cliente.nifCif(),
+	            cliente.direccion(),
+	            cliente.codigoPostal(),
+	            cliente.poblacion(),
+	            cliente.provincia(),
+	            cliente.telefono(),
+	            cliente.email(),
+	            cliente.idCliente()
+	    );
+
+	    // Si se ha modificado al menos una fila, devolvemos true.
+	    // Si no se ha modificado ninguna, devolvemos false.
+	    return filas > 0;
+	}
 	@Override
 	public boolean deleteById(int id) {
 		boolean borrarOk = false;

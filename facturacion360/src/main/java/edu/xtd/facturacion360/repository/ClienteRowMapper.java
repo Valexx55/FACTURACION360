@@ -4,13 +4,18 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.stereotype.Component;
 
 import edu.xtd.facturacion360.dto.Cliente;
 
 /**
- * Esta clase, convierte un registro de la base de datos en un Cliente
+ * Esta clase convierte un registro de la base de datos en un objeto Cliente.
+ *
+ * Con @Component, Spring crea automáticamente una instancia de esta clase
+ * para poder utilizarla desde el repositorio.
  */
-public class ClienteRowMapper implements RowMapper<Cliente>{
+@Component
+public class ClienteRowMapper implements RowMapper<Cliente> {
 
 	@Override
 	public Cliente mapRow(ResultSet rs, int rowNum) throws SQLException {

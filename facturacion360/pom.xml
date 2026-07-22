@@ -91,6 +91,12 @@
 			<artifactId>spring-boot-starter-jdbc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Documentación OpenAPI y Swagger UI -->
+		<dependency>
+		    <groupId>org.springdoc</groupId>
+		    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+		    <version>3.0.3</version>
+		</dependency>
 	</dependencies>
 
 	<build>

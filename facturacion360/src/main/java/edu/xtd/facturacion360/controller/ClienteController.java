@@ -26,6 +26,13 @@ import edu.xtd.facturacion360.dto.ClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.Hidden;
+
 /**
 
  * Recibe las peticiones HTTP relativas a los clientes y devuelve su respuesta.
@@ -39,6 +46,10 @@ import jakarta.validation.Valid;
  * 
  * 
  */
+@Tag(
+    name = "Clientes",
+    description = "Operaciones para consultar, crear, actualizar y eliminar clientes"
+)
 
 @RestController
 @RequestMapping("/cliente")
@@ -56,9 +67,17 @@ public class ClienteController {
 	@Autowired
 	ClienteMapper clienteMapper;
 
-
+	@Operation(
+    	summary = "Lista los últimos clientes",
+    	description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100."
+	)
+	@ApiResponse(
+    	responseCode = "200",
+    	description = "Clientes recuperados correctamente"
+	)
 	@GetMapping("/listar-ultimos")
 	public ResponseEntity<List<ClienteResponse>> listarUltimos(
+			@Parameter(description = "Número de clientes listados.", example = "10")
 			@RequestParam(defaultValue = "10") int limite) {
 
 		// 0) Validación: acotamos el valor pedido a [1, 100] para no saturar la BD
@@ -77,6 +96,7 @@ public class ClienteController {
 		return ResponseEntity.ok(respuesta);
 	}
 
+	@Hidden
 	@GetMapping("/{id}")
 	public ResponseEntity<ClienteResponse> obtenerPorId(@PathVariable int id) {
 
@@ -99,6 +119,16 @@ public class ClienteController {
 	 *              Devuelve 201 si se crea el cliente, 400 si hay errores de
 	 *              validación y 500 si no se consigue guardar.
 	 */
+	@Operation(
+	    summary = "Crea un cliente",
+    	description = "Registra un cliente a partir de los datos recibidos"
+	)
+	@ApiResponses({
+    	@ApiResponse(responseCode = "201", description = "Cliente creado correctamente"),
+    	@ApiResponse(responseCode = "400", description = "Datos de entrada no válidos"),
+    	@ApiResponse(responseCode = "409", description = "Ya existe un cliente con ese NIF/CIF"),
+    	@ApiResponse(responseCode = "500", description = "Error interno al crear el cliente")
+	})
 	@PostMapping
 	public ResponseEntity<ClienteResponse> crear(@Valid @RequestBody ClienteRequest clienteRequest,
 			BindingResult bindingResult) {
@@ -130,6 +160,7 @@ public class ClienteController {
 		return respuesta;
 	}
 
+	@Hidden
 	@PutMapping("/{id}")
 	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
 			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {
@@ -138,8 +169,18 @@ public class ClienteController {
 		return respuesta;
 	}
 
+	@Operation(
+	    summary = "Elimina un cliente",
+    	description = "Elimina el cliente identificado por su ID"
+	)
+	@ApiResponse(
+    	responseCode = "200",
+    	description = "Cliente eliminado correctamente"
+	)
 	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> eliminar(@PathVariable int id) {
+	public ResponseEntity<Void> eliminar(
+        @Parameter(description = "Identificador del cliente", example = "1")
+        @PathVariable int id) {
 		ResponseEntity<Void> respuesta = null;
 
 		this.clienteService.eliminar(id);

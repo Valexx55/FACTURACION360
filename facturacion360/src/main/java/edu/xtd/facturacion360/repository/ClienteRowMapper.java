@@ -9,13 +9,13 @@ import org.springframework.stereotype.Component;
 import edu.xtd.facturacion360.dto.Cliente;
 
 /**
- * Esta clase, convierte un registro de la base de datos en un Cliente
- * 
- * Con @Component, Spring creará una instancia de esta clase de manera 
- * automática. Hará new ClienteRowMapper (). Inversión de Control IOC
+ * Esta clase convierte un registro de la base de datos en un objeto Cliente.
+ *
+ * Con @Component, Spring crea automáticamente una instancia de esta clase
+ * para poder utilizarla desde el repositorio.
  */
 @Component
-public class ClienteRowMapper implements RowMapper<Cliente>{
+public class ClienteRowMapper implements RowMapper<Cliente> {
 
 	/**
 	 * Convierte la fila ACTUAL del {@link ResultSet} en un objeto {@link Cliente}.

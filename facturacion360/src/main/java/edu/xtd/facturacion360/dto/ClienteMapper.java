@@ -1,5 +1,6 @@
 package edu.xtd.facturacion360.dto;
 
+
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,10 +11,26 @@ import org.springframework.stereotype.Component;
 public class ClienteMapper {
 
 	// toDomain (Request -> Cliente) lo necesitan crear/actualizar: lo dejará el compañero.
-	public Cliente toDomain (ClienteRequest clienteRequest)
-	{
-		return null;
+	public Cliente toDomain(ClienteRequest clienteRequest) {
+		Cliente cliente = null;
+			
+			cliente =  new Cliente(
+					0,
+					clienteRequest.nombre(),
+					clienteRequest.nifCif(),
+					clienteRequest.direccion(),
+					clienteRequest.codigoPostal(),
+					clienteRequest.poblacion(),
+					clienteRequest.provincia(),
+					clienteRequest.telefono(),
+					clienteRequest.email(),
+					null);
+		
+			System.out.println("ClienteRequest2Cliente "+ cliente);
+		
+		return cliente;
 	}
+
 
 	
 	/**
@@ -24,6 +41,7 @@ public class ClienteMapper {
 	 * @param cliente el cliente de dominio a convertir; puede ser {@code null}
 	 * @return el {@link ClienteResponse} equivalente, o {@code null} si {@code cliente} es null
 	 */
+
 	public ClienteResponse toResponse (Cliente cliente)
 	{
 		ClienteResponse clienteResponse = null;

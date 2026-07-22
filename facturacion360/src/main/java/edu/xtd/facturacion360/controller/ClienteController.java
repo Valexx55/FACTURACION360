@@ -5,6 +5,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteRequest;
 import edu.xtd.facturacion360.dto.ClienteResponse;
+import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
 
@@ -44,8 +46,10 @@ import jakarta.validation.Valid;
 @RequestMapping("/cliente")
 public class ClienteController {
 
-	// Límites permitidos para el parámetro 'limite' (evita que pidan una
-	// barbaridad).
+
+	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
+
+	
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
 
@@ -57,21 +61,81 @@ public class ClienteController {
 	@Autowired
 	ClienteMapper clienteMapper;
 
+	/**
+	 * Devuelve los últimos clientes dados de alta (por defecto 10) como JSON.
+	 * Ejemplo de uso: {@code GET /cliente/listar-ultimos?limite=25}
+	 *
+	 * @param limite cuántos clientes devolver; llega por la URL (?limite=). Si no
+	 *               se manda, vale 10 (defaultValue). Se acota internamente al
+	 *               rango [1, 100].
+	 * @return {@code 200 OK} con la lista de {@link ClienteResponse}; o {@code 500}
+	 *         si falla la BD.
+	 */
 	@GetMapping("/listar-ultimos")
 	public ResponseEntity<List<ClienteResponse>> listarUltimos(@RequestParam(defaultValue = "10") int limite) {
+
+		// Declaramos la respuesta al inicio y hacemos UN solo return al final: así la
+		// rellenamos en el try (éxito) o en el catch (error) según cómo vaya la
+		// operación.
+		ResponseEntity<List<ClienteResponse>> respuestaHttp = null;
 
 		// 0) Validación: acotamos el valor pedido a [1, 100] para no saturar la BD
 		// (si no mandan 'limite', llega 10 por el defaultValue).
 		int limiteSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, limite));
+		log.info("GET /cliente/listar-ultimos?limite={} (acotado a {})", limite, limiteSeguro);
 
-		// 1) Pedimos al service los últimos clientes (objetos de dominio).
-		List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
+		try {
+			List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
 
-		// 2) Los traducimos a ClienteResponse (lo que ve el navegador).
-		List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
+			List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
 
-		// 3) 200 OK con la lista en el cuerpo.
-		return ResponseEntity.ok(respuesta);
+			log.info("listar-ultimos devuelve {} clientes", respuesta.size());
+			respuestaHttp = ResponseEntity.ok(respuesta);
+		} catch (DataAccessException e) {
+
+			log.error("Error al listar los ultimos clientes", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
+	}
+
+	/**
+	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla). No toca a
+	 * {@link #listarUltimos(int)}; es un endpoint aparte. Ejemplo de uso:
+	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10}
+	 *
+	 * @param pagina índice de la página empezando en 0; llega por la URL
+	 *               (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
+	 * @param tamano cuántos clientes por página; llega por la URL (?tamano=). Por
+	 *               defecto 10. Se acota al rango [1, 100].
+	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
+	 *         la página + metadatos de paginación); o {@code 500} si falla la BD.
+	 */
+	@GetMapping("/listar-pagina")
+	public ResponseEntity<PaginaClienteResponse> listarPagina(@RequestParam(defaultValue = "0") int pagina,
+			@RequestParam(defaultValue = "10") int tamano) {
+
+		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
+
+		// Validación: la página no puede ser negativa y el tamaño lo acotamos a [1,
+		// 100]
+		// (evita OFFSET raros o pedir demasiadas filas de golpe).
+		int paginaSegura = Math.max(0, pagina);
+		int tamanoSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, tamano));
+		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}", paginaSegura, tamanoSeguro);
+
+		try {
+			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
+			// etc.).
+			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro);
+			respuestaHttp = ResponseEntity.ok(pagina2);
+		} catch (DataAccessException e) {
+			log.error("Error al listar la pagina de clientes", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
 	}
 
 	@GetMapping("/{id}")

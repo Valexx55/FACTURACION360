@@ -1,38 +1,50 @@
 /*
  * clientes.js
  * -----------
- * Pide al backend los últimos clientes y los pinta en la tabla.
+ * Pide al backend una PÁGINA de clientes y la pinta en la tabla, con paginación
+ * (botones "Más recientes" / "Más antiguos").
  *
- * Endpoint (arquitectura del profe, con JDBC): GET /cliente/listar-ultimos
- * Devuelve una LISTA simple de ClienteResponse (sin paginación):
- *   { idCliente, nombre, nifCif, direccion, codigoPostal, poblacion,
- *     provincia, telefono, email, fechaAlta }
+ * Endpoint: GET /cliente/listar-pagina?pagina=0&tamano=10
+ * Devuelve un PaginaClienteResponse:
+ *   { contenido: [ {idCliente, nombre, nifCif, ...}, ... ],
+ *     paginaActual, totalPaginas, totalElementos, hayAnterior, haySiguiente }
  *
- * Idea: separar "pedir" (cargarClientes) de "pintar" (pintarFilas). Usamos el
- * <template> del HTML como molde y textContent (no innerHTML) para que un nombre
- * con < o & no pueda inyectar HTML.
+ * Idea: separar "pedir" (cargarClientes) de "pintar" (pintarFilas / pintarPaginacion).
+ * Usamos el <template> del HTML como molde y textContent (no innerHTML) para que un
+ * nombre con < o & no pueda inyectar HTML.
  */
 
-// Ruta relativa: el HTML lo sirve el propio Spring Boot, así que apunta al mismo
-// origen y no hay problemas de CORS.
-const API_LISTAR_ULTIMOS = "/cliente/listar-ultimos";
+// Ruta relativa: el HTML lo sirve el propio Spring Boot, mismo origen (sin CORS).
+const API_LISTAR_PAGINA = "/cliente/listar-pagina";
+const TAMANO_PAGINA = 10;
 
 // Referencias del DOM que usamos.
 const cuerpoTabla = document.getElementById("tabla-clientes");
 const plantillaFila = document.getElementById("fila-cliente-template");
+const btnRecientes = document.getElementById("btn-recientes");   // ir a la página anterior
+const btnAntiguos = document.getElementById("btn-antiguos");     // ir a la página siguiente
+const infoPagina = document.getElementById("info-pagina");
 
-/** Pide los últimos clientes al backend y dispara el repintado. */
-async function cargarClientes() {
+// Único estado que guardamos entre clics: en qué página estamos.
+let paginaActual = 0;
+
+/**
+ * Pide una página de clientes al backend y repinta la tabla y los botones.
+ * @param {number} pagina índice de la página a cargar (empieza en 0)
+ */
+async function cargarClientes(pagina) {
     try {
-        const respuesta = await fetch(API_LISTAR_ULTIMOS);
+        const respuesta = await fetch(`${API_LISTAR_PAGINA}?pagina=${pagina}&tamano=${TAMANO_PAGINA}`);
 
         // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
         if (!respuesta.ok) {
             throw new Error(`El servidor respondió ${respuesta.status}`);
         }
 
-        const clientes = await respuesta.json(); // es una lista (array)
-        pintarFilas(clientes);
+        const datos = await respuesta.json();   // PaginaClienteResponse
+        paginaActual = datos.paginaActual;
+        pintarFilas(datos.contenido);
+        pintarPaginacion(datos);
     } catch (error) {
         mostrarError(error);
     }
@@ -68,6 +80,20 @@ function pintarFilas(clientes) {
     }
 }
 
+/**
+ * Activa/desactiva los botones y actualiza el texto según los metadatos de la página.
+ * @param {Object} datos PaginaClienteResponse
+ */
+function pintarPaginacion(datos) {
+    // "Más recientes" = página anterior; "Más antiguos" = página siguiente. El backend
+    // nos dice si cada una existe, así el usuario no se sale del rango.
+    btnRecientes.disabled = !datos.hayAnterior;
+    btnAntiguos.disabled = !datos.haySiguiente;
+
+    infoPagina.textContent =
+        `Página ${datos.paginaActual + 1} de ${datos.totalPaginas} · ${datos.totalElementos} clientes`;
+}
+
 /** Pinta una fila que ocupa toda la tabla con un mensaje informativo. */
 function mostrarMensaje(texto) {
     cuerpoTabla.replaceChildren();
@@ -84,10 +110,22 @@ function mostrarMensaje(texto) {
 function mostrarError(error) {
     console.error("No se pudieron cargar los clientes:", error);
     mostrarMensaje("No se pudieron cargar los clientes. Inténtalo de nuevo.");
+    btnRecientes.disabled = true;
+    btnAntiguos.disabled = true;
 }
 
-// Carga inicial: los últimos clientes.
-cargarClientes();
+// --- Enlazado de los botones de paginación ---
+btnRecientes.addEventListener("click", () => cargarClientes(paginaActual - 1));
+btnAntiguos.addEventListener("click", () => cargarClientes(paginaActual + 1));
+
+// --- Refresco automático tras crear/editar/eliminar ---
+// Cuando otro compañero cambie un cliente, avisa disparando este evento y recargamos la
+// página actual (así la tabla siempre refleja la BD, sin que su código conozca el nuestro).
+// Ellos solo hacen: document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
+document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActual));
+
+// Carga inicial: la primera página (los 10 más recientes).
+cargarClientes(0);
 
 
 // 1. Botón VER

@@ -49,5 +49,8 @@ public interface ClienteRepository {
 	public boolean update (Cliente cliente);
 	
 	public boolean deleteById (int id);
+	
+	public List<Cliente> buscarXNombre (String nif_onombre);
+	public List<Cliente> buscarXNIF (String nif_onombre);
 
 }

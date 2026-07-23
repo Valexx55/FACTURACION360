@@ -270,5 +270,29 @@ public class ClienteController {
 		 *         error.
 		 */
 	}
+	
+	@GetMapping("/buscar")
+    public ResponseEntity<List<ClienteResponse>> buscar(@RequestParam(name = "nif_ocif") String nif_ocif) {
+        
+        // Llamamos al servicio que se encarga de decidir si es Nombre o NIF/CIF
+        List<ClienteResponse> resultados = clienteService.buscar(nif_ocif);
+        
+        // Preparamos la respuesta basándonos en tu esqueleto
+        ResponseEntity<List<ClienteResponse>> respuesta;
+
+        if (resultados.isEmpty()) {
+            // Si no hay resultados, devolvemos un 204 No Content (o podrías usar un 404 Not Found)
+            respuesta = ResponseEntity.noContent().build();
+        } else {
+            // Si hay resultados, devolvemos un 200 OK con la lista
+            respuesta = ResponseEntity.ok(resultados);
+        }
+        
+        return respuesta;
+    }
+}
+	}
+	
+	
 
 }

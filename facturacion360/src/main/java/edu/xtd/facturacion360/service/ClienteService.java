@@ -2,6 +2,7 @@ package edu.xtd.facturacion360.service;
 
 import java.util.List;
 import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.ClienteResponse;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 
 
@@ -42,5 +43,7 @@ public interface ClienteService {
 	public Cliente actualizar(int id, Cliente cliente);
 
 	public void eliminar(int id);
+
+	public List<ClienteResponse> buscar(String nif_ocif);
 
 }

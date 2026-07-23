@@ -196,6 +196,13 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	    return filas > 0;
 	}
 	@Override
+	/**
+	 * Ejecuta la sentencia SQL para borrar un cliente de la base de datos según su ID.
+	 * 
+	 * @param id El identificador del cliente a eliminar.
+	 * @return true si se eliminó exactamente una fila (borrado exitoso), 
+	 *         false si no se eliminó ninguna fila (el cliente no existía).
+	 */
 	public boolean deleteById(int id) {
 		boolean borrarOk = false;
 		String instruccionBorrar = "DELETE FROM clientes where idcliente = ?;";
@@ -206,12 +213,25 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		} 
 		
 		return borrarOk;
-		/**
-	     * Ejecuta la sentencia SQL para borrar un cliente de la base de datos según su ID.
-	     * 
-	     * @param id El identificador del cliente a eliminar.
-	     * @return true si se eliminó exactamente una fila (borrado exitoso), 
-	     *         false si no se eliminó ninguna fila (el cliente no existía).
-	     */
 	}
+	
+	
+
+	@Override
+    public List<Cliente> buscarXNif(String nifCif) {
+        // Consulta exacta por NIF/CIF
+        String sql = "SELECT * FROM clientes WHERE UPPER(nif_cif) = UPPER(?)";
+        
+        // JdbcTemplate usa tu ClienteRowMapper automáticamente para cada fila
+        return jdbcTemplate.query(sql, clienteRowMapper, nifCif);
+    }
+
+    @Override
+    public List<Cliente> BuscarXNombre(String nombre) {
+        // Consulta parcial por Nombre
+        String sql = "SELECT * FROM clientes WHERE LOWER(nombre) LIKE LOWER(?)";
+        String parametroBusqueda = "%" + nombre.toLowerCase() + "%";
+        
+        return jdbcTemplate.query(sql, clienteRowMapper, parametroBusqueda);
+    }
 }

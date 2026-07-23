@@ -124,6 +124,46 @@ public class ClienteServiceImpl implements ClienteService{
 
 	}
 
+	@Override
+	public List<ClienteResponse> buscar(String parametro) {
+        // Limpiamos espacios en blanco al inicio y final
+        String terminoLimpio = parametro.trim();
+        
+        List<Cliente> clientesEncontrados;
+
+        /* 
+         * Regex para NIF/CIF/NIE español: 
+         * Normalmente son 9 caracteres (números y letras) sin espacios.
+         * Si cumple esto, asumimos que es un documento de identidad.
+         */
+        String regexNifCif = "^[A-Za-z0-9]{9}$";
+
+        if (terminoLimpio.matches(regexNifCif)) {
+            // Es un NIF/CIF. Buscamos SOLO por NIF/CIF.
+            clientesEncontrados = clienteRepository.findByNifCif(terminoLimpio.toUpperCase());
+        } else {
+            // No tiene formato de NIF/CIF. Asumimos que es un Nombre.
+            clientesEncontrados = clienteRepository.findByNombreContainingIgnoreCase(terminoLimpio);
+        }
+
+        // Convertimos la lista de "Cliente" a "ClienteResponse"
+        return clientesEncontrados.stream()
+                .map(this::mapearAResponse)
+                .collect(Collectors.toList());
+    }
+
+    // Método auxiliar para transformar el record Cliente al record ClienteResponse
+    private ClienteResponse mapearAResponse(Cliente c) {
+        return new ClienteResponse(
+                c.idCliente(),
+                c.nombre(),
+                c.nifCif(),
+                c.telefono(),
+                c.email(), null, null, null, null, null
+        );
+    }
+}
+
 	// TODO: valorar la programación del método privado validarCifUnico mirar el
 	// Diagrama de Clases
 

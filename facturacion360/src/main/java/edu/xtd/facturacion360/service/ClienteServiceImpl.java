@@ -40,10 +40,12 @@ public class ClienteServiceImpl implements ClienteService{
 	}
 
 	@Override
-	public PaginaClienteResponse listarPagina(int pagina, int tamano) {
+	public PaginaClienteResponse listarPagina(int pagina, int tamano, String provincia, String poblacion, String orden) {
 		int offset = pagina * tamano;                        // cuántas filas saltar
-		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset);
-		long total = clienteRepository.contarTotal();
+		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset, provincia, poblacion, orden);
+		// El total se cuenta CON los mismos filtros: si no, el nº de páginas no
+		// cuadraría con lo que se ve en pantalla.
+		long total = clienteRepository.contarTotal(provincia, poblacion);
 
 		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El (double)
 		// es clave: sin él la división entera daría 2 y perderías la última página.
@@ -62,9 +64,23 @@ public class ClienteServiceImpl implements ClienteService{
 
 		PaginaClienteResponse respuesta = new PaginaClienteResponse(
 				contenido, pagina, totalPaginas, total, hayAnterior, haySiguiente);
-		log.info("listarPagina(pagina={}, tamano={}) -> pagina {}/{}, {} elementos",
-				pagina, tamano, pagina + 1, totalPaginas, total);
+		log.info("listarPagina(pagina={}, tamano={}, provincia={}, poblacion={}, orden={}) -> pagina {}/{}, {} elementos",
+				pagina, tamano, provincia, poblacion, orden, pagina + 1, totalPaginas, total);
 		return respuesta;
+	}
+
+	@Override
+	public List<String> listarProvincias() {
+		List<String> provincias = clienteRepository.findProvincias();
+		log.info("listarProvincias() -> {} provincias", provincias.size());
+		return provincias;
+	}
+
+	@Override
+	public List<String> listarPoblaciones(String provincia) {
+		List<String> poblaciones = clienteRepository.findPoblaciones(provincia);
+		log.info("listarPoblaciones(provincia={}) -> {} poblaciones", provincia, poblaciones.size());
+		return poblaciones;
 	}
 
 	@Override
@@ -125,46 +141,27 @@ public class ClienteServiceImpl implements ClienteService{
 	}
 
 	@Override
-	public List<ClienteResponse> buscar(String parametro) {
-        // Limpiamos espacios en blanco al inicio y final
-        String terminoLimpio = parametro.trim();
-        
-        List<Cliente> clientesEncontrados;
+	public List<ClienteResponse> buscar(String busqueda, String provincia, String poblacion, String orden) {
+		// Limpiamos espacios en blanco al inicio y final
+		String termino = busqueda.trim();
 
-        /* 
-         * Regex para NIF/CIF/NIE español: 
-         * Normalmente son 9 caracteres (números y letras) sin espacios.
-         * Si cumple esto, asumimos que es un documento de identidad.
-         */
-        String regexNifCif = "^[A-Za-z0-9]{9}$";
+		// Si el término llega vacío (p. ej. ?busqueda= ), no consultamos la BD:
+		// un LIKE '%%' devolvería la tabla entera.
+		if (termino.isEmpty()) {
+			return List.of();
+		}
 
-        if (terminoLimpio.matches(regexNifCif)) {
-            // Es un NIF/CIF. Buscamos SOLO por NIF/CIF.
-            clientesEncontrados = clienteRepository.findByNifCif(terminoLimpio.toUpperCase());
-        } else {
-            // No tiene formato de NIF/CIF. Asumimos que es un Nombre.
-            clientesEncontrados = clienteRepository.findByNombreContainingIgnoreCase(terminoLimpio);
-        }
-
-        // Convertimos la lista de "Cliente" a "ClienteResponse"
-        return clientesEncontrados.stream()
-                .map(this::mapearAResponse)
-                .collect(Collectors.toList());
-    }
-
-    // Método auxiliar para transformar el record Cliente al record ClienteResponse
-    private ClienteResponse mapearAResponse(Cliente c) {
-        return new ClienteResponse(
-                c.idCliente(),
-                c.nombre(),
-                c.nifCif(),
-                c.telefono(),
-                c.email(), null, null, null, null, null
-        );
-    }
+		// El repositorio busca el término en nombre Y nif_cif (coincidencia parcial),
+		// aplicando los filtros y la ordenación. Convertimos cada Cliente (dominio)
+		// a ClienteResponse con el mapper ya inyectado.
+		List<ClienteResponse> resultados = clienteRepository.buscar(termino, provincia, poblacion, orden).stream()
+				.map(clienteMapper::toResponse)
+				.toList();
+		log.info("buscar({}, provincia={}, poblacion={}, orden={}) -> {} resultados",
+				termino, provincia, poblacion, orden, resultados.size());
+		return resultados;
+	}
 }
 
 	// TODO: valorar la programación del método privado validarCifUnico mirar el
 	// Diagrama de Clases
-
-}

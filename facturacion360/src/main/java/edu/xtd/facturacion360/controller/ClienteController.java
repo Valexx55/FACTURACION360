@@ -114,20 +114,28 @@ public class ClienteController {
 	}
 
 	/**
-	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla). No toca a
-	 * {@link #listarUltimos(int)}; es un endpoint aparte. Ejemplo de uso:
-	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10}
+	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla), con filtros
+	 * y ordenación opcionales. No toca a {@link #listarUltimos(int)}; es un endpoint
+	 * aparte. Ejemplo de uso:
+	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10&provincia=Valencia&orden=nombre_az}
 	 *
-	 * @param pagina índice de la página empezando en 0; llega por la URL
-	 *               (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
-	 * @param tamano cuántos clientes por página; llega por la URL (?tamano=). Por
-	 *               defecto 10. Se acota al rango [1, 100].
+	 * @param pagina    índice de la página empezando en 0; llega por la URL
+	 *                  (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
+	 * @param tamano    cuántos clientes por página; llega por la URL (?tamano=). Por
+	 *                  defecto 10. Se acota al rango [1, 100].
+	 * @param provincia filtro por provincia (?provincia=); opcional.
+	 * @param poblacion filtro por población (?poblacion=); opcional.
+	 * @param orden     criterio de ordenación (?orden=): recientes (defecto),
+	 *                  antiguos, nombre_az o nombre_za.
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
 	 *         la página + metadatos de paginación); o {@code 500} si falla la BD.
 	 */
 	@GetMapping("/listar-pagina")
 	public ResponseEntity<PaginaClienteResponse> listarPagina(@RequestParam(defaultValue = "0") int pagina,
-			@RequestParam(defaultValue = "10") int tamano) {
+			@RequestParam(defaultValue = "10") int tamano,
+			@RequestParam(required = false) String provincia,
+			@RequestParam(required = false) String poblacion,
+			@RequestParam(defaultValue = "recientes") String orden) {
 
 		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
 
@@ -136,15 +144,72 @@ public class ClienteController {
 		// (evita OFFSET raros o pedir demasiadas filas de golpe).
 		int paginaSegura = Math.max(0, pagina);
 		int tamanoSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, tamano));
-		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}", paginaSegura, tamanoSeguro);
+		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}&provincia={}&poblacion={}&orden={}",
+				paginaSegura, tamanoSeguro, provincia, poblacion, orden);
 
 		try {
 			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
 			// etc.).
-			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro);
+			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro, provincia,
+					poblacion, orden);
 			respuestaHttp = ResponseEntity.ok(pagina2);
 		} catch (DataAccessException e) {
 			log.error("Error al listar la pagina de clientes", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
+	}
+
+	/**
+	 * Devuelve las provincias distintas que existen en la tabla, para rellenar el
+	 * desplegable de filtro del frontend. Ejemplo de uso:
+	 * {@code GET /cliente/provincias}
+	 *
+	 * @return {@code 200 OK} con la lista de provincias; o {@code 500} si falla la BD.
+	 */
+	@Operation(summary = "Lista las provincias", description = "Devuelve las provincias distintas de la tabla clientes, ordenadas alfabéticamente")
+	@ApiResponse(responseCode = "200", description = "Provincias recuperadas correctamente")
+	@GetMapping("/provincias")
+	public ResponseEntity<List<String>> listarProvincias() {
+
+		ResponseEntity<List<String>> respuestaHttp = null;
+		log.info("GET /cliente/provincias");
+
+		try {
+			List<String> provincias = clienteService.listarProvincias();
+			respuestaHttp = ResponseEntity.ok(provincias);
+		} catch (DataAccessException e) {
+			log.error("Error al listar las provincias", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
+	}
+
+	/**
+	 * Devuelve las poblaciones distintas que existen en la tabla, para el desplegable
+	 * de filtro en cascada. Ejemplo de uso:
+	 * {@code GET /cliente/poblaciones?provincia=Valencia}
+	 *
+	 * @param provincia si llega informada, solo las poblaciones de esa provincia;
+	 *                  si no, todas. Opcional.
+	 * @return {@code 200 OK} con la lista de poblaciones; o {@code 500} si falla la BD.
+	 */
+	@Operation(summary = "Lista las poblaciones", description = "Devuelve las poblaciones distintas de la tabla clientes; si se indica provincia, solo las de esa provincia")
+	@ApiResponse(responseCode = "200", description = "Poblaciones recuperadas correctamente")
+	@GetMapping("/poblaciones")
+	public ResponseEntity<List<String>> listarPoblaciones(
+			@Parameter(description = "Provincia por la que filtrar", example = "Valencia") @RequestParam(required = false) String provincia) {
+
+		ResponseEntity<List<String>> respuestaHttp = null;
+		log.info("GET /cliente/poblaciones?provincia={}", provincia);
+
+		try {
+			List<String> poblaciones = clienteService.listarPoblaciones(provincia);
+			respuestaHttp = ResponseEntity.ok(poblaciones);
+		} catch (DataAccessException e) {
+			log.error("Error al listar las poblaciones", e);
 			respuestaHttp = ResponseEntity.internalServerError().build();
 		}
 
@@ -274,24 +339,33 @@ public class ClienteController {
 	/**
 	 * Busca clientes por nombre o NIF/CIF. La coincidencia es parcial (el término
 	 * puede ser un trozo del nombre o del documento) y no distingue mayúsculas.
-	 * Ejemplo de uso: {@code GET /cliente/buscar?nif_ocif=garcia}
+	 * Admite los mismos filtros y ordenación que el listado paginado.
+	 * Ejemplo de uso: {@code GET /cliente/buscar?busqueda=garcia&provincia=Valencia&orden=nombre_az}
 	 *
-	 * @param nif_ocif término a buscar en nombre y nif_cif; llega por la URL
-	 *                 (?nif_ocif=)
+	 * @param busqueda  término a buscar en nombre y nif_cif; llega por la URL
+	 *                  (?busqueda=)
+	 * @param provincia filtro por provincia (?provincia=); opcional.
+	 * @param poblacion filtro por población (?poblacion=); opcional.
+	 * @param orden     criterio de ordenación (?orden=): recientes (defecto),
+	 *                  antiguos, nombre_az o nombre_za.
 	 * @return {@code 200 OK} con la lista de {@link ClienteResponse} que coinciden,
 	 *         o {@code 204 No Content} si no hay ninguna coincidencia
 	 */
-	@Operation(summary = "Busca clientes", description = "Busca por nombre o NIF/CIF (coincidencia parcial, sin distinguir mayúsculas)")
+	@Operation(summary = "Busca clientes", description = "Busca por nombre o NIF/CIF (coincidencia parcial, sin distinguir mayúsculas), con filtros y ordenación opcionales")
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Clientes encontrados"),
 			@ApiResponse(responseCode = "204", description = "Ningún cliente coincide con la búsqueda") })
 	@GetMapping("/buscar")
 	public ResponseEntity<List<ClienteResponse>> buscar(
-			@Parameter(description = "Término a buscar en nombre o NIF/CIF", example = "12345678Z") @RequestParam(name = "nif_ocif") String nif_ocif) {
+			@Parameter(description = "Término a buscar en nombre o NIF/CIF", example = "12345678Z") @RequestParam(name = "busqueda") String busqueda,
+			@RequestParam(required = false) String provincia,
+			@RequestParam(required = false) String poblacion,
+			@RequestParam(defaultValue = "recientes") String orden) {
 
-		log.info("GET /cliente/buscar?nif_ocif={}", nif_ocif);
+		log.info("GET /cliente/buscar?busqueda={}&provincia={}&poblacion={}&orden={}", busqueda, provincia, poblacion,
+				orden);
 
 		// El servicio busca el término en nombre y nif_cif (coincidencia parcial)
-		List<ClienteResponse> resultados = clienteService.buscar(nif_ocif);
+		List<ClienteResponse> resultados = clienteService.buscar(busqueda, provincia, poblacion, orden);
 
 		// Preparamos la respuesta basándonos en tu esqueleto
 		ResponseEntity<List<ClienteResponse>> respuesta;

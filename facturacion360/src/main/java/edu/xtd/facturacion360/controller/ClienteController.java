@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.TransactionException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -153,7 +154,13 @@ public class ClienteController {
 			// etc.).
 			PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
 			respuestaHttp = ResponseEntity.ok(pagina);
-		} catch (DataAccessException e) {
+		} catch (DataAccessException | TransactionException e) {
+			// TransactionException aparte de DataAccessException porque NO son la misma
+			// familia: al ser listarPagina transaccional, si la BD no responde el fallo
+			// salta al ABRIR la transacción (CannotCreateTransactionException), antes de
+			// lanzar ninguna consulta. Sin este segundo tipo, esa excepción se escaparía y
+			// el cliente recibiría la página de error de Spring con la traza dentro, en vez
+			// del 500 limpio que devuelven los demás endpoints.
 			log.error("Error al listar la pagina de clientes", e);
 			respuestaHttp = ResponseEntity.internalServerError().build();
 		}

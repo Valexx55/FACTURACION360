@@ -168,6 +168,28 @@ ORDER BY fecha_alta IS NULL, fecha_alta DESC, idcliente DESC
 **La ordenación se aplica sobre lo ya filtrado sin trabajo extra**: en SQL el `ORDER BY` se evalúa
 *después* del `WHERE`. Si filtras por Madrid y ordenas alfabéticamente, ordena los de Madrid.
 
+#### La página y el total, en la misma transacción
+
+`listarPagina` hace **dos** consultas: una trae las filas de la página y otra cuenta el total para
+saber cuántas páginas hay. Si cada una va por su cuenta y alguien da de alta o borra un cliente
+justo entre las dos, verían estados distintos de la tabla: el total diría "12 clientes" mientras se
+muestran 10 filas, y la paginación no cuadraría.
+
+Por eso el método lleva:
+
+```java
+@Transactional(readOnly = true)
+```
+
+Con la transacción abierta, MySQL (InnoDB, aislamiento `REPEATABLE READ`) sirve **las dos consultas
+desde la misma foto** de la tabla. El `readOnly = true` avisa además al driver de que no vamos a
+escribir, con lo que puede optimizar.
+
+**Los demás métodos de lectura NO la llevan, y es intencionado**: `listarUltimos`,
+`listarProvincias` y `listarPoblaciones` hacen **una sola** consulta, así que no hay dos lecturas
+que puedan discrepar entre sí y una transacción solo añadiría un `BEGIN`/`COMMIT` sin ganar nada.
+Anotar por costumbre allí donde no hace falta es ruido.
+
 #### Los criterios viajan juntos: el record `CriteriosCliente`
 
 Los siete datos que definen una consulta (`pagina`, `tamano`, `busqueda`, `provincia`, `poblacion`,

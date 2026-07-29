@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import edu.xtd.facturacion360.dto.Cliente;
@@ -40,6 +41,14 @@ public class ClienteServiceImpl implements ClienteService{
 		return clientes;
 	}
 
+	// Las dos consultas de este método (las filas y el total) tienen que ver la MISMA foto
+	// de la tabla. Sin transacción, cada una va por su cuenta: si alguien da de alta o
+	// borra un cliente justo entre ambas, el total no cuadraría con las filas devueltas y
+	// la paginación mostraría "12 clientes" con 10 filas.
+	// readOnly = true además avisa al driver de que no vamos a escribir, y así puede
+	// optimizar. Los demás métodos de lectura NO lo llevan a propósito: hacen una sola
+	// consulta, así que no hay dos lecturas que puedan discrepar y solo añadiría trabajo.
+	@Transactional(readOnly = true)
 	@Override
 	public PaginaClienteResponse listarPagina(CriteriosCliente criterios) {
 		// Los criterios llegan ya acotados y limpios (lo hace el constructor compacto de

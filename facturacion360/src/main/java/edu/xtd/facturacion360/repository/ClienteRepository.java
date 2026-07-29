@@ -22,27 +22,34 @@ public interface ClienteRepository {
 
 	/**
 	 * Una página de clientes: 'tamano' filas saltando las primeras 'offset'
-	 * ({@code LIMIT ? OFFSET ?}), aplicando los filtros y la ordenación pedidos.
+	 * ({@code LIMIT ? OFFSET ?}), aplicando la búsqueda, los filtros y la
+	 * ordenación pedidos.
 	 *
-	 * @param tamano    cuántas filas devolver (LIMIT)
-	 * @param offset    cuántas filas saltar desde el principio (OFFSET)
-	 * @param provincia filtro por provincia; null o vacío = no filtrar
-	 * @param poblacion filtro por población; null o vacío = no filtrar
-	 * @param orden     criterio de ordenación (recientes, antiguos, nombre_az,
-	 *                  nombre_za); se traduce con una lista blanca
+	 * @param tamano     cuántas filas devolver (LIMIT)
+	 * @param offset     cuántas filas saltar desde el principio (OFFSET)
+	 * @param busqueda   texto a buscar en nombre y nif_cif (coincidencia parcial);
+	 *                   null o vacío = no buscar
+	 * @param provincia  filtro por provincia; null o vacío = no filtrar
+	 * @param poblacion  filtro por población; null o vacío = no filtrar
+	 * @param ordenarPor columna por la que ordenar (nombre o fecha_alta); se traduce
+	 *                   con una lista blanca
+	 * @param direccion  sentido de la ordenación: asc o desc
 	 * @return la lista de clientes de esa página; vacía si no hay, nunca {@code null}
 	 */
-	public List<Cliente> findPagina (int tamano, int offset, String provincia, String poblacion, String orden);
+	public List<Cliente> findPagina (int tamano, long offset, String busqueda, String provincia, String poblacion,
+			String ordenarPor, String direccion);
 
 	/**
-	 * Cuenta el total de clientes que cumplen los filtros (para saber cuántas
-	 * páginas hay con ese filtro aplicado).
+	 * Cuenta el total de clientes que cumplen la búsqueda y los filtros (para saber
+	 * cuántas páginas hay con esos criterios aplicados). Recibe los mismos criterios
+	 * que {@link #findPagina} para que el total cuadre siempre con lo que se muestra.
 	 *
+	 * @param busqueda  texto a buscar en nombre y nif_cif; null o vacío = no buscar
 	 * @param provincia filtro por provincia; null o vacío = no filtrar
 	 * @param poblacion filtro por población; null o vacío = no filtrar
-	 * @return el número total de clientes que cumplen los filtros
+	 * @return el número total de clientes que cumplen los criterios
 	 */
-	public long contarTotal (String provincia, String poblacion);
+	public long contarTotal (String busqueda, String provincia, String poblacion);
 
 	/**
 	 * Las provincias distintas que existen en la tabla (para rellenar el
@@ -75,19 +82,5 @@ public interface ClienteRepository {
 	public boolean update (Cliente cliente);
 	
 	public boolean deleteById (int id);
-	
-	/**
-	 * Busca clientes cuyo nombre o NIF/CIF contengan el término indicado
-	 * (coincidencia parcial, sin distinguir mayúsculas de minúsculas), aplicando
-	 * los filtros y la ordenación pedidos.
-	 *
-	 * @param termino   texto a buscar en nombre y nif_cif
-	 * @param provincia filtro por provincia; null o vacío = no filtrar
-	 * @param poblacion filtro por población; null o vacío = no filtrar
-	 * @param orden     criterio de ordenación (recientes, antiguos, nombre_az,
-	 *                  nombre_za); se traduce con una lista blanca
-	 * @return la lista de clientes que coinciden; vacía si no hay ninguno, nunca {@code null}
-	 */
-	public List<Cliente> buscar (String termino, String provincia, String poblacion, String orden);
 
 }

@@ -13,6 +13,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,6 +32,7 @@ import edu.xtd.facturacion360.dto.ClienteResponse;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -56,6 +58,10 @@ import io.swagger.v3.oas.annotations.Hidden;
 
 @RestController
 @RequestMapping("/cliente")
+// @Validated hace que Spring compruebe las anotaciones de validación (@Size, etc.)
+// puestas directamente sobre los @RequestParam. Sin ella se ignorarían en silencio:
+// @Valid solo cubre los objetos del @RequestBody, no los parámetros sueltos.
+@Validated
 public class ClienteController {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
@@ -63,10 +69,12 @@ public class ClienteController {
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
 
+	// La columna 'nombre' es VARCHAR(60): un término más largo no puede coincidir con
+	// nada, así que lo rechazamos antes de molestar a la base de datos.
+	private static final int LONGITUD_MAX_BUSQUEDA = 60;
+
 	@Autowired
 	ClienteService clienteService;
-
-	Logger logger = LoggerFactory.getLogger(ClienteController.class);
 
 	@Autowired
 	ClienteMapper clienteMapper;
@@ -114,28 +122,41 @@ public class ClienteController {
 	}
 
 	/**
-	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla), con filtros
-	 * y ordenación opcionales. No toca a {@link #listarUltimos(int)}; es un endpoint
-	 * aparte. Ejemplo de uso:
-	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10&provincia=Valencia&orden=nombre_az}
+	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla), con búsqueda,
+	 * filtros y ordenación opcionales. No toca a {@link #listarUltimos(int)}; es un
+	 * endpoint aparte. Ejemplo de uso:
+	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10&busqueda=garcia&provincia=Valencia&ordenarPor=nombre&direccion=asc}
 	 *
-	 * @param pagina    índice de la página empezando en 0; llega por la URL
-	 *                  (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
-	 * @param tamano    cuántos clientes por página; llega por la URL (?tamano=). Por
-	 *                  defecto 10. Se acota al rango [1, 100].
-	 * @param provincia filtro por provincia (?provincia=); opcional.
-	 * @param poblacion filtro por población (?poblacion=); opcional.
-	 * @param orden     criterio de ordenación (?orden=): recientes (defecto),
-	 *                  antiguos, nombre_az o nombre_za.
+	 * Buscar es "listar con un filtro de texto más", por eso comparte endpoint con el
+	 * listado: así la búsqueda hereda la paginación y los metadatos, y el frontend usa
+	 * un único camino de código tanto si hay término de búsqueda como si no.
+	 *
+	 * @param pagina     índice de la página empezando en 0; llega por la URL
+	 *                   (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
+	 * @param tamano     cuántos clientes por página; llega por la URL (?tamano=). Por
+	 *                   defecto 10. Se acota al rango [1, 100].
+	 * @param busqueda   texto a buscar en nombre y nif_cif (?busqueda=), coincidencia
+	 *                   parcial y sin distinguir mayúsculas; opcional.
+	 * @param provincia  filtro por provincia (?provincia=); opcional.
+	 * @param poblacion  filtro por población (?poblacion=); opcional.
+	 * @param ordenarPor columna por la que ordenar (?ordenarPor=): fecha_alta (defecto)
+	 *                   o nombre.
+	 * @param direccion  sentido de la ordenación (?direccion=): desc (defecto) o asc.
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
 	 *         la página + metadatos de paginación); o {@code 500} si falla la BD.
 	 */
+	@Operation(summary = "Lista una página de clientes", description = "Devuelve una página de clientes con búsqueda por nombre o NIF/CIF, filtros por provincia y población, y ordenación por nombre o fecha de alta en ambos sentidos")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Página recuperada correctamente"),
+			@ApiResponse(responseCode = "400", description = "Término de búsqueda demasiado largo"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar los clientes") })
 	@GetMapping("/listar-pagina")
 	public ResponseEntity<PaginaClienteResponse> listarPagina(@RequestParam(defaultValue = "0") int pagina,
 			@RequestParam(defaultValue = "10") int tamano,
-			@RequestParam(required = false) String provincia,
-			@RequestParam(required = false) String poblacion,
-			@RequestParam(defaultValue = "recientes") String orden) {
+			@Parameter(description = "Texto a buscar en nombre o NIF/CIF", example = "garcia") @RequestParam(required = false) @Size(max = LONGITUD_MAX_BUSQUEDA, message = "El término de búsqueda no puede superar los 60 caracteres") String busqueda,
+			@Parameter(description = "Provincia por la que filtrar", example = "Valencia") @RequestParam(required = false) String provincia,
+			@Parameter(description = "Población por la que filtrar", example = "Valencia") @RequestParam(required = false) String poblacion,
+			@Parameter(description = "Columna por la que ordenar", example = "nombre") @RequestParam(defaultValue = "fecha_alta") String ordenarPor,
+			@Parameter(description = "Sentido de la ordenación", example = "asc") @RequestParam(defaultValue = "desc") String direccion) {
 
 		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
 
@@ -144,14 +165,14 @@ public class ClienteController {
 		// (evita OFFSET raros o pedir demasiadas filas de golpe).
 		int paginaSegura = Math.max(0, pagina);
 		int tamanoSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, tamano));
-		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}&provincia={}&poblacion={}&orden={}",
-				paginaSegura, tamanoSeguro, provincia, poblacion, orden);
+		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}&busqueda={}&provincia={}&poblacion={}&ordenarPor={}&direccion={}",
+				paginaSegura, tamanoSeguro, busqueda, provincia, poblacion, ordenarPor, direccion);
 
 		try {
 			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
 			// etc.).
-			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro, provincia,
-					poblacion, orden);
+			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro, busqueda, provincia,
+					poblacion, ordenarPor, direccion);
 			respuestaHttp = ResponseEntity.ok(pagina2);
 		} catch (DataAccessException e) {
 			log.error("Error al listar la pagina de clientes", e);
@@ -251,23 +272,23 @@ public class ClienteController {
 		ClienteResponse clienteResponse = null;
 
 		if (bindingResult.hasErrors()) {
-			logger.error("Cliente recibido con errores");
+			log.error("Cliente recibido con errores");
 			respuesta = ResponseEntity.badRequest().build();
 		} else {
 			try {
-				logger.debug("Cliente sin errores de validación");
+				log.debug("Cliente sin errores de validación");
 				Cliente cliente = clienteMapper.toDomain(clienteRequest);
 				Cliente clienteNuevo = clienteService.crear(cliente);
 
-				logger.debug("Cliente creado correctamente " + clienteNuevo);
+				log.debug("Cliente creado correctamente " + clienteNuevo);
 				clienteResponse = clienteMapper.toResponse(clienteNuevo);
 				respuesta = ResponseEntity.status(HttpStatus.CREATED).body(clienteResponse);
 
 			} catch (DuplicateKeyException e) {
-				logger.error("NIF duplicado", e);
+				log.error("NIF duplicado", e);
 				respuesta = ResponseEntity.status(HttpStatus.CONFLICT).build();
 			} catch (Exception e) {
-				logger.error("Excepción creando cliente", e);
+				log.error("Excepción creando cliente", e);
 				respuesta = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 			}
 		}
@@ -336,49 +357,4 @@ public class ClienteController {
 		 */
 	}
 
-	/**
-	 * Busca clientes por nombre o NIF/CIF. La coincidencia es parcial (el término
-	 * puede ser un trozo del nombre o del documento) y no distingue mayúsculas.
-	 * Admite los mismos filtros y ordenación que el listado paginado.
-	 * Ejemplo de uso: {@code GET /cliente/buscar?busqueda=garcia&provincia=Valencia&orden=nombre_az}
-	 *
-	 * @param busqueda  término a buscar en nombre y nif_cif; llega por la URL
-	 *                  (?busqueda=)
-	 * @param provincia filtro por provincia (?provincia=); opcional.
-	 * @param poblacion filtro por población (?poblacion=); opcional.
-	 * @param orden     criterio de ordenación (?orden=): recientes (defecto),
-	 *                  antiguos, nombre_az o nombre_za.
-	 * @return {@code 200 OK} con la lista de {@link ClienteResponse} que coinciden,
-	 *         o {@code 204 No Content} si no hay ninguna coincidencia
-	 */
-	@Operation(summary = "Busca clientes", description = "Busca por nombre o NIF/CIF (coincidencia parcial, sin distinguir mayúsculas), con filtros y ordenación opcionales")
-	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Clientes encontrados"),
-			@ApiResponse(responseCode = "204", description = "Ningún cliente coincide con la búsqueda") })
-	@GetMapping("/buscar")
-	public ResponseEntity<List<ClienteResponse>> buscar(
-			@Parameter(description = "Término a buscar en nombre o NIF/CIF", example = "12345678Z") @RequestParam(name = "busqueda") String busqueda,
-			@RequestParam(required = false) String provincia,
-			@RequestParam(required = false) String poblacion,
-			@RequestParam(defaultValue = "recientes") String orden) {
-
-		log.info("GET /cliente/buscar?busqueda={}&provincia={}&poblacion={}&orden={}", busqueda, provincia, poblacion,
-				orden);
-
-		// El servicio busca el término en nombre y nif_cif (coincidencia parcial)
-		List<ClienteResponse> resultados = clienteService.buscar(busqueda, provincia, poblacion, orden);
-
-		// Preparamos la respuesta basándonos en tu esqueleto
-		ResponseEntity<List<ClienteResponse>> respuesta;
-
-		if (resultados.isEmpty()) {
-			// Si no hay resultados, devolvemos un 204 No Content (o podrías usar un 404 Not
-			// Found)
-			respuesta = ResponseEntity.noContent().build();
-		} else {
-			// Si hay resultados, devolvemos un 200 OK con la lista
-			respuesta = ResponseEntity.ok(resultados);
-		}
-
-		return respuesta;
-	}
 }

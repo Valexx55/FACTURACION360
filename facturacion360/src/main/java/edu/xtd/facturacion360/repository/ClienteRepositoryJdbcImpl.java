@@ -7,6 +7,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -44,6 +45,19 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	private static final String COLUMNAS_CLIENTE = "idcliente, nombre, nif_cif, direccion, codigopostal, "
 			+ "poblacion, provincia, telefono, email, fecha_alta";
 
+	// LISTA BLANCA de ordenaciones permitidas. La CLAVE es lo que puede mandar el cliente
+	// por la URL; el VALOR es el nombre real de la columna, escrito por nosotros. Como el
+	// ORDER BY no admite '?', esta traducción es lo que impide que el texto del usuario
+	// llegue nunca al SQL: si la clave no está en el mapa, se usa la de por defecto.
+	// Para permitir ordenar por una columna más, basta con añadir aquí una línea: funciona
+	// automáticamente en ambos sentidos (ver sqlOrden).
+	private static final Map<String, String> COLUMNAS_ORDEN = Map.of(
+			"nombre", "nombre",
+			"fecha_alta", "fecha_alta");
+
+	// Columna por la que se ordena si no piden otra cosa (o piden algo que no existe).
+	private static final String COLUMNA_ORDEN_DEFECTO = "fecha_alta";
+
 	@Autowired
 	ClienteRowMapper clienteRowMapper;
 
@@ -80,34 +94,36 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	}
 
 	@Override
-	public List<Cliente> findPagina(int tamano, int offset, String provincia, String poblacion, String orden) {
+	public List<Cliente> findPagina(int tamano, long offset, String busqueda, String provincia, String poblacion,
+			String ordenarPor, String direccion) {
 		// Igual que findUltimos pero con dos '?': LIMIT (cuántas filas) y OFFSET (cuántas
 		// saltar). Se sustituyen en orden -> primero 'tamano', luego 'offset'. Así traemos solo
 		// la página pedida, no todos los clientes.
-		// El WHERE se construye solo con los filtros que llegan informados (ver anadirFiltros).
+		// El WHERE se construye solo con los criterios que llegan informados (ver anadirFiltros).
 		StringBuilder sql = new StringBuilder("SELECT " + COLUMNAS_CLIENTE + " FROM clientes");
 		List<Object> args = new ArrayList<>();
-		anadirFiltros(sql, args, provincia, poblacion, false);
+		anadirFiltros(sql, args, busqueda, provincia, poblacion);
 
 		// El ORDER BY NO admite '?': el criterio se traduce con la lista blanca sqlOrden().
-		sql.append(sqlOrden(orden)).append(" LIMIT ? OFFSET ?");
+		sql.append(sqlOrden(ordenarPor, direccion)).append(" LIMIT ? OFFSET ?");
 		args.add(tamano);
 		args.add(offset);
 
 		List<Cliente> clientes = jdbcTemplate.query(sql.toString(), clienteRowMapper, args.toArray());
-		log.debug("findPagina(tamano={}, offset={}, provincia={}, poblacion={}, orden={}) -> {} filas",
-				tamano, offset, provincia, poblacion, orden, clientes.size());
+		log.debug("findPagina(tamano={}, offset={}, busqueda={}, provincia={}, poblacion={}, ordenarPor={}, direccion={}) -> {} filas",
+				tamano, offset, busqueda, provincia, poblacion, ordenarPor, direccion, clientes.size());
 		return clientes;
 	}
 
 	@Override
-	public long contarTotal(String provincia, String poblacion) {
+	public long contarTotal(String busqueda, String provincia, String poblacion) {
 		// queryForObject: para un SELECT que devuelve UN SOLO valor (aquí el nº total de filas).
 		// Le decimos el tipo esperado (Long.class) para que lo convierta por nosotros.
-		// Lleva los MISMOS filtros que findPagina: el total debe cuadrar con lo que se ve.
+		// Lleva los MISMOS criterios que findPagina (misma llamada a anadirFiltros): el total
+		// debe cuadrar con lo que se ve, o el nº de páginas mentiría.
 		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM clientes");
 		List<Object> args = new ArrayList<>();
-		anadirFiltros(sql, args, provincia, poblacion, false);
+		anadirFiltros(sql, args, busqueda, provincia, poblacion);
 
 		Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
 		return total != null ? total : 0L;
@@ -143,50 +159,107 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	}
 
 	/**
-	 * Añade al SQL los filtros de provincia y población que lleguen informados (null o
-	 * vacío = sin filtro). Cada valor se añade como '?' a {@code args}, en orden, para
-	 * que viaje aparte del SQL (PreparedStatement): sin inyección SQL.
+	 * Construye el WHERE con los criterios que lleguen informados (null o vacío = sin
+	 * filtrar). Lo usan TANTO findPagina COMO contarTotal, y por eso está aquí fuera: si
+	 * cada uno montara su propio WHERE, el total y las filas mostradas podrían dejar de
+	 * cuadrar en cuanto alguien tocara uno y se olvidara del otro.
 	 *
-	 * @param sql            consulta en construcción; se le concatenan las condiciones
-	 * @param args           valores de los '?', en el mismo orden
-	 * @param provincia      filtro de provincia; null o vacío = no filtrar
-	 * @param poblacion      filtro de población; null o vacío = no filtrar
-	 * @param conectarConAnd {@code true} si la consulta ya lleva un WHERE (la del
-	 *                       buscador) y los filtros deben encadenarse con AND
+	 * Cada valor se añade como '?' a {@code args}, en orden, para que viaje aparte del
+	 * texto SQL (PreparedStatement): así el dato NUNCA se interpreta como instrucción y
+	 * no hay inyección SQL.
+	 *
+	 * @param sql       consulta en construcción; se le concatenan las condiciones
+	 * @param args      valores de los '?', en el mismo orden en que aparecen
+	 * @param busqueda  texto a buscar en nombre y nif_cif; null o vacío = no buscar
+	 * @param provincia filtro de provincia; null o vacío = no filtrar
+	 * @param poblacion filtro de población; null o vacío = no filtrar
 	 */
-	private void anadirFiltros(StringBuilder sql, List<Object> args, String provincia, String poblacion,
-			boolean conectarConAnd) {
-		boolean hayCondiciones = conectarConAnd;
+	private void anadirFiltros(StringBuilder sql, List<Object> args, String busqueda, String provincia,
+			String poblacion) {
+		// Vamos juntando condiciones y al final las unimos con AND. Así no hace falta ir
+		// preguntando "¿soy la primera condición, pongo WHERE o AND?" en cada if.
+		List<String> condiciones = new ArrayList<>();
 
+		if (busqueda != null && !busqueda.isBlank()) {
+			// Coincidencia parcial en AMBOS campos: los comodines %...% envuelven al término.
+			// Los paréntesis alrededor del OR son OBLIGATORIOS: sin ellos, los AND de los
+			// filtros solo se aplicarían al nif_cif (AND tiene prioridad sobre OR).
+			// Sin LOWER(): la tabla es utf8mb4_0900_ai_ci, que YA compara ignorando
+			// mayúsculas y acentos ('garcia' encuentra 'García'). Envolver la columna en
+			// LOWER() no cambiaría el resultado y además impediría usar índices.
+			condiciones.add("(nombre LIKE ? ESCAPE '\\\\' OR nif_cif LIKE ? ESCAPE '\\\\')");
+			String patron = "%" + escaparComodines(busqueda) + "%";
+			args.add(patron);
+			args.add(patron);
+		}
 		if (provincia != null && !provincia.isBlank()) {
-			sql.append(hayCondiciones ? " AND provincia = ?" : " WHERE provincia = ?");
+			condiciones.add("provincia = ?");
 			args.add(provincia);
-			hayCondiciones = true;
 		}
 		if (poblacion != null && !poblacion.isBlank()) {
-			sql.append(hayCondiciones ? " AND poblacion = ?" : " WHERE poblacion = ?");
+			condiciones.add("poblacion = ?");
 			args.add(poblacion);
+		}
+
+		if (!condiciones.isEmpty()) {
+			sql.append(" WHERE ").append(String.join(" AND ", condiciones));
 		}
 	}
 
 	/**
-	 * Lista blanca de ordenaciones: traduce el criterio que llega del cliente a un
-	 * fragmento ORDER BY FIJO escrito por nosotros. Es imprescindible porque el
-	 * ORDER BY no admite '?': sin esta traducción habría que concatenar el texto del
-	 * cliente en el SQL y eso abriría la puerta a la INYECCIÓN SQL. Cualquier valor
-	 * que no esté en la lista cae en el {@code default} (recientes).
-	 * {@code idcliente} se añade como desempate: varios clientes pueden compartir fecha_alta.
+	 * Neutraliza los comodines de LIKE dentro del texto que escribe el usuario.
 	 *
-	 * @param orden criterio pedido: recientes, antiguos, nombre_az o nombre_za
+	 * En LIKE, '%' significa "cualquier cosa" y '_' "un carácter cualquiera". Si el
+	 * término llega sin tratar, buscar "%" genera el patrón '%%%', que casa con TODAS
+	 * las filas: el buscador dejaría de filtrar y devolvería la tabla entera. No es
+	 * inyección SQL (el valor sigue viajando como '?'), pero sí un modo de saltarse
+	 * el filtro, así que los escapamos para que se busquen como caracteres normales.
+	 *
+	 * El orden importa: la barra invertida va PRIMERO. Si se escapara la última,
+	 * volvería a escapar las barras que acabamos de introducir para '%' y '_'.
+	 *
+	 * @param termino texto tal cual lo escribió el usuario
+	 * @return el mismo texto con '\', '%' y '_' escapados; se usa junto a ESCAPE '\'
+	 */
+	private String escaparComodines(String termino) {
+		return termino.replace("\\", "\\\\")
+				.replace("%", "\\%")
+				.replace("_", "\\_");
+	}
+
+	/**
+	 * Lista blanca de ordenaciones: traduce lo que pide el cliente a un fragmento
+	 * ORDER BY escrito por nosotros. Es imprescindible porque el ORDER BY no admite
+	 * '?': sin esta traducción habría que concatenar el texto del cliente en el SQL y
+	 * eso sí abriría la puerta a la INYECCIÓN SQL.
+	 *
+	 * Fíjate en que el texto del usuario nunca se concatena: solo se usa como CLAVE
+	 * para buscar en el mapa. Si pide una columna que no está en la lista, se ignora y
+	 * cae en el valor por defecto. La dirección se resuelve con una comparación, así
+	 * que solo puede acabar valiendo "ASC" o "DESC".
+	 *
+	 * @param ordenarPor columna pedida; ver {@link #COLUMNAS_ORDEN}
+	 * @param direccion  "asc" o "desc"; cualquier otra cosa se trata como "desc"
 	 * @return el fragmento " ORDER BY ..." correspondiente, nunca {@code null}
 	 */
-	private String sqlOrden(String orden) {
-		return switch (orden == null ? "" : orden) {
-			case "antiguos" -> " ORDER BY fecha_alta ASC, idcliente ASC";
-			case "nombre_az" -> " ORDER BY nombre ASC, idcliente DESC";
-			case "nombre_za" -> " ORDER BY nombre DESC, idcliente DESC";
-			default -> " ORDER BY fecha_alta DESC, idcliente DESC"; // "recientes" y cualquier otro valor
-		};
+	private String sqlOrden(String ordenarPor, String direccion) {
+		// El null se filtra ANTES de consultar el mapa: Map.of() crea un mapa inmutable
+		// que no admite claves nulas y lanzaría NullPointerException en vez de devolver
+		// el valor por defecto. Por la URL no debería llegar nunca (el @RequestParam
+		// tiene defaultValue), pero el repositorio no puede depender de eso.
+		String columna = ordenarPor == null
+				? COLUMNA_ORDEN_DEFECTO
+				: COLUMNAS_ORDEN.getOrDefault(ordenarPor, COLUMNA_ORDEN_DEFECTO);
+		String sentido = "asc".equalsIgnoreCase(direccion) ? "ASC" : "DESC";
+
+		// 'columna IS NULL' va primero para que las filas sin valor (fecha_alta admite
+		// NULL) queden SIEMPRE al final, se ordene ascendente o descendentemente. Si no,
+		// MySQL las pondría al principio en ASC y al final en DESC, y al invertir el
+		// orden saltarían de un extremo al otro de la lista.
+		// 'idcliente' es el desempate: sin él, dos clientes con la misma fecha (o el mismo
+		// nombre) podrían intercambiarse entre consultas y, al paginar, verse repetidos en
+		// una página y desaparecer de la siguiente.
+		return " ORDER BY " + columna + " IS NULL, " + columna + " " + sentido + ", idcliente " + sentido;
 	}
 
 	@Override
@@ -289,14 +362,14 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	    // Si no se ha modificado ninguna, devolvemos false.
 	    return filas > 0;
 	}
-	@Override
 	/**
 	 * Ejecuta la sentencia SQL para borrar un cliente de la base de datos según su ID.
-	 * 
+	 *
 	 * @param id El identificador del cliente a eliminar.
-	 * @return true si se eliminó exactamente una fila (borrado exitoso), 
+	 * @return true si se eliminó exactamente una fila (borrado exitoso),
 	 *         false si no se eliminó ninguna fila (el cliente no existía).
 	 */
+	@Override
 	public boolean deleteById(int id) {
 		boolean borrarOk = false;
 		String instruccionBorrar = "DELETE FROM clientes where idcliente = ?;";
@@ -307,30 +380,5 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		} 
 		
 		return borrarOk;
-	}
-	
-	
-
-	@Override
-	public List<Cliente> buscar(String termino, String provincia, String poblacion, String orden) {
-		// Búsqueda parcial en AMBOS campos (nombre y nif_cif): un único LIKE con
-		// comodines %...% aplicado a las dos columnas. LOWER() en la columna y
-		// toLowerCase() en el término hacen la búsqueda insensible a mayúsculas.
-		// El '?' viaja aparte del SQL (PreparedStatement): sin inyección SQL.
-		// Los paréntesis alrededor del OR son OBLIGATORIOS: sin ellos, los AND de los
-		// filtros solo se aplicarían a la parte del nif_cif (AND tiene prioridad sobre OR).
-		StringBuilder sql = new StringBuilder("SELECT " + COLUMNAS_CLIENTE + " FROM clientes "
-				+ "WHERE (LOWER(nombre) LIKE ? OR LOWER(nif_cif) LIKE ?)");
-		List<Object> args = new ArrayList<>();
-		String patron = "%" + termino.toLowerCase() + "%";
-		args.add(patron);
-		args.add(patron);
-		anadirFiltros(sql, args, provincia, poblacion, true);
-		sql.append(sqlOrden(orden));
-
-		List<Cliente> clientes = jdbcTemplate.query(sql.toString(), clienteRowMapper, args.toArray());
-		log.debug("buscar({}, provincia={}, poblacion={}, orden={}) -> {} filas",
-				termino, provincia, poblacion, orden, clientes.size());
-		return clientes;
 	}
 }

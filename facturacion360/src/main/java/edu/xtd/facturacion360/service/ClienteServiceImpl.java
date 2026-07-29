@@ -40,12 +40,22 @@ public class ClienteServiceImpl implements ClienteService{
 	}
 
 	@Override
-	public PaginaClienteResponse listarPagina(int pagina, int tamano, String provincia, String poblacion, String orden) {
-		int offset = pagina * tamano;                        // cuántas filas saltar
-		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset, provincia, poblacion, orden);
-		// El total se cuenta CON los mismos filtros: si no, el nº de páginas no
+	public PaginaClienteResponse listarPagina(int pagina, int tamano, String busqueda, String provincia,
+			String poblacion, String ordenarPor, String direccion) {
+		// El término se normaliza UNA vez, aquí: quitamos espacios sobrantes y dejamos
+		// null si no hay nada que buscar. Así el repositorio recibe un único convenio
+		// ("null = sin filtro") en lugar de tener que distinguir null, "" y "   ".
+		String termino = (busqueda == null || busqueda.isBlank()) ? null : busqueda.trim();
+
+		// (long) en el PRIMER operando: si se multiplicara en int y luego se ampliara,
+		// una página muy alta desbordaría el int ANTES de convertirse, daría un offset
+		// negativo y MySQL fallaría con un error de sintaxis.
+		long offset = (long) pagina * tamano;                // cuántas filas saltar
+		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset, termino, provincia, poblacion,
+				ordenarPor, direccion);
+		// El total se cuenta CON los mismos criterios: si no, el nº de páginas no
 		// cuadraría con lo que se ve en pantalla.
-		long total = clienteRepository.contarTotal(provincia, poblacion);
+		long total = clienteRepository.contarTotal(termino, provincia, poblacion);
 
 		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El (double)
 		// es clave: sin él la división entera daría 2 y perderías la última página.
@@ -64,8 +74,8 @@ public class ClienteServiceImpl implements ClienteService{
 
 		PaginaClienteResponse respuesta = new PaginaClienteResponse(
 				contenido, pagina, totalPaginas, total, hayAnterior, haySiguiente);
-		log.info("listarPagina(pagina={}, tamano={}, provincia={}, poblacion={}, orden={}) -> pagina {}/{}, {} elementos",
-				pagina, tamano, provincia, poblacion, orden, pagina + 1, totalPaginas, total);
+		log.info("listarPagina(pagina={}, tamano={}, busqueda={}, provincia={}, poblacion={}, ordenarPor={}, direccion={}) -> pagina {}/{}, {} elementos",
+				pagina, tamano, termino, provincia, poblacion, ordenarPor, direccion, pagina + 1, totalPaginas, total);
 		return respuesta;
 	}
 
@@ -140,28 +150,6 @@ public class ClienteServiceImpl implements ClienteService{
 
 	}
 
-	@Override
-	public List<ClienteResponse> buscar(String busqueda, String provincia, String poblacion, String orden) {
-		// Limpiamos espacios en blanco al inicio y final
-		String termino = busqueda.trim();
-
-		// Si el término llega vacío (p. ej. ?busqueda= ), no consultamos la BD:
-		// un LIKE '%%' devolvería la tabla entera.
-		if (termino.isEmpty()) {
-			return List.of();
-		}
-
-		// El repositorio busca el término en nombre Y nif_cif (coincidencia parcial),
-		// aplicando los filtros y la ordenación. Convertimos cada Cliente (dominio)
-		// a ClienteResponse con el mapper ya inyectado.
-		List<ClienteResponse> resultados = clienteRepository.buscar(termino, provincia, poblacion, orden).stream()
-				.map(clienteMapper::toResponse)
-				.toList();
-		log.info("buscar({}, provincia={}, poblacion={}, orden={}) -> {} resultados",
-				termino, provincia, poblacion, orden, resultados.size());
-		return resultados;
-	}
-}
-
 	// TODO: valorar la programación del método privado validarCifUnico mirar el
 	// Diagrama de Clases
+}

@@ -400,6 +400,37 @@ git push -u origin Angel_listar_ultimos
 git push origin --delete Angel
 ```
 
+### F. Índices de base de datos para los filtros y la ordenación (pendiente)
+
+La tabla `clientes` solo tiene `PRIMARY KEY (idcliente)` y `UNIQUE KEY (nif_cif)`. Los filtros que
+añadimos comparan por **igualdad** (`WHERE provincia = ?`, `WHERE poblacion = ?`) y la ordenación
+usa `nombre` y `fecha_alta`: **ninguna de esas cuatro columnas tiene índice**, así que MySQL recorre
+la tabla entera para resolverlas.
+
+Un índice es como el índice alfabético de un libro: permite saltar a lo que buscas sin leer todas
+las páginas. Pero solo sirve si la condición se puede "buscar por orden".
+
+**Aquí está el matiz importante**: al **buscador** un índice **no** le serviría. Usa
+`LIKE '%texto%'`, y ese `%` **inicial** significa "que contenga", no "que empiece por" — como no
+sabes por qué letra empieza, el orden alfabético no te ayuda y hay que mirar fila por fila igual.
+Por eso el índice **no** arregla la búsqueda; arregla los **filtros** y la **ordenación**, que sí
+son condiciones ordenables.
+
+```sql
+ALTER TABLE clientes ADD INDEX idx_provincia_poblacion (provincia, poblacion);
+ALTER TABLE clientes ADD INDEX idx_nombre (nombre);
+```
+
+El índice compuesto `(provincia, poblacion)` sirve para las dos combinaciones que usa el frontend:
+filtrar solo por provincia, y filtrar por provincia + población. El orden de las columnas importa:
+un índice compuesto se puede usar "de izquierda a derecha", así que `(provincia, poblacion)` vale
+para `WHERE provincia = ?` pero **no** para `WHERE poblacion = ?` a solas.
+
+**Por qué está pendiente y no hecho:** con las 7 filas actuales no se nota absolutamente nada —es
+una mejora pensada para cuando la tabla crezca—, y sobre todo **toca `backupFacturacion360.sql`,
+que es un script compartido por todo el equipo**. Conviene comentarlo con Val antes de meterlo en
+ninguna rama, para no pisar el esquema de los demás.
+
 ---
 
 ## Para los compañeros: avisar cuando cambie un cliente

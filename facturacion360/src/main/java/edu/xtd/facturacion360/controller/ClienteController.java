@@ -270,29 +270,41 @@ public class ClienteController {
 		 *         error.
 		 */
 	}
-	
+
+	/**
+	 * Busca clientes por nombre o NIF/CIF. La coincidencia es parcial (el término
+	 * puede ser un trozo del nombre o del documento) y no distingue mayúsculas.
+	 * Ejemplo de uso: {@code GET /cliente/buscar?nif_ocif=garcia}
+	 *
+	 * @param nif_ocif término a buscar en nombre y nif_cif; llega por la URL
+	 *                 (?nif_ocif=)
+	 * @return {@code 200 OK} con la lista de {@link ClienteResponse} que coinciden,
+	 *         o {@code 204 No Content} si no hay ninguna coincidencia
+	 */
+	@Operation(summary = "Busca clientes", description = "Busca por nombre o NIF/CIF (coincidencia parcial, sin distinguir mayúsculas)")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Clientes encontrados"),
+			@ApiResponse(responseCode = "204", description = "Ningún cliente coincide con la búsqueda") })
 	@GetMapping("/buscar")
-    public ResponseEntity<List<ClienteResponse>> buscar(@RequestParam(name = "nif_ocif") String nif_ocif) {
-        
-        // Llamamos al servicio que se encarga de decidir si es Nombre o NIF/CIF
-        List<ClienteResponse> resultados = clienteService.buscar(nif_ocif);
-        
-        // Preparamos la respuesta basándonos en tu esqueleto
-        ResponseEntity<List<ClienteResponse>> respuesta;
+	public ResponseEntity<List<ClienteResponse>> buscar(
+			@Parameter(description = "Término a buscar en nombre o NIF/CIF", example = "12345678Z") @RequestParam(name = "nif_ocif") String nif_ocif) {
 
-        if (resultados.isEmpty()) {
-            // Si no hay resultados, devolvemos un 204 No Content (o podrías usar un 404 Not Found)
-            respuesta = ResponseEntity.noContent().build();
-        } else {
-            // Si hay resultados, devolvemos un 200 OK con la lista
-            respuesta = ResponseEntity.ok(resultados);
-        }
-        
-        return respuesta;
-    }
-}
+		log.info("GET /cliente/buscar?nif_ocif={}", nif_ocif);
+
+		// El servicio busca el término en nombre y nif_cif (coincidencia parcial)
+		List<ClienteResponse> resultados = clienteService.buscar(nif_ocif);
+
+		// Preparamos la respuesta basándonos en tu esqueleto
+		ResponseEntity<List<ClienteResponse>> respuesta;
+
+		if (resultados.isEmpty()) {
+			// Si no hay resultados, devolvemos un 204 No Content (o podrías usar un 404 Not
+			// Found)
+			respuesta = ResponseEntity.noContent().build();
+		} else {
+			// Si hay resultados, devolvemos un 200 OK con la lista
+			respuesta = ResponseEntity.ok(resultados);
+		}
+
+		return respuesta;
 	}
-	
-	
-
 }

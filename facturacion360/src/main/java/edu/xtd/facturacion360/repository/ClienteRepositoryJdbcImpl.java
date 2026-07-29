@@ -21,6 +21,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.web.server.ResponseStatusException;
 
 import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 
 @Repository
 public class ClienteRepositoryJdbcImpl implements ClienteRepository {
@@ -75,9 +76,7 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		//    como código. Eso evita la INYECCIÓN SQL: si en su lugar concatenáramos el valor dentro
 		//    del String (" ... LIMIT " + limite), un valor malicioso podría "colar" SQL extra; con
 		//    '?' es imposible porque el dato y la instrucción van por separado.
-		String sql = "SELECT idcliente, nombre, nif_cif, direccion, codigopostal, "
-				+ "poblacion, provincia, telefono, email, fecha_alta "
-				+ "FROM clientes ORDER BY idcliente DESC LIMIT ?";
+		String sql = "SELECT " + COLUMNAS_CLIENTE + " FROM clientes ORDER BY idcliente DESC LIMIT ?";
 
 		// jdbcTemplate.query(sql, rowMapper, args...) es la sobrecarga para SELECT que devuelven
 		// VARIAS filas. Lo que hace, en orden:
@@ -94,36 +93,35 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	}
 
 	@Override
-	public List<Cliente> findPagina(int tamano, long offset, String busqueda, String provincia, String poblacion,
-			String ordenarPor, String direccion) {
+	public List<Cliente> findPagina(CriteriosCliente criterios) {
 		// Igual que findUltimos pero con dos '?': LIMIT (cuántas filas) y OFFSET (cuántas
 		// saltar). Se sustituyen en orden -> primero 'tamano', luego 'offset'. Así traemos solo
 		// la página pedida, no todos los clientes.
 		// El WHERE se construye solo con los criterios que llegan informados (ver anadirFiltros).
 		StringBuilder sql = new StringBuilder("SELECT " + COLUMNAS_CLIENTE + " FROM clientes");
 		List<Object> args = new ArrayList<>();
-		anadirFiltros(sql, args, busqueda, provincia, poblacion);
+		anadirFiltros(sql, args, criterios);
 
 		// El ORDER BY NO admite '?': el criterio se traduce con la lista blanca sqlOrden().
-		sql.append(sqlOrden(ordenarPor, direccion)).append(" LIMIT ? OFFSET ?");
-		args.add(tamano);
-		args.add(offset);
+		sql.append(sqlOrden(criterios.ordenarPor(), criterios.direccion())).append(" LIMIT ? OFFSET ?");
+		args.add(criterios.tamano());
+		args.add(criterios.offset());
 
 		List<Cliente> clientes = jdbcTemplate.query(sql.toString(), clienteRowMapper, args.toArray());
-		log.debug("findPagina(tamano={}, offset={}, busqueda={}, provincia={}, poblacion={}, ordenarPor={}, direccion={}) -> {} filas",
-				tamano, offset, busqueda, provincia, poblacion, ordenarPor, direccion, clientes.size());
+		log.debug("findPagina({}) -> {} filas", criterios, clientes.size());
 		return clientes;
 	}
 
 	@Override
-	public long contarTotal(String busqueda, String provincia, String poblacion) {
+	public long contarTotal(CriteriosCliente criterios) {
 		// queryForObject: para un SELECT que devuelve UN SOLO valor (aquí el nº total de filas).
 		// Le decimos el tipo esperado (Long.class) para que lo convierta por nosotros.
 		// Lleva los MISMOS criterios que findPagina (misma llamada a anadirFiltros): el total
-		// debe cuadrar con lo que se ve, o el nº de páginas mentiría.
+		// debe cuadrar con lo que se ve, o el nº de páginas mentiría. Aquí no se ponen LIMIT
+		// ni ORDER BY: no cambian CUÁNTOS hay, solo cuáles se ven y en qué orden.
 		StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM clientes");
 		List<Object> args = new ArrayList<>();
-		anadirFiltros(sql, args, busqueda, provincia, poblacion);
+		anadirFiltros(sql, args, criterios);
 
 		Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
 		return total != null ? total : 0L;
@@ -170,15 +168,17 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 *
 	 * @param sql       consulta en construcción; se le concatenan las condiciones
 	 * @param args      valores de los '?', en el mismo orden en que aparecen
-	 * @param busqueda  texto a buscar en nombre y nif_cif; null o vacío = no buscar
-	 * @param provincia filtro de provincia; null o vacío = no filtrar
-	 * @param poblacion filtro de población; null o vacío = no filtrar
+	 * @param criterios de aquí se usan la búsqueda, la provincia y la población; la
+	 *                  paginación y la ordenación no forman parte del WHERE
 	 */
-	private void anadirFiltros(StringBuilder sql, List<Object> args, String busqueda, String provincia,
-			String poblacion) {
+	private void anadirFiltros(StringBuilder sql, List<Object> args, CriteriosCliente criterios) {
 		// Vamos juntando condiciones y al final las unimos con AND. Así no hace falta ir
 		// preguntando "¿soy la primera condición, pongo WHERE o AND?" en cada if.
 		List<String> condiciones = new ArrayList<>();
+
+		String busqueda = criterios.busqueda();
+		String provincia = criterios.provincia();
+		String poblacion = criterios.poblacion();
 
 		if (busqueda != null && !busqueda.isBlank()) {
 			// Coincidencia parcial en AMBOS campos: los comodines %...% envuelven al término.

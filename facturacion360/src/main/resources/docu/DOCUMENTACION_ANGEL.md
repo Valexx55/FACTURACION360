@@ -168,6 +168,54 @@ ORDER BY fecha_alta IS NULL, fecha_alta DESC, idcliente DESC
 **La ordenación se aplica sobre lo ya filtrado sin trabajo extra**: en SQL el `ORDER BY` se evalúa
 *después* del `WHERE`. Si filtras por Madrid y ordenas alfabéticamente, ordena los de Madrid.
 
+#### Los criterios viajan juntos: el record `CriteriosCliente`
+
+Los siete datos que definen una consulta (`pagina`, `tamano`, `busqueda`, `provincia`, `poblacion`,
+`ordenarPor`, `direccion`) **no se pasan sueltos**, sino agrupados en un `record`.
+
+El motivo: esa firma de siete parámetros aparecía en **cinco sitios** (controller, interfaz e
+implementación del service, e interfaz e implementación del repository). Añadir un filtro nuevo
+obligaba a tocar los cinco y a no equivocarse de orden en ninguno. Con el record se añade un
+componente y ya está. Es el *code smell* clásico de "lista larga de parámetros".
+
+Spring lo rellena solo desde la URL con `@ModelAttribute`, emparejando cada parámetro con el
+componente que se llama igual:
+
+```java
+@GetMapping("/listar-pagina")
+public ResponseEntity<PaginaClienteResponse> listarPagina(
+        @Valid @ModelAttribute CriteriosCliente criterios) { ... }
+```
+
+**Toda la normalización vive en su constructor compacto**, y eso es lo importante: antes estaba
+repartida —el acotado de la página en el controller, la limpieza del término en el service—, así que
+había dos sitios donde se decidía qué es un valor válido. Ahora hay uno solo, y da igual si el
+record lo construye Spring desde la URL o alguien a mano.
+
+```java
+public CriteriosCliente {
+    pagina = (pagina == null || pagina < 0) ? 0 : pagina;
+    tamano = (tamano == null || tamano <= 0) ? TAMANO_DEFECTO : Math.min(TAMANO_MAX, tamano);
+    busqueda = normalizar(busqueda);   // "" y "   " -> null
+    ...
+}
+```
+
+**¿Por qué `Integer` y no `int` en `pagina` y `tamano`?** Es la parte menos evidente y conviene no
+tocarla sin saber por qué está. Cuando un parámetro **no viene en la URL**, Spring intenta enlazar
+`null` — y `null` no se puede convertir a un primitivo. Con `int` la aplicación respondía `400` a
+**todas** las peticiones, incluidas las correctas:
+
+```
+Failed to convert value of type 'null' to required type 'int'
+```
+
+Con `Integer`, el `null` llega sin problema y es el constructor compacto quien decide el valor por
+defecto. A partir de ahí ya nunca son `null`, así que se usan como si fueran `int`.
+
+> Detalle a recordar: esto **compilaba perfectamente**. Solo se ve arrancando la aplicación y
+> haciendo una petición. Que un refactor compile no significa que funcione.
+
 #### Frontend: un único estado
 
 `clientes.js` guarda **un solo objeto** `{ busqueda, provincia, poblacion, ordenarPor, direccion }`.

@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteResponse;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.repository.ClienteRepository;
 
@@ -40,26 +41,18 @@ public class ClienteServiceImpl implements ClienteService{
 	}
 
 	@Override
-	public PaginaClienteResponse listarPagina(int pagina, int tamano, String busqueda, String provincia,
-			String poblacion, String ordenarPor, String direccion) {
-		// El término se normaliza UNA vez, aquí: quitamos espacios sobrantes y dejamos
-		// null si no hay nada que buscar. Así el repositorio recibe un único convenio
-		// ("null = sin filtro") en lugar de tener que distinguir null, "" y "   ".
-		String termino = (busqueda == null || busqueda.isBlank()) ? null : busqueda.trim();
-
-		// (long) en el PRIMER operando: si se multiplicara en int y luego se ampliara,
-		// una página muy alta desbordaría el int ANTES de convertirse, daría un offset
-		// negativo y MySQL fallaría con un error de sintaxis.
-		long offset = (long) pagina * tamano;                // cuántas filas saltar
-		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset, termino, provincia, poblacion,
-				ordenarPor, direccion);
+	public PaginaClienteResponse listarPagina(CriteriosCliente criterios) {
+		// Los criterios llegan ya acotados y limpios (lo hace el constructor compacto de
+		// CriteriosCliente), así que aquí solo queda la lógica de negocio: pedir la
+		// página, pedir el total y montar los metadatos de paginación.
+		List<Cliente> clientes = clienteRepository.findPagina(criterios);
 		// El total se cuenta CON los mismos criterios: si no, el nº de páginas no
 		// cuadraría con lo que se ve en pantalla.
-		long total = clienteRepository.contarTotal(termino, provincia, poblacion);
+		long total = clienteRepository.contarTotal(criterios);
 
 		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El (double)
 		// es clave: sin él la división entera daría 2 y perderías la última página.
-		int totalPaginas = (int) Math.ceil((double) total / tamano);
+		int totalPaginas = (int) Math.ceil((double) total / criterios.tamano());
 
 		// Traducimos cada Cliente (dominio) a ClienteResponse con la API de Streams: stream() abre
 		// el flujo, map(clienteMapper::toResponse) transforma cada elemento (clienteMapper::toResponse
@@ -69,13 +62,14 @@ public class ClienteServiceImpl implements ClienteService{
 		// Usamos '::'+streams por ser más corto y legible (a cambio de que hay que conocer streams).
 		List<ClienteResponse> contenido = clientes.stream().map(clienteMapper::toResponse).toList();
 
+		int pagina = criterios.pagina();
 		boolean hayAnterior  = pagina > 0;                   // hay anterior salvo en la página 0
 		boolean haySiguiente = pagina < totalPaginas - 1;    // hay siguiente salvo en la última
 
 		PaginaClienteResponse respuesta = new PaginaClienteResponse(
 				contenido, pagina, totalPaginas, total, hayAnterior, haySiguiente);
-		log.info("listarPagina(pagina={}, tamano={}, busqueda={}, provincia={}, poblacion={}, ordenarPor={}, direccion={}) -> pagina {}/{}, {} elementos",
-				pagina, tamano, termino, provincia, poblacion, ordenarPor, direccion, pagina + 1, totalPaginas, total);
+		log.info("listarPagina({}) -> pagina {}/{}, {} elementos",
+				criterios, pagina + 1, totalPaginas, total);
 		return respuesta;
 	}
 

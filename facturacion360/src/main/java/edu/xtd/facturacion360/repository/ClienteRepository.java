@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 
 /**
  * Este interfaz recoge las operaciones sobre base de datos
@@ -21,35 +22,26 @@ public interface ClienteRepository {
 	public List<Cliente> findUltimos (int limite);
 
 	/**
-	 * Una página de clientes: 'tamano' filas saltando las primeras 'offset'
-	 * ({@code LIMIT ? OFFSET ?}), aplicando la búsqueda, los filtros y la
-	 * ordenación pedidos.
+	 * Una página de clientes: {@code tamano} filas saltando las primeras
+	 * {@code offset} ({@code LIMIT ? OFFSET ?}), aplicando la búsqueda, los filtros
+	 * y la ordenación que traigan los criterios.
 	 *
-	 * @param tamano     cuántas filas devolver (LIMIT)
-	 * @param offset     cuántas filas saltar desde el principio (OFFSET)
-	 * @param busqueda   texto a buscar en nombre y nif_cif (coincidencia parcial);
-	 *                   null o vacío = no buscar
-	 * @param provincia  filtro por provincia; null o vacío = no filtrar
-	 * @param poblacion  filtro por población; null o vacío = no filtrar
-	 * @param ordenarPor columna por la que ordenar (nombre o fecha_alta); se traduce
-	 *                   con una lista blanca
-	 * @param direccion  sentido de la ordenación: asc o desc
+	 * @param criterios qué página, de qué tamaño, qué buscar, por qué filtrar y cómo
+	 *                  ordenar; el offset sale de {@code criterios.offset()}
 	 * @return la lista de clientes de esa página; vacía si no hay, nunca {@code null}
 	 */
-	public List<Cliente> findPagina (int tamano, long offset, String busqueda, String provincia, String poblacion,
-			String ordenarPor, String direccion);
+	public List<Cliente> findPagina (CriteriosCliente criterios);
 
 	/**
 	 * Cuenta el total de clientes que cumplen la búsqueda y los filtros (para saber
 	 * cuántas páginas hay con esos criterios aplicados). Recibe los mismos criterios
-	 * que {@link #findPagina} para que el total cuadre siempre con lo que se muestra.
+	 * que {@link #findPagina} para que el total cuadre siempre con lo que se muestra;
+	 * la paginación y la ordenación se ignoran, porque no cambian cuántos hay.
 	 *
-	 * @param busqueda  texto a buscar en nombre y nif_cif; null o vacío = no buscar
-	 * @param provincia filtro por provincia; null o vacío = no filtrar
-	 * @param poblacion filtro por población; null o vacío = no filtrar
+	 * @param criterios los mismos criterios con los que se pidió la página
 	 * @return el número total de clientes que cumplen los criterios
 	 */
-	public long contarTotal (String busqueda, String provincia, String poblacion);
+	public long contarTotal (CriteriosCliente criterios);
 
 	/**
 	 * Las provincias distintas que existen en la tabla (para rellenar el

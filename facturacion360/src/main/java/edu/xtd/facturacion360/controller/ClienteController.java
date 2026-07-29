@@ -13,9 +13,9 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -29,10 +29,10 @@ import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteRequest;
 import edu.xtd.facturacion360.dto.ClienteResponse;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Size;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -58,20 +58,14 @@ import io.swagger.v3.oas.annotations.Hidden;
 
 @RestController
 @RequestMapping("/cliente")
-// @Validated hace que Spring compruebe las anotaciones de validación (@Size, etc.)
-// puestas directamente sobre los @RequestParam. Sin ella se ignorarían en silencio:
-// @Valid solo cubre los objetos del @RequestBody, no los parámetros sueltos.
-@Validated
 public class ClienteController {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
 
+	// Los usa listarUltimos para acotar su parámetro 'limite'. El listado paginado ya no
+	// los necesita: sus topes viven en CriteriosCliente, junto a los datos que acotan.
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
-
-	// La columna 'nombre' es VARCHAR(60): un término más largo no puede coincidir con
-	// nada, así que lo rechazamos antes de molestar a la base de datos.
-	private static final int LONGITUD_MAX_BUSQUEDA = 60;
 
 	@Autowired
 	ClienteService clienteService;
@@ -131,49 +125,34 @@ public class ClienteController {
 	 * listado: así la búsqueda hereda la paginación y los metadatos, y el frontend usa
 	 * un único camino de código tanto si hay término de búsqueda como si no.
 	 *
-	 * @param pagina     índice de la página empezando en 0; llega por la URL
-	 *                   (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
-	 * @param tamano     cuántos clientes por página; llega por la URL (?tamano=). Por
-	 *                   defecto 10. Se acota al rango [1, 100].
-	 * @param busqueda   texto a buscar en nombre y nif_cif (?busqueda=), coincidencia
-	 *                   parcial y sin distinguir mayúsculas; opcional.
-	 * @param provincia  filtro por provincia (?provincia=); opcional.
-	 * @param poblacion  filtro por población (?poblacion=); opcional.
-	 * @param ordenarPor columna por la que ordenar (?ordenarPor=): fecha_alta (defecto)
-	 *                   o nombre.
-	 * @param direccion  sentido de la ordenación (?direccion=): desc (defecto) o asc.
+	 * @param criterios los parámetros de la URL (?pagina=, ?tamano=, ?busqueda=,
+	 *                  ?provincia=, ?poblacion=, ?ordenarPor=, ?direccion=) que Spring
+	 *                  agrupa en un {@link CriteriosCliente}. El propio record se
+	 *                  encarga de acotarlos y limpiarlos, así que aquí llegan ya
+	 *                  normalizados.
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
-	 *         la página + metadatos de paginación); o {@code 500} si falla la BD.
+	 *         la página + metadatos de paginación); {@code 400} si algún criterio
+	 *         supera la longitud permitida; o {@code 500} si falla la BD.
 	 */
 	@Operation(summary = "Lista una página de clientes", description = "Devuelve una página de clientes con búsqueda por nombre o NIF/CIF, filtros por provincia y población, y ordenación por nombre o fecha de alta en ambos sentidos")
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Página recuperada correctamente"),
-			@ApiResponse(responseCode = "400", description = "Término de búsqueda demasiado largo"),
+			@ApiResponse(responseCode = "400", description = "Algún criterio supera la longitud permitida"),
 			@ApiResponse(responseCode = "500", description = "Error interno al consultar los clientes") })
 	@GetMapping("/listar-pagina")
-	public ResponseEntity<PaginaClienteResponse> listarPagina(@RequestParam(defaultValue = "0") int pagina,
-			@RequestParam(defaultValue = "10") int tamano,
-			@Parameter(description = "Texto a buscar en nombre o NIF/CIF", example = "garcia") @RequestParam(required = false) @Size(max = LONGITUD_MAX_BUSQUEDA, message = "El término de búsqueda no puede superar los 60 caracteres") String busqueda,
-			@Parameter(description = "Provincia por la que filtrar", example = "Valencia") @RequestParam(required = false) String provincia,
-			@Parameter(description = "Población por la que filtrar", example = "Valencia") @RequestParam(required = false) String poblacion,
-			@Parameter(description = "Columna por la que ordenar", example = "nombre") @RequestParam(defaultValue = "fecha_alta") String ordenarPor,
-			@Parameter(description = "Sentido de la ordenación", example = "asc") @RequestParam(defaultValue = "desc") String direccion) {
+	public ResponseEntity<PaginaClienteResponse> listarPagina(@Valid @ModelAttribute CriteriosCliente criterios) {
 
 		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
 
-		// Validación: la página no puede ser negativa y el tamaño lo acotamos a [1,
-		// 100]
-		// (evita OFFSET raros o pedir demasiadas filas de golpe).
-		int paginaSegura = Math.max(0, pagina);
-		int tamanoSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, tamano));
-		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}&busqueda={}&provincia={}&poblacion={}&ordenarPor={}&direccion={}",
-				paginaSegura, tamanoSeguro, busqueda, provincia, poblacion, ordenarPor, direccion);
+		// Ya no hace falta acotar nada aquí: el constructor compacto de CriteriosCliente
+		// deja la página, el tamaño y los textos listos para usar. Por eso el log muestra
+		// los valores YA normalizados, que son los que de verdad se van a consultar.
+		log.info("GET /cliente/listar-pagina -> {}", criterios);
 
 		try {
 			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
 			// etc.).
-			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro, busqueda, provincia,
-					poblacion, ordenarPor, direccion);
-			respuestaHttp = ResponseEntity.ok(pagina2);
+			PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
+			respuestaHttp = ResponseEntity.ok(pagina);
 		} catch (DataAccessException e) {
 			log.error("Error al listar la pagina de clientes", e);
 			respuestaHttp = ResponseEntity.internalServerError().build();

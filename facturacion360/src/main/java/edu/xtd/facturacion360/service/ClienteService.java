@@ -2,6 +2,7 @@ package edu.xtd.facturacion360.service;
 
 import java.util.List;
 import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 
 
@@ -26,19 +27,12 @@ public interface ClienteService {
 	 * Es el único punto de entrada del listado: buscar es "listar con un filtro de
 	 * texto más", así que la búsqueda hereda gratis la paginación y los metadatos.
 	 *
-	 * @param pagina     índice de la página empezando en 0
-	 * @param tamano     cuántos clientes por página
-	 * @param busqueda   texto a buscar en nombre y nif_cif (coincidencia parcial);
-	 *                   null o vacío = no buscar
-	 * @param provincia  filtro por provincia; null o vacío = no filtrar
-	 * @param poblacion  filtro por población; null o vacío = no filtrar
-	 * @param ordenarPor columna por la que ordenar: nombre o fecha_alta
-	 * @param direccion  sentido de la ordenación: asc o desc
+	 * @param criterios qué página, de qué tamaño, qué buscar, por qué filtrar y cómo
+	 *                  ordenar; llegan ya normalizados por el propio record
 	 * @return un {@link PaginaClienteResponse} con el contenido de la página y los metadatos
 	 *         (total de páginas, si hay anterior/siguiente, etc.)
 	 */
-	public PaginaClienteResponse listarPagina(int pagina, int tamano, String busqueda, String provincia,
-			String poblacion, String ordenarPor, String direccion);
+	public PaginaClienteResponse listarPagina(CriteriosCliente criterios);
 
 	/**
 	 * Las provincias distintas de la tabla (para el desplegable de filtro).

@@ -6,37 +6,33 @@ import jakarta.validation.constraints.Size;
  * Los criterios con los que se pide una página de clientes: qué página, de qué tamaño,
  * qué buscar, por qué filtrar y cómo ordenar.
  *
- * <p>Va todo junto en un objeto en vez de como siete parámetros sueltos porque esa firma
- * se repetía en cinco sitios (controller, interfaz e implementación del service, e interfaz
- * e implementación del repository): añadir un filtro nuevo obligaba a tocar los cinco. Con
- * el record, se añade un componente aquí y ya está.</p>
+ * <p>Van juntos en un objeto y no como siete parámetros sueltos porque esa firma se
+ * repetía en cinco sitios (controller, service y repository, con sus interfaces): añadir
+ * un filtro obligaba a tocar los cinco.</p>
  *
- * <p>Además, TODA la normalización vive en su constructor compacto. Antes estaba repartida:
- * el acotado de la página en el controller y la limpieza del término en el service. Al
- * juntarla, solo hay un sitio donde se decide qué es un valor válido, y da igual si el
- * record lo construye Spring desde la URL o alguien a mano.</p>
- *
- * <p>Spring lo rellena desde los parámetros de la URL con {@code @ModelAttribute},
- * emparejándolos por nombre con los componentes.</p>
+ * <p>Toda la normalización vive en el constructor compacto, así que hay un único lugar
+ * donde se decide qué es un valor válido, tanto si lo construye Spring desde la URL
+ * (con {@code @ModelAttribute}, emparejando por nombre) como si se crea a mano.</p>
  *
  * @param pagina     índice de la página empezando en 0; se fuerza a no ser negativo
- * @param tamano     cuántos clientes por página; se acota a un máximo de
- *                   {@value #TAMANO_MAX} y toma {@value #TAMANO_DEFECTO} si no llega
+ * @param tamano     clientes por página; máximo {@value #TAMANO_MAX}, y
+ *                   {@value #TAMANO_DEFECTO} si no llega
  * @param busqueda   texto a buscar en nombre y nif_cif (coincidencia parcial);
  *                   {@code null} = no buscar
  * @param provincia  filtro por provincia; {@code null} = no filtrar
  * @param poblacion  filtro por población; {@code null} = no filtrar
- * @param ordenarPor columna por la que ordenar: nombre o fecha_alta
- * @param direccion  sentido de la ordenación: asc o desc
+ * @param ordenarPor columna por la que ordenar: {@code nombre} o {@code fecha_alta}
+ * @param direccion  sentido de la ordenación: {@code asc} o {@code desc}
+ *
+ * @author AngelDanielC0des
+ * @see PaginaClienteResponse
+ * @see edu.xtd.facturacion360.repository.ClienteRepository#findPagina(CriteriosCliente)
  */
 public record CriteriosCliente(
 
-		// Integer y no int, a propósito: cuando un parámetro no viene en la URL, Spring
-		// intenta enlazar null, y null NO se puede convertir a un primitivo (falla con
-		// "Failed to convert value of type 'null' to required type 'int'" y devuelve 400
-		// hasta en las peticiones correctas). Con Integer el null llega bien y es el
-		// constructor compacto el que decide el valor por defecto. Después de él, estos
-		// dos NUNCA son null, así que se pueden usar como si fueran int.
+		// Integer y no int, a propósito: si el parámetro no viene en la URL, Spring enlaza
+		// null, y null no convierte a primitivo (con int, la aplicación respondía 400 hasta
+		// a las peticiones correctas). Tras el constructor compacto nunca son null.
 		Integer pagina,
 
 		Integer tamano,
@@ -82,28 +78,25 @@ public record CriteriosCliente(
 	 * quien reciba un {@code CriteriosCliente} no tiene que volver a comprobar nada.
 	 */
 	public CriteriosCliente {
-		// null = no lo han mandado; negativo = no tiene sentido. En ambos casos, la 0.
+		// null (no lo han mandado) o fuera de rango: se usa el valor por defecto.
 		pagina = (pagina == null || pagina < 0) ? 0 : pagina;
-
-		// null = no lo han mandado; 0 o negativo = no tiene sentido. En los dos casos lo
-		// razonable es el tamaño por defecto, no un 1.
 		tamano = (tamano == null || tamano <= 0) ? TAMANO_DEFECTO : Math.min(TAMANO_MAX, tamano);
 
 		busqueda = normalizar(busqueda);
 		provincia = normalizar(provincia);
 		poblacion = normalizar(poblacion);
 
-		// Estos dos SÍ tienen valor por defecto: siempre se ordena de alguna manera.
+		// Estos dos nunca quedan a null: siempre se ordena de alguna manera.
 		ordenarPor = (normalizar(ordenarPor) == null) ? ORDEN_DEFECTO : ordenarPor.trim();
 		direccion = (normalizar(direccion) == null) ? DIRECCION_DEFECTO : direccion.trim();
 	}
 
 	/**
-	 * Cuántas filas hay que saltar para llegar a esta página (el OFFSET del SQL).
+	 * Cuántas filas hay que saltar para llegar a esta página (el {@code OFFSET} del SQL).
 	 *
-	 * El {@code (long)} va en el PRIMER operando a propósito: si se multiplicara en
-	 * {@code int} y se ampliara después, una página muy alta desbordaría antes de
-	 * convertirse, daría un offset negativo y MySQL fallaría con un error de sintaxis.
+	 * <p>El {@code (long)} va en el primer operando a propósito: multiplicar en {@code int}
+	 * y ampliar después haría que una página muy alta desbordase, dando un offset negativo
+	 * que MySQL rechaza.</p>
 	 *
 	 * @return el número de filas a saltar; nunca negativo
 	 */
@@ -112,9 +105,9 @@ public record CriteriosCliente(
 	}
 
 	/**
-	 * Deja en {@code null} lo que no aporta ningún filtro, y quita los espacios sobrantes
-	 * del resto. Así el repositorio maneja un único convenio ("null = sin filtro") en vez
-	 * de tener que distinguir entre {@code null}, {@code ""} y {@code "   "}.
+	 * Deja en {@code null} lo que no aporta filtro y quita los espacios sobrantes del resto,
+	 * para que el repositorio maneje un único convenio ("null = sin filtro") en vez de
+	 * distinguir entre {@code null}, {@code ""} y {@code "   "}.
 	 *
 	 * @param valor el texto tal cual llega de la URL
 	 * @return el texto sin espacios alrededor, o {@code null} si no había contenido

@@ -261,6 +261,58 @@ en el mismo sitio y luego se repinta todo desde ahí, no pueden acabar mostrando
 - **Columna "Alta"** en la tabla: ordenar por fecha de alta sin ver la fecha no hay forma de
   comprobarlo.
 
+### Cómo está documentada esta parte (Javadoc)
+
+Los contratos se documentan **en las interfaces**, `ClienteRepository` y `ClienteService`, con
+`@param`, `@return` y `@throws`. Las implementaciones no repiten ese Javadoc: duplicarlo obliga a
+mantener dos textos que acaban diciendo cosas distintas. Lo que sí llevan las implementaciones son
+comentarios `//` que explican **cómo** y **por qué** se hace algo, no **qué** hace.
+
+Se documenta también `@throws DataAccessException`, porque forma parte real del contrato: el
+controller la captura para responder un `500` en vez de dejar escapar el error.
+
+#### Las etiquetas `@author` y `@autor`
+
+Conviven dos, y no es una errata:
+
+| Etiqueta | Dónde | Por qué |
+|---|---|---|
+| `@author` | Clases y records | Es la estándar de Javadoc |
+| `@autor` | Métodos sueltos | La estándar **no se admite** en métodos |
+
+El `@author` estándar solo vale en *overview*, *package* y *class/interface*. Ponerlo sobre un
+método no es que se ignore: con doclint activo **falla la generación** del Javadoc. Para poder
+firmar métodos concretos se declara una etiqueta propia en el `pom.xml`:
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-javadoc-plugin</artifactId>
+    <configuration>
+        <tags>
+            <tag>
+                <name>autor</name>
+                <placement>tm</placement>
+                <head>Autor:</head>
+            </tag>
+        </tags>
+    </configuration>
+</plugin>
+```
+
+`placement` indica dónde vale la etiqueta: `t` tipos, `m` métodos, `f` campos, `c` constructores,
+`p` paquetes, `a` todas. Con `tm` se admite en clases y en métodos.
+
+> **Importante:** esa configuración y las etiquetas `@autor` van juntas. Si se quita del `pom.xml`,
+> javadoc pasa a considerarlas desconocidas y la generación falla. Para retirarla hay que borrar
+> antes las etiquetas del código.
+
+Generar la documentación:
+
+```bash
+./mvnw javadoc:javadoc      # sale en target/reports/apidocs/index.html
+```
+
 ### Refresco automático tras cambios
 
 Cuando se crea, edita o elimina un cliente, la tabla debe reflejarlo. Lo resolvemos con un **evento

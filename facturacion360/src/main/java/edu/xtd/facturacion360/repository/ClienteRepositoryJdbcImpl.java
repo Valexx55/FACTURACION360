@@ -23,6 +23,18 @@ import org.springframework.web.server.ResponseStatusException;
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.CriteriosCliente;
 
+/**
+ * Implementación de {@link ClienteRepository} sobre MySQL con {@code JdbcTemplate}.
+ *
+ * <p>Es la única capa que habla SQL: traduce cada operación del contrato a una consulta y
+ * convierte las filas en objetos {@link Cliente} mediante {@link ClienteRowMapper}. Todos los
+ * valores viajan como parámetros ({@code ?}) para evitar la inyección SQL; lo que no admite
+ * parámetros, como el {@code ORDER BY}, se resuelve con listas blancas.</p>
+ *
+ * <p>El detalle de cada método está documentado en la interfaz.</p>
+ *
+ * @see ClienteRepository
+ */
 @Repository
 public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 
@@ -63,35 +75,32 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	ClienteRowMapper clienteRowMapper;
 
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<Cliente> findUltimos(int limite) {
-		// SQL de la consulta, explicado pieza a pieza:
-		//  - ORDER BY idcliente DESC: 'idcliente' es AUTOINCREMENTAL, es decir, la BD le asigna
-		//    un número mayor a cada cliente nuevo. Por eso ordenar de mayor a menor (DESC) equivale
-		//    a ordenar del más reciente al más antiguo, SIN necesitar una columna de fecha.
-		//  - LIMIT ?: de esa lista ya ordenada, nos quedamos solo con los primeros 'limite'. El
-		//    troceado lo hace MySQL (no Java), así que es eficiente aunque la tabla tenga miles de filas.
-		//  - El '?' es un PARÁMETRO (placeholder). JdbcTemplate lo ejecuta con un PreparedStatement:
-		//    el valor de 'limite' viaja a la BD APARTE del texto SQL, así que NUNCA se interpreta
-		//    como código. Eso evita la INYECCIÓN SQL: si en su lugar concatenáramos el valor dentro
-		//    del String (" ... LIMIT " + limite), un valor malicioso podría "colar" SQL extra; con
-		//    '?' es imposible porque el dato y la instrucción van por separado.
+		// ORDER BY idcliente DESC: al ser autoincremental, el id más alto es el alta más
+		// reciente, así que no hace falta mirar la fecha. El troceado con LIMIT lo hace MySQL,
+		// no Java, de modo que es eficiente aunque la tabla tenga miles de filas.
+		// El '?' es un parámetro: JdbcTemplate usa un PreparedStatement, así que el valor viaja
+		// aparte del texto SQL y nunca se interpreta como código (sin inyección SQL).
 		String sql = "SELECT " + COLUMNAS_CLIENTE + " FROM clientes ORDER BY idcliente DESC LIMIT ?";
 
-		// jdbcTemplate.query(sql, rowMapper, args...) es la sobrecarga para SELECT que devuelven
-		// VARIAS filas. Lo que hace, en orden:
-		//   1) ejecuta el 'sql';
-		//   2) sustituye cada '?' por los 'args' que le pasamos, en orden (aquí solo 'limite'),
-		//      de forma segura (PreparedStatement);
-		//   3) aplica 'clienteRowMapper' a CADA fila del resultado para convertirla en un Cliente;
-		//   4) devuelve un List<Cliente> con todos (lista VACÍA si no hay filas, nunca null).
-		// (Para una única fila se usaría queryForObject(...); para INSERT/UPDATE/DELETE, update(...).)
-		// Guardamos la lista en una variable para poder loguearla (y depurarla) antes del return.
+		// query(sql, rowMapper, args...) es la sobrecarga para SELECT de varias filas: sustituye
+		// los '?', aplica el rowMapper a cada fila y devuelve la lista (vacía si no hay, nunca null).
 		List<Cliente> clientes = jdbcTemplate.query(sql, clienteRowMapper, limite);
 		log.debug("findUltimos({}) -> {} filas", limite, clientes.size());
 		return clientes;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<Cliente> findPagina(CriteriosCliente criterios) {
 		// Igual que findUltimos pero con dos '?': LIMIT (cuántas filas) y OFFSET (cuántas
@@ -112,6 +121,11 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		return clientes;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public long contarTotal(CriteriosCliente criterios) {
 		// queryForObject: para un SELECT que devuelve UN SOLO valor (aquí el nº total de filas).
@@ -127,6 +141,11 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		return total != null ? total : 0L;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<String> findProvincias() {
 		// DISTINCT: una sola fila por provincia aunque haya mil clientes en ella. Se
@@ -138,6 +157,11 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		return provincias;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<String> findPoblaciones(String provincia) {
 		// Si llega provincia, solo las poblaciones de esa provincia (para el desplegable

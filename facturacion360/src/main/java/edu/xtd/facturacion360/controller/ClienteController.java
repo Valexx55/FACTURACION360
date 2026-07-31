@@ -83,6 +83,8 @@ public class ClienteController {
 	 *               rango [1, 100].
 	 * @return {@code 200 OK} con la lista de {@link ClienteResponse}; o {@code 500}
 	 *         si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarPagina(CriteriosCliente)
 	 */
 	@Operation(summary = "Lista los últimos clientes", description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100.")
 	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
@@ -134,6 +136,9 @@ public class ClienteController {
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
 	 *         la página + metadatos de paginación); {@code 400} si algún criterio
 	 *         supera la longitud permitida; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see CriteriosCliente
+	 * @see PaginaClienteResponse
 	 */
 	@Operation(summary = "Lista una página de clientes", description = "Devuelve una página de clientes con búsqueda por nombre o NIF/CIF, filtros por provincia y población, y ordenación por nombre o fecha de alta en ambos sentidos")
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Página recuperada correctamente"),
@@ -174,6 +179,8 @@ public class ClienteController {
 	 * {@code GET /cliente/provincias}
 	 *
 	 * @return {@code 200 OK} con la lista de provincias; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarPoblaciones(String)
 	 */
 	@Operation(summary = "Lista las provincias", description = "Devuelve las provincias distintas de la tabla clientes, ordenadas alfabéticamente")
 	@ApiResponse(responseCode = "200", description = "Provincias recuperadas correctamente")
@@ -202,6 +209,8 @@ public class ClienteController {
 	 * @param provincia si llega informada, solo las poblaciones de esa provincia;
 	 *                  si no, todas. Opcional.
 	 * @return {@code 200 OK} con la lista de poblaciones; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarProvincias()
 	 */
 	@Operation(summary = "Lista las poblaciones", description = "Devuelve las poblaciones distintas de la tabla clientes; si se indica provincia, solo las de esa provincia")
 	@ApiResponse(responseCode = "200", description = "Poblaciones recuperadas correctamente")

@@ -17,10 +17,19 @@ import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.repository.ClienteRepository;
 
+/**
+ * Implementación de {@link ClienteService}: la lógica de negocio de los clientes.
+ *
+ * <p>Hace de intermediaria entre el controller y el repositorio. Aquí viven las reglas que no
+ * son ni HTTP ni SQL: calcular los metadatos de paginación, decidir qué es un error de negocio
+ * y traducir el dominio a los DTO de respuesta con {@link ClienteMapper}.</p>
+ *
+ * <p>El detalle de cada método está documentado en la interfaz.</p>
+ *
+ * @see ClienteService
+ */
 @Service
-
-
-public class ClienteServiceImpl implements ClienteService{
+public class ClienteServiceImpl implements ClienteService {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteServiceImpl.class);
 
@@ -32,6 +41,11 @@ public class ClienteServiceImpl implements ClienteService{
 	@Autowired
 	ClienteMapper clienteMapper;
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<Cliente> listarUltimos(int limite) {
 		// Regla de negocio ("los últimos N"): de momento solo delega en el repositorio.
@@ -41,6 +55,11 @@ public class ClienteServiceImpl implements ClienteService{
 		return clientes;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	// Las dos consultas de este método (las filas y el total) tienen que ver la MISMA foto
 	// de la tabla. Sin transacción, cada una va por su cuenta: si alguien da de alta o
 	// borra un cliente justo entre ambas, el total no cuadraría con las filas devueltas y
@@ -59,16 +78,12 @@ public class ClienteServiceImpl implements ClienteService{
 		// cuadraría con lo que se ve en pantalla.
 		long total = clienteRepository.contarTotal(criterios);
 
-		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El (double)
-		// es clave: sin él la división entera daría 2 y perderías la última página.
+		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El
+		// (double) es clave: sin él la división entera daría 2 y se perdería la última página.
 		int totalPaginas = (int) Math.ceil((double) total / criterios.tamano());
 
-		// Traducimos cada Cliente (dominio) a ClienteResponse con la API de Streams: stream() abre
-		// el flujo, map(clienteMapper::toResponse) transforma cada elemento (clienteMapper::toResponse
-		// es una referencia a método = la lambda c -> clienteMapper.toResponse(c)) y toList() recoge
-		// el resultado en una List nueva.
-		// Sin '::' sería map(c -> clienteMapper.toResponse(c)); y sin streams, un bucle for con add().
-		// Usamos '::'+streams por ser más corto y legible (a cambio de que hay que conocer streams).
+		// Cada Cliente (dominio) se traduce a ClienteResponse (JSON). La referencia a método
+		// clienteMapper::toResponse equivale a la lambda c -> clienteMapper.toResponse(c).
 		List<ClienteResponse> contenido = clientes.stream().map(clienteMapper::toResponse).toList();
 
 		int pagina = criterios.pagina();
@@ -82,6 +97,11 @@ public class ClienteServiceImpl implements ClienteService{
 		return respuesta;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<String> listarProvincias() {
 		List<String> provincias = clienteRepository.findProvincias();
@@ -89,6 +109,11 @@ public class ClienteServiceImpl implements ClienteService{
 		return provincias;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<String> listarPoblaciones(String provincia) {
 		List<String> poblaciones = clienteRepository.findPoblaciones(provincia);

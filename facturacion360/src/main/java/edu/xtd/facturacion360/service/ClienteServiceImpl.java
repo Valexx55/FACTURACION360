@@ -7,18 +7,29 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteResponse;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.repository.ClienteRepository;
 
+/**
+ * Implementación de {@link ClienteService}: la lógica de negocio de los clientes.
+ *
+ * <p>Hace de intermediaria entre el controller y el repositorio. Aquí viven las reglas que no
+ * son ni HTTP ni SQL: calcular los metadatos de paginación, decidir qué es un error de negocio
+ * y traducir el dominio a los DTO de respuesta con {@link ClienteMapper}.</p>
+ *
+ * <p>El detalle de cada método está documentado en la interfaz.</p>
+ *
+ * @see ClienteService
+ */
 @Service
-
-
-public class ClienteServiceImpl implements ClienteService{
+public class ClienteServiceImpl implements ClienteService {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteServiceImpl.class);
 
@@ -30,6 +41,11 @@ public class ClienteServiceImpl implements ClienteService{
 	@Autowired
 	ClienteMapper clienteMapper;
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public List<Cliente> listarUltimos(int limite) {
 		// Regla de negocio ("los últimos N"): de momento solo delega en el repositorio.
@@ -39,32 +55,70 @@ public class ClienteServiceImpl implements ClienteService{
 		return clientes;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
+	// Las dos consultas de este método (las filas y el total) tienen que ver la MISMA foto
+	// de la tabla. Sin transacción, cada una va por su cuenta: si alguien da de alta o
+	// borra un cliente justo entre ambas, el total no cuadraría con las filas devueltas y
+	// la paginación mostraría "12 clientes" con 10 filas.
+	// readOnly = true además avisa al driver de que no vamos a escribir, y así puede
+	// optimizar. Los demás métodos de lectura NO lo llevan a propósito: hacen una sola
+	// consulta, así que no hay dos lecturas que puedan discrepar y solo añadiría trabajo.
+	@Transactional(readOnly = true)
 	@Override
-	public PaginaClienteResponse listarPagina(int pagina, int tamano) {
-		int offset = pagina * tamano;                        // cuántas filas saltar
-		List<Cliente> clientes = clienteRepository.findPagina(tamano, offset);
-		long total = clienteRepository.contarTotal();
+	public PaginaClienteResponse listarPagina(CriteriosCliente criterios) {
+		// Los criterios llegan ya acotados y limpios (lo hace el constructor compacto de
+		// CriteriosCliente), así que aquí solo queda la lógica de negocio: pedir la
+		// página, pedir el total y montar los metadatos de paginación.
+		List<Cliente> clientes = clienteRepository.findPagina(criterios);
+		// El total se cuenta CON los mismos criterios: si no, el nº de páginas no
+		// cuadraría con lo que se ve en pantalla.
+		long total = clienteRepository.contarTotal(criterios);
 
-		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El (double)
-		// es clave: sin él la división entera daría 2 y perderías la última página.
-		int totalPaginas = (int) Math.ceil((double) total / tamano);
+		// Math.ceil redondea HACIA ARRIBA: 28/10 = 2,8 -> 3 páginas (la última con 8). El
+		// (double) es clave: sin él la división entera daría 2 y se perdería la última página.
+		int totalPaginas = (int) Math.ceil((double) total / criterios.tamano());
 
-		// Traducimos cada Cliente (dominio) a ClienteResponse con la API de Streams: stream() abre
-		// el flujo, map(clienteMapper::toResponse) transforma cada elemento (clienteMapper::toResponse
-		// es una referencia a método = la lambda c -> clienteMapper.toResponse(c)) y toList() recoge
-		// el resultado en una List nueva.
-		// Sin '::' sería map(c -> clienteMapper.toResponse(c)); y sin streams, un bucle for con add().
-		// Usamos '::'+streams por ser más corto y legible (a cambio de que hay que conocer streams).
+		// Cada Cliente (dominio) se traduce a ClienteResponse (JSON). La referencia a método
+		// clienteMapper::toResponse equivale a la lambda c -> clienteMapper.toResponse(c).
 		List<ClienteResponse> contenido = clientes.stream().map(clienteMapper::toResponse).toList();
 
+		int pagina = criterios.pagina();
 		boolean hayAnterior  = pagina > 0;                   // hay anterior salvo en la página 0
 		boolean haySiguiente = pagina < totalPaginas - 1;    // hay siguiente salvo en la última
 
 		PaginaClienteResponse respuesta = new PaginaClienteResponse(
 				contenido, pagina, totalPaginas, total, hayAnterior, haySiguiente);
-		log.info("listarPagina(pagina={}, tamano={}) -> pagina {}/{}, {} elementos",
-				pagina, tamano, pagina + 1, totalPaginas, total);
+		log.info("listarPagina({}) -> pagina {}/{}, {} elementos",
+				criterios, pagina + 1, totalPaginas, total);
 		return respuesta;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
+	@Override
+	public List<String> listarProvincias() {
+		List<String> provincias = clienteRepository.findProvincias();
+		log.info("listarProvincias() -> {} provincias", provincias.size());
+		return provincias;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
+	@Override
+	public List<String> listarPoblaciones(String provincia) {
+		List<String> poblaciones = clienteRepository.findPoblaciones(provincia);
+		log.info("listarPoblaciones(provincia={}) -> {} poblaciones", provincia, poblaciones.size());
+		return poblaciones;
 	}
 
 	@Override
@@ -126,5 +180,4 @@ public class ClienteServiceImpl implements ClienteService{
 
 	// TODO: valorar la programación del método privado validarCifUnico mirar el
 	// Diagrama de Clases
-
 }

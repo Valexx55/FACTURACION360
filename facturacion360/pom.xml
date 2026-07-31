@@ -84,6 +84,27 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<!--
+				Declara la etiqueta @autor, que permite atribuir METODOS concretos dentro de
+				clases compartidas. El @author estandar solo vale en clases e interfaces.
+				placement "tm" = tipos y metodos.
+
+				NO BORRAR sin quitar antes las etiquetas @autor del codigo: sin esta
+				configuracion, javadoc las trata como desconocidas y falla la generacion.
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<configuration>
+					<tags>
+						<tag>
+							<name>autor</name>
+							<placement>tm</placement>
+							<head>Autor:</head>
+						</tag>
+					</tags>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

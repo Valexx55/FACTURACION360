@@ -12,10 +12,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.TransactionException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,6 +32,7 @@ import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
 import edu.xtd.facturacion360.dto.ClienteRequest;
 import edu.xtd.facturacion360.dto.ClienteResponse;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 import jakarta.validation.Valid;
@@ -63,13 +66,13 @@ public class ClienteController {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
 
+	// Los usa listarUltimos para acotar su parámetro 'limite'. El listado paginado ya no
+	// los necesita: sus topes viven en CriteriosCliente, junto a los datos que acotan.
 	private static final int LIMITE_MIN = 1;
 	private static final int LIMITE_MAX = 100;
 
 	@Autowired
 	ClienteService clienteService;
-
-	Logger logger = LoggerFactory.getLogger(ClienteController.class);
 
 	@Autowired
 	ClienteMapper clienteMapper;
@@ -83,6 +86,8 @@ public class ClienteController {
 	 *               rango [1, 100].
 	 * @return {@code 200 OK} con la lista de {@link ClienteResponse}; o {@code 500}
 	 *         si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarPagina(CriteriosCliente)
 	 */
 	@Operation(summary = "Lista los últimos clientes", description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100.")
 	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
@@ -117,37 +122,113 @@ public class ClienteController {
 	}
 
 	/**
-	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla). No toca a
-	 * {@link #listarUltimos(int)}; es un endpoint aparte. Ejemplo de uso:
-	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10}
+	 * Devuelve una PÁGINA de clientes (para la paginación de la tabla), con búsqueda,
+	 * filtros y ordenación opcionales. No toca a {@link #listarUltimos(int)}; es un
+	 * endpoint aparte. Ejemplo de uso:
+	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10&busqueda=garcia&provincia=Valencia&ordenarPor=nombre&direccion=asc}
 	 *
-	 * @param pagina índice de la página empezando en 0; llega por la URL
-	 *               (?pagina=). Por defecto 0. Se fuerza a no ser negativo.
-	 * @param tamano cuántos clientes por página; llega por la URL (?tamano=). Por
-	 *               defecto 10. Se acota al rango [1, 100].
+	 * Buscar es "listar con un filtro de texto más", por eso comparte endpoint con el
+	 * listado: así la búsqueda hereda la paginación y los metadatos, y el frontend usa
+	 * un único camino de código tanto si hay término de búsqueda como si no.
+	 *
+	 * @param criterios los parámetros de la URL (?pagina=, ?tamano=, ?busqueda=,
+	 *                  ?provincia=, ?poblacion=, ?ordenarPor=, ?direccion=) que Spring
+	 *                  agrupa en un {@link CriteriosCliente}. El propio record se
+	 *                  encarga de acotarlos y limpiarlos, así que aquí llegan ya
+	 *                  normalizados.
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
-	 *         la página + metadatos de paginación); o {@code 500} si falla la BD.
+	 *         la página + metadatos de paginación); {@code 400} si algún criterio
+	 *         supera la longitud permitida; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see CriteriosCliente
+	 * @see PaginaClienteResponse
 	 */
+	@Operation(summary = "Lista una página de clientes", description = "Devuelve una página de clientes con búsqueda por nombre o NIF/CIF, filtros por provincia y población, y ordenación por nombre o fecha de alta en ambos sentidos")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Página recuperada correctamente"),
+			@ApiResponse(responseCode = "400", description = "Algún criterio supera la longitud permitida"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar los clientes") })
 	@GetMapping("/listar-pagina")
-	public ResponseEntity<PaginaClienteResponse> listarPagina(@RequestParam(defaultValue = "0") int pagina,
-			@RequestParam(defaultValue = "10") int tamano) {
+	public ResponseEntity<PaginaClienteResponse> listarPagina(@Valid @ModelAttribute CriteriosCliente criterios) {
 
 		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
 
-		// Validación: la página no puede ser negativa y el tamaño lo acotamos a [1,
-		// 100]
-		// (evita OFFSET raros o pedir demasiadas filas de golpe).
-		int paginaSegura = Math.max(0, pagina);
-		int tamanoSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, tamano));
-		log.info("GET /cliente/listar-pagina?pagina={}&tamano={}", paginaSegura, tamanoSeguro);
+		// Ya no hace falta acotar nada aquí: el constructor compacto de CriteriosCliente
+		// deja la página, el tamaño y los textos listos para usar. Por eso el log muestra
+		// los valores YA normalizados, que son los que de verdad se van a consultar.
+		log.info("GET /cliente/listar-pagina -> {}", criterios);
 
 		try {
 			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
 			// etc.).
-			PaginaClienteResponse pagina2 = clienteService.listarPagina(paginaSegura, tamanoSeguro);
-			respuestaHttp = ResponseEntity.ok(pagina2);
-		} catch (DataAccessException e) {
+			PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
+			respuestaHttp = ResponseEntity.ok(pagina);
+		} catch (DataAccessException | TransactionException e) {
+			// TransactionException aparte de DataAccessException porque NO son la misma
+			// familia: al ser listarPagina transaccional, si la BD no responde el fallo
+			// salta al ABRIR la transacción (CannotCreateTransactionException), antes de
+			// lanzar ninguna consulta. Sin este segundo tipo, esa excepción se escaparía y
+			// el cliente recibiría la página de error de Spring con la traza dentro, en vez
+			// del 500 limpio que devuelven los demás endpoints.
 			log.error("Error al listar la pagina de clientes", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
+	}
+
+	/**
+	 * Devuelve las provincias distintas que existen en la tabla, para rellenar el
+	 * desplegable de filtro del frontend. Ejemplo de uso:
+	 * {@code GET /cliente/provincias}
+	 *
+	 * @return {@code 200 OK} con la lista de provincias; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarPoblaciones(String)
+	 */
+	@Operation(summary = "Lista las provincias", description = "Devuelve las provincias distintas de la tabla clientes, ordenadas alfabéticamente")
+	@ApiResponse(responseCode = "200", description = "Provincias recuperadas correctamente")
+	@GetMapping("/provincias")
+	public ResponseEntity<List<String>> listarProvincias() {
+
+		ResponseEntity<List<String>> respuestaHttp = null;
+		log.info("GET /cliente/provincias");
+
+		try {
+			List<String> provincias = clienteService.listarProvincias();
+			respuestaHttp = ResponseEntity.ok(provincias);
+		} catch (DataAccessException e) {
+			log.error("Error al listar las provincias", e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
+	}
+
+	/**
+	 * Devuelve las poblaciones distintas que existen en la tabla, para el desplegable
+	 * de filtro en cascada. Ejemplo de uso:
+	 * {@code GET /cliente/poblaciones?provincia=Valencia}
+	 *
+	 * @param provincia si llega informada, solo las poblaciones de esa provincia;
+	 *                  si no, todas. Opcional.
+	 * @return {@code 200 OK} con la lista de poblaciones; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarProvincias()
+	 */
+	@Operation(summary = "Lista las poblaciones", description = "Devuelve las poblaciones distintas de la tabla clientes; si se indica provincia, solo las de esa provincia")
+	@ApiResponse(responseCode = "200", description = "Poblaciones recuperadas correctamente")
+	@GetMapping("/poblaciones")
+	public ResponseEntity<List<String>> listarPoblaciones(
+			@Parameter(description = "Provincia por la que filtrar", example = "Valencia") @RequestParam(required = false) String provincia) {
+
+		ResponseEntity<List<String>> respuestaHttp = null;
+		log.info("GET /cliente/poblaciones?provincia={}", provincia);
+
+		try {
+			List<String> poblaciones = clienteService.listarPoblaciones(provincia);
+			respuestaHttp = ResponseEntity.ok(poblaciones);
+		} catch (DataAccessException e) {
+			log.error("Error al listar las poblaciones", e);
 			respuestaHttp = ResponseEntity.internalServerError().build();
 		}
 
@@ -189,23 +270,23 @@ public class ClienteController {
 		ClienteResponse clienteResponse = null;
 
 		if (bindingResult.hasErrors()) {
-			logger.error("Cliente recibido con errores");
+			log.error("Cliente recibido con errores");
 			respuesta = ResponseEntity.badRequest().build();
 		} else {
 			try {
-				logger.debug("Cliente sin errores de validación");
+				log.debug("Cliente sin errores de validación");
 				Cliente cliente = clienteMapper.toDomain(clienteRequest);
 				Cliente clienteNuevo = clienteService.crear(cliente);
 
-				logger.debug("Cliente creado correctamente " + clienteNuevo);
+				log.debug("Cliente creado correctamente " + clienteNuevo);
 				clienteResponse = clienteMapper.toResponse(clienteNuevo);
 				respuesta = ResponseEntity.status(HttpStatus.CREATED).body(clienteResponse);
 
 			} catch (DuplicateKeyException e) {
-				logger.error("NIF duplicado", e);
+				log.error("NIF duplicado", e);
 				respuesta = ResponseEntity.status(HttpStatus.CONFLICT).build();
 			} catch (Exception e) {
-				logger.error("Excepción creando cliente", e);
+				log.error("Excepción creando cliente", e);
 				respuesta = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
 			}
 		}

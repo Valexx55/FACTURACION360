@@ -85,7 +85,7 @@ public class ClienteServiceImpl implements ClienteService{
 
 		clienteNuevo = clienteRepository.insert(cliente);
 		if (clienteNuevo == null) {
-			throw new RuntimeException("Error al insertar cliente " + cliente);
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error al insertar el cliente");
 		}
 
 		return clienteNuevo;
@@ -117,9 +117,7 @@ public class ClienteServiceImpl implements ClienteService{
 
 		boolean borrado = this.clienteRepository.deleteById(id);
 		if (!borrado) {
-			System.err.println("El cliente con ese ID no existe");
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Error, No se encontró el cliente");
-
 		}
 
 	}

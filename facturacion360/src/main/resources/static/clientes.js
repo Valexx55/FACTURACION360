@@ -65,6 +65,20 @@ const cabecerasOrdenables = document.querySelectorAll(".th-ordenable");
 const regionAnuncios = document.getElementById("anuncios");
 const avisoClientes = document.getElementById("aviso-clientes");
 const contenedorTabla = cuerpoTabla.closest(".table-responsive");
+const dialogoDescartar = document.getElementById("modal-descartar");
+const btnDescartar = document.getElementById("btn-descartar");
+
+// El diálogo de descartar: se construye la primera vez que hace falta y se reutiliza.
+let modalDescartar = null;
+
+// Cómo se contesta a quien está esperando la respuesta del diálogo, y qué se le va a
+// contestar. Solo puede haber una pregunta a la vez: mientras está abierto, su fondo impide
+// pulsar cualquier otra cosa de la página.
+let responderDescarte = null;
+let descarteAceptado = false;
+
+// Qué control tenía el foco cuando se abrió el diálogo, para devolvérselo al cerrarlo.
+let focoPrevioDialogo = null;
 
 // Las cabeceras de la tabla. Se cuentan para saber cuántas columnas tiene que ocupar la fila
 // de mensajes y la del despliegue, en vez de escribir un 6 que habría que acordarse de cambiar
@@ -896,7 +910,7 @@ function cerrarDespliegue(fila) {
  * @param {HTMLTableRowElement} fila la fila del cliente
  * @param {string} modo el modo que pide el control que se ha pulsado
  */
-function alternarDespliegue(fila, modo) {
+async function alternarDespliegue(fila, modo) {
     const modoActual = modoDe(fila);
 
     // El aviso emergente se queda flotando con el texto de antes si no se esconde al pulsar.
@@ -907,7 +921,15 @@ function alternarDespliegue(fila, modo) {
         return;
     }
 
-    if (modoActual === "edicion" && !confirmarDescarte(fila)) return;
+    if (modoActual === "edicion") {
+        if (!await confirmarDescarte(fila)) return;
+
+        // Preguntar lleva su tiempo, y en ese rato la tabla ha podido repintarse (un refresco
+        // de otra pestaña, o la búsqueda que quedara pendiente): esta fila ya no está en el
+        // documento y lo que se haga con ella no se vería. La que la sustituye se reabrió
+        // sola con el estado de siempre.
+        if (!fila.isConnected) return;
+    }
 
     if (modoActual === modo) {
         cerrarDespliegue(fila);
@@ -1182,13 +1204,77 @@ function hayCambios(formulario) {
     return JSON.stringify(leerFormulario(formulario)) !== formulario.dataset.valoresOriginales;
 }
 
-/** Pregunta antes de tirar unos cambios sin guardar. Devuelve si se puede seguir. */
-function confirmarDescarte(fila) {
+/**
+ * Pregunta antes de tirar unos cambios sin guardar.
+ *
+ * @param {HTMLTableRowElement} fila la fila que se va a cerrar o cambiar de modo
+ * @return {Promise<boolean>} si se puede seguir adelante
+ */
+async function confirmarDescarte(fila) {
     const formulario = panelDe(fila)?.querySelector(".formulario-edicion");
+
+    // Sin formulario o sin nada tocado no hay nada que descartar, así que no se pregunta:
+    // un diálogo para decir "sí" siempre es un diálogo que sobra.
     if (!formulario || !hayCambios(formulario)) return true;
 
-    return confirm("Hay cambios sin guardar en este cliente. ¿Quieres descartarlos?");
+    return preguntarDescarte();
 }
+
+/**
+ * Abre el diálogo de descartar y espera la respuesta.
+ *
+ * La promesa se resuelve en 'hidden.bs.modal', cuando el diálogo ya se ha cerrado del todo y
+ * el foco ha vuelto a su sitio, y no al pulsar el botón: respondiendo antes, quien nos llama
+ * colocaría el foco (en el lápiz de la fila) y la vuelta se lo llevaría de allí.
+ *
+ * @return {Promise<boolean>} true si se descartan los cambios
+ */
+function preguntarDescarte() {
+    // Si Bootstrap no ha cargado (su CDN caído, por ejemplo), se pregunta con el diálogo del
+    // navegador: es feo, pero sin él la fila se cerraría llevándose lo escrito sin avisar.
+    if (!window.bootstrap) {
+        return Promise.resolve(confirm("Hay cambios sin guardar en este cliente. ¿Quieres descartarlos?"));
+    }
+
+    modalDescartar ??= new bootstrap.Modal(dialogoDescartar);
+
+    // De dónde venimos, para devolver el foco al cerrar. Bootstrap solo lo hace con los
+    // diálogos que se abren con data-bs-toggle, y este se abre desde el código: sin esto,
+    // quien contesta "Seguir editando" se encuentra el foco en el <body>, al principio de la
+    // página, justo después de haber dicho que quería seguir donde estaba.
+    focoPrevioDialogo = document.activeElement;
+
+    return new Promise((resolver) => {
+        responderDescarte = resolver;
+        modalDescartar.show();
+    });
+}
+
+// Pulsar "Descartar" solo deja anotada la respuesta y manda cerrar; quien resuelve la promesa
+// es el cierre, que ocurre igual si se pulsa "Seguir editando", la X, Escape o el fondo.
+btnDescartar.addEventListener("click", () => {
+    descarteAceptado = true;
+    modalDescartar.hide();
+});
+
+dialogoDescartar.addEventListener("hidden.bs.modal", () => {
+    const aceptado = descarteAceptado;
+    const resolver = responderDescarte;
+
+    descarteAceptado = false;
+    responderDescarte = null;
+
+    // El foco, de vuelta a donde estaba antes de preguntar. Puede que ese control ya no exista
+    // (la tabla se ha repintado mientras el diálogo estaba abierto), y entonces no se toca.
+    // Se hace ANTES de responder: si la respuesta fue "descartar", quien nos llama va a
+    // colocarlo en otro sitio y su decisión es la que debe quedar.
+    if (focoPrevioDialogo?.isConnected) {
+        focoPrevioDialogo.focus();
+    }
+    focoPrevioDialogo = null;
+
+    resolver?.(aceptado);
+});
 
 /** Guarda lo escrito en los formularios abiertos antes de que la tabla se repinte. */
 function guardarBorradores() {
@@ -1291,11 +1377,16 @@ cuerpoTabla.addEventListener("click", (evento) => {
 });
 
 /** Clic dentro de un panel abierto: cancelar la edición o reintentar la carga. */
-function manejarClicPanel(evento, panel) {
+async function manejarClicPanel(evento, panel) {
     const fila = panel.previousElementSibling;
 
     if (evento.target.closest(".btn-cancelar")) {
-        if (!confirmarDescarte(fila)) return;
+        if (!await confirmarDescarte(fila)) return;
+
+        // Igual que al alternar: mientras se preguntaba, la tabla ha podido repintarse y esta
+        // fila ya no ser la que está en pantalla.
+        if (!fila.isConnected) return;
+
         cerrarDespliegue(fila);
         // El foco vuelve al lápiz que abrió el formulario: si no, se quedaría en un botón que
         // acaba de desaparecer y saltaría al principio de la página.

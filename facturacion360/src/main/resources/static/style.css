@@ -635,19 +635,28 @@ footer {
     border-bottom: 0;
 }
 
-.fila-cliente.desplegada > *:first-child,
-.fila-despliegue > td {
+.fila-cliente.desplegada > *:first-child {
     border-left: 2px solid var(--color-modo);
 }
 
-.fila-cliente.desplegada > *:last-child,
-.fila-despliegue > td {
+.fila-cliente.desplegada > *:last-child {
     border-right: 2px solid var(--color-modo);
 }
 
 .fila-despliegue > td {
     padding: 0;
     border-top: 0;
+}
+
+/* Los tres lados que pinta el panel van CONDICIONADOS al modo, no puestos siempre.
+   Al cerrar, marcarFila() quita las clases de modo pero el panel se queda 250 ms en el
+   documento plegándose: sin esta condición, --color-modo deja de existir, el var() no
+   resuelve, border-color cae a su valor inicial (currentColor, o sea el color del texto) y
+   se veía una raya oscura parpadear en cada cierre. */
+.fila-despliegue.modo-detalle > td,
+.fila-despliegue.modo-edicion > td {
+    border-left: 2px solid var(--color-modo);
+    border-right: 2px solid var(--color-modo);
     border-bottom: 2px solid var(--color-modo);
 }
 
@@ -783,7 +792,7 @@ footer {
     .barra-filtros .buscador-clientes,
     .buscador-clientes .buscador-input,
     .buscador-clientes .buscador-etiqueta,
-    #tabla-clientes {
+    .table-responsive {
         transition: none;
     }
 }

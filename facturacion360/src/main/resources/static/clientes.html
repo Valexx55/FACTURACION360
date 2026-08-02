@@ -4,10 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal de Clientes | Facturación 360</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- integrity: el navegador comprueba que lo que descarga del CDN es EXACTAMENTE el
+         fichero esperado (la huella se ha calculado sobre estas mismas URL) y, si no, no lo
+         ejecuta. Sin eso, quien controlase el CDN podría servir otro archivo a esta página.
+         crossorigin es obligatorio para poder comprobarlo en una descarga de otro dominio.
+         Google Fonts se queda fuera a propósito: devuelve un CSS distinto según el navegador,
+         así que ninguna huella fija valdría para todos y la fuente no cargaría. -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM"
+          crossorigin="anonymous">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+          integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g"
+          crossorigin="anonymous">
     <link rel="icon" href="./img/fav.ico" type="image/png">
     <!-- defer: descarga en paralelo con el parseo del HTML y se ejecuta cuando el
          DOM ya está listo, así que no hace falta DOMContentLoaded. -->
@@ -91,8 +101,12 @@
                 </select>
                 <!-- El botón MUESTRA el orden actual; al pulsarlo, lo invierte. La etiqueta
                      es aria-live porque cambia sola al pulsar: sin eso, quien no ve la
-                     pantalla pulsa y no se entera de en qué orden ha quedado. -->
-                <button id="btn-direccion" type="button" class="btn btn-outline-secondary btn-direccion">
+                     pantalla pulsa y no se entera de en qué orden ha quedado.
+                     data-bs-title y no title: el aviso emergente es el mismo sistema que usa
+                     la tabla, con su aspecto y su retardo, y así no conviven dos clases de
+                     globo en la misma pantalla. Lo escribe el HTML porque nunca cambia. -->
+                <button id="btn-direccion" type="button" class="btn btn-outline-secondary btn-direccion"
+                        data-bs-title="Pulsa para invertir el orden">
                     <i id="icono-direccion" class="fa-solid fa-arrow-down-wide-short" aria-hidden="true"></i>
                     <span id="etiqueta-direccion" aria-live="polite">Más recientes</span>
                 </button>
@@ -182,12 +196,14 @@
                  recientes"/"Más antiguos", que ahora chocaría con el control de
                  ordenación por fecha: quien lo leyera no sabría si mueve de página
                  o cambia el orden. -->
+            <!-- Las flechas son aria-hidden como el resto de iconos de la página: acompañan a
+                 un texto que ya dice lo mismo, y sin esto un lector de pantalla las nombra. -->
             <button id="btn-anterior" type="button" class="btn btn-outline-secondary" disabled>
-                <i class="fa-solid fa-chevron-left"></i> Anterior
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Anterior
             </button>
             <span id="info-pagina" class="text-muted" aria-live="polite"></span>
             <button id="btn-siguiente" type="button" class="btn btn-outline-secondary">
-                Siguiente <i class="fa-solid fa-chevron-right"></i>
+                Siguiente <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             </button>
         </nav>
 
@@ -425,6 +441,8 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
+            crossorigin="anonymous"></script>
 </body>
 </html>

@@ -52,6 +52,7 @@ const infoPagina = document.getElementById("info-pagina");
 
 const inputBuscador = document.getElementById("buscador-clientes");
 const contenedorBuscador = document.querySelector(".buscador-clientes");
+const barraFiltros = document.querySelector(".barra-filtros");
 const contadorFiltros = document.getElementById("contador-filtros");
 const selectProvincia = document.getElementById("filtro-provincia");
 const selectPoblacion = document.getElementById("filtro-poblacion");
@@ -65,12 +66,12 @@ const regionAnuncios = document.getElementById("anuncios");
 const avisoClientes = document.getElementById("aviso-clientes");
 const contenedorTabla = cuerpoTabla.closest(".table-responsive");
 
-// Columnas de la tabla, contadas de sus propias cabeceras. Lo usan la fila de mensajes y la
-// del despliegue, que tienen que ocuparlas todas. Se cuentan en vez de escribir un 6 porque
-// añadir una columna obligaría, si no, a acordarse de cambiar el número aquí y en el HTML.
-// El ":scope >" deja fuera las cabeceras de las tablas de los paneles, que se insertan dentro.
-const COLUMNAS_TABLA = cuerpoTabla.closest("table")
-    .querySelectorAll(":scope > thead > tr > th").length;
+// Las cabeceras de la tabla. Se cuentan para saber cuántas columnas tiene que ocupar la fila
+// de mensajes y la del despliegue, en vez de escribir un 6 que habría que acordarse de cambiar
+// aquí y en el HTML al añadir una columna. El ":scope >" deja fuera las cabeceras de las
+// tablas de los paneles, que se insertan dentro de esta.
+const CABECERAS_TABLA = cuerpoTabla.closest("table")
+    .querySelectorAll(":scope > thead > tr > th");
 
 // El texto por defecto del error del NIF/CIF, sacado del propio <template> donde está escrito.
 // Se guarda al arrancar porque al mostrar el error del servidor se pisa, y al cerrar hay que
@@ -424,6 +425,11 @@ function pintarEnlace(celda, valor, construirHref, pista) {
 
 /**
  * Pasa la fecha ISO que manda el backend (2026-01-10) al formato español (10/1/2026).
+ *
+ * Se formatea en UTC a propósito. El backend manda un día suelto, sin hora, y el navegador lo
+ * entiende como medianoche UTC: al pasarlo a la hora local de un huso negativo, esa medianoche
+ * cae en el día anterior y la fecha de alta se vería con un día menos.
+ *
  * @param {string|null} fechaIso fecha en formato ISO, o null si el cliente no la tiene
  * @return {string} la fecha formateada, o un guion si no hay fecha
  */
@@ -431,7 +437,7 @@ function formatearFecha(fechaIso) {
     if (!fechaIso) {
         return "—";   // fecha_alta admite NULL en base de datos
     }
-    return new Date(fechaIso).toLocaleDateString("es-ES");
+    return new Date(fechaIso).toLocaleDateString("es-ES", { timeZone: "UTC" });
 }
 
 /**
@@ -463,7 +469,6 @@ function pintarControlesOrden() {
     selectOrdenarPor.value = ordenarPor;
     etiquetaDireccion.textContent = etiqueta.texto;
     iconoDireccion.className = `fa-solid ${etiqueta.icono}`;
-    btnDireccion.title = "Pulsa para invertir el orden";
 
     // Cada cabecera muestra si es la columna activa y en qué sentido.
     cabecerasOrdenables.forEach((cabecera) => {
@@ -483,6 +488,24 @@ function pintarControlesOrden() {
         cabecera.closest("th").setAttribute("aria-sort",
             esColumnaActiva ? (direccion === "asc" ? "ascending" : "descending") : "none");
     });
+}
+
+/**
+ * Cuántas columnas se están viendo ahora mismo.
+ *
+ * Se cuentan en vez de usar el total porque en móvil hay dos que se ocultan con las clases
+ * d-none de Bootstrap: con el número entero, la fila de mensajes y la del panel se extienden
+ * sobre dos columnas que no existen y su contenido se centra respecto a un ancho mayor que el
+ * de la tabla, saliéndose por la derecha.
+ *
+ * @return {number} el número de cabeceras visibles; el total si no hubiera ninguna, que es lo
+ *         que pasa si la tabla entera está oculta y un colspan de 0 no es válido
+ */
+function columnasVisibles() {
+    // offsetParent es null en un elemento con display:none (y en toda su descendencia), que es
+    // justo lo que hace la clase d-none.
+    const visibles = [...CABECERAS_TABLA].filter((cabecera) => cabecera.offsetParent !== null);
+    return visibles.length || CABECERAS_TABLA.length;
 }
 
 /** ¿Hay algún filtro o búsqueda puesto? (la ordenación no cuenta: siempre hay una) */
@@ -544,7 +567,7 @@ function mostrarMensaje(texto, { conLimpiar = false } = {}) {
     cuerpoTabla.replaceChildren();
     const fila = document.createElement("tr");
     const celda = document.createElement("td");
-    celda.colSpan = COLUMNAS_TABLA;
+    celda.colSpan = columnasVisibles();
     celda.className = "text-center text-muted py-4";
     celda.textContent = texto;
 
@@ -914,7 +937,7 @@ function obtenerPanel(fila, animar) {
     panel.dataset.clienteId = fila.dataset.clienteId;
 
     // La celda del panel ocupa el ancho entero de la tabla, sean las columnas que sean.
-    panel.querySelector("td").colSpan = COLUMNAS_TABLA;
+    panel.querySelector("td").colSpan = columnasVisibles();
 
     fila.after(panel);
 
@@ -1219,6 +1242,17 @@ if (window.bootstrap) {
         placement: "top",
         trigger: "hover focus",
     });
+
+    // Y otro para la barra de filtros, con los mismos ajustes: un aviso que se abre distinto
+    // o con otro retardo según la zona de la pantalla se nota, y ahí es donde estaba el title
+    // del navegador que ponía el botón de dirección.
+    new bootstrap.Tooltip(barraFiltros, {
+        selector: "[data-bs-title]",
+        delay: { show: RETARDO_PISTA_MS, hide: 0 },
+        container: "body",
+        placement: "top",
+        trigger: "hover focus",
+    });
 }
 
 // --- Enlazado de los clics de la tabla ---
@@ -1512,10 +1546,39 @@ function ajustarFocoTabla() {
     }
 }
 
+/**
+ * Reajusta las filas que ocupan la tabla a lo ancho (los paneles y los mensajes) cuando el
+ * número de columnas visibles cambia, que es lo que pasa al estrechar la ventana hasta el
+ * ancho de móvil con un panel ya abierto.
+ */
+function ajustarColumnas() {
+    const columnas = columnasVisibles();
+
+    // El ":scope >" es importante: dentro de los paneles hay más tablas, y sus celdas no
+    // tienen nada que ver con las columnas de esta.
+    for (const celda of cuerpoTabla.querySelectorAll(":scope > tr > td[colspan]")) {
+        celda.colSpan = columnas;
+    }
+}
+
 // Se vigilan los dos: la ventana al cambiar de tamaño encoge el contenedor, y un nombre muy
 // largo o un panel abierto ensanchan la tabla. Cualquiera de las dos cosas hace aparecer o
 // desaparecer el desplazamiento.
-const observadorTabla = new ResizeObserver(ajustarFocoTabla);
+//
+// El requestAnimationFrame no es adorno: arrastrar el borde de la ventana dispara el
+// observador decenas de veces por segundo, y cada medida de scrollWidth obliga al navegador a
+// recalcular la disposición de la página. Así se mide una vez por fotograma como mucho.
+let ajustePedido = false;
+const observadorTabla = new ResizeObserver(() => {
+    if (ajustePedido) return;
+    ajustePedido = true;
+
+    requestAnimationFrame(() => {
+        ajustePedido = false;
+        ajustarFocoTabla();
+        ajustarColumnas();
+    });
+});
 observadorTabla.observe(contenedorTabla);
 observadorTabla.observe(cuerpoTabla.closest("table"));
 

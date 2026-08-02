@@ -399,19 +399,13 @@ footer {
     --hueco-lupa: 3.2rem;
     --ancho-cerrado: 9rem;
 
+    /* El ancho, el encogimiento y la transición se deciden en un único sitio, el bloque
+       '.barra-filtros .buscador-clientes' de arriba: dentro de una fila flexible manda
+       flex-basis y lo que se escriba aquí como width no llega a aplicarse nunca. Estaban en
+       los dos, diciendo cosas contrarias, y el comentario de este bloque defendía justo lo
+       que el otro deshacía. */
     position: relative;
-    /* En la barra de filtros es un elemento flex más: sin esto puede encogerse por debajo
-       de su ancho y el desbordamiento sería aún mayor. */
-    flex: 0 0 auto;
-    width: var(--ancho-cerrado);
     height: var(--alto-control);
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Clase que añadimos con JS al enfocar (ratón o teclado) */
-.buscador-clientes.expandido {
-    width: 100%;
-    max-width: 800px;
 }
 
 .buscador-clientes .buscador-input {
@@ -778,7 +772,6 @@ footer {
 /* Quien tenga desactivadas las animaciones del sistema abre y cierra sin transición. */
 @media (prefers-reduced-motion: reduce) {
     .despliegue-envoltorio,
-    .buscador-clientes,
     .barra-filtros .buscador-clientes,
     .buscador-clientes .buscador-input,
     .buscador-clientes .buscador-etiqueta,

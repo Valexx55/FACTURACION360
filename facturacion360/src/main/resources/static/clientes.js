@@ -20,6 +20,7 @@
  */
 
 // Rutas relativas: el HTML lo sirve el propio Spring Boot, mismo origen (sin CORS).
+const API_CLIENTE = "/cliente";
 const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 const API_PROVINCIAS = "/cliente/provincias";
 const API_POBLACIONES = "/cliente/poblaciones";
@@ -29,14 +30,30 @@ const TAMANO_PAGINA = 10;
 // escribir "garcia" lanzaría 6 peticiones a la base de datos en vez de 1.
 const ESPERA_TECLEO_MS = 300;
 
+// Columnas de la tabla. Lo usan la fila de mensajes y la del despliegue, que tienen que
+// ocuparlas todas; si un día se añade una columna, se cambia aquí y no en tres sitios.
+const COLUMNAS_TABLA = 6;
+
+// Cuánto tarda en aparecer el aviso de "Ver detalles" al dejar el ratón encima.
+const RETARDO_PISTA_MS = 1000;
+
+// Lo que dura el plegado del panel. Tiene que coincidir con la transición de
+// .despliegue-envoltorio en style.css: es el tiempo que esperamos para quitarlo del DOM.
+const DURACION_PLEGADO_MS = 250;
+
 // Referencias del DOM que usamos.
 const cuerpoTabla = document.getElementById("tabla-clientes");
 const plantillaFila = document.getElementById("fila-cliente-template");
+const plantillaDespliegue = document.getElementById("fila-despliegue-template");
+const plantillaPanelDetalle = document.getElementById("panel-detalle-template");
+const plantillaPanelEdicion = document.getElementById("panel-edicion-template");
 const btnAnterior = document.getElementById("btn-anterior");
 const btnSiguiente = document.getElementById("btn-siguiente");
 const infoPagina = document.getElementById("info-pagina");
 
 const inputBuscador = document.getElementById("buscador-clientes");
+const contenedorBuscador = document.querySelector(".buscador-clientes");
+const contadorFiltros = document.getElementById("contador-filtros");
 const selectProvincia = document.getElementById("filtro-provincia");
 const selectPoblacion = document.getElementById("filtro-poblacion");
 const selectOrdenarPor = document.getElementById("filtro-ordenar-por");
@@ -60,6 +77,34 @@ const criterios = {
 };
 
 let paginaActual = 0;
+
+// Peticiones de listado que hay ahora mismo en el aire. Es un contador y no un booleano
+// porque una petición cancelada termina DESPUÉS de que arranque la que la sustituye: con un
+// booleano, la que muere apagaría el "cargando" de la que sigue viva.
+let listadosEnVuelo = 0;
+
+/*
+ * Filas con el panel desplegado: id del cliente -> { modo, borrador }.
+ *
+ * Es un Map y no un id suelto porque se pueden tener varias abiertas a la vez, y vive fuera
+ * del DOM porque la tabla se repinta entera cada vez que se pagina, se busca o se refresca:
+ * de aquí se saca qué paneles hay que volver a abrir después.
+ *
+ *   modo     -> "detalle" (solo lectura) o "edicion" (formulario)
+ *   borrador -> lo que el usuario tuviera escrito sin guardar cuando se repintó la tabla,
+ *               o null. Sin esto, buscar algo con un formulario abierto le borraría lo
+ *               tecleado sin avisar.
+ */
+const filasDesplegadas = new Map();
+
+// Los campos que se pueden editar, en un orden fijo. Se usa para leer el formulario, para
+// rellenarlo y para comparar si algo ha cambiado: al recorrer siempre esta misma lista, los
+// dos objetos que se comparan salen con las claves en el mismo orden.
+const CAMPOS_EDITABLES = ["nombre", "nifCif", "email", "telefono",
+    "direccion", "codigoPostal", "poblacion", "provincia"];
+
+// Los que la BD admite a NULL (el resto son NOT NULL y el formulario los exige).
+const CAMPOS_OPCIONALES = ["email", "telefono", "codigoPostal"];
 
 /*
  * Etiqueta e icono del botón según lo que se esté viendo AHORA. Decir "Más recientes"
@@ -133,6 +178,11 @@ function esCancelacion(error) {
  * @param {number} pagina índice de la página a cargar (empieza en 0)
  */
 async function cargarClientes(pagina) {
+    // Atenúa la tabla y avisa a los lectores de pantalla de que lo que hay no es definitivo:
+    // sin esto se siguen viendo los datos de la página anterior como si fueran los nuevos.
+    listadosEnVuelo++;
+    cuerpoTabla.setAttribute("aria-busy", "true");
+
     try {
         // URLSearchParams se encarga de codificar los valores: un término con '&',
         // '%' o tildes viaja entero y no rompe la URL.
@@ -158,6 +208,11 @@ async function cargarClientes(pagina) {
         // tocar la tabla para no borrar lo que hay mientras llega la respuesta buena.
         if (esCancelacion(error)) return;
         mostrarError(error);
+    } finally {
+        listadosEnVuelo--;
+        if (listadosEnVuelo === 0) {
+            cuerpoTabla.setAttribute("aria-busy", "false");
+        }
     }
 }
 
@@ -166,33 +221,102 @@ async function cargarClientes(pagina) {
  * @param {Array<Object>} clientes lista de ClienteResponse
  */
 function pintarFilas(clientes) {
+    // Antes de vaciar la tabla: guardar lo que hubiera a medio escribir en un formulario
+    // abierto y destruir los avisos emergentes de las filas que van a desaparecer (si no,
+    // se quedan flotando sobre la pantalla y además Bootstrap sigue guardando una
+    // referencia a cada fila borrada).
+    guardarBorradores();
+    limpiarPistas();
+
     cuerpoTabla.replaceChildren(); // limpia la tabla sin usar innerHTML
 
     if (!Array.isArray(clientes) || clientes.length === 0) {
         // El mensaje cambia según el motivo: "no hay clientes" y "tu búsqueda no
         // encuentra nada" son cosas distintas y el usuario reacciona distinto a cada una.
-        mostrarMensaje(hayCriteriosActivos()
+        // En el segundo caso, la salida se ofrece ahí mismo.
+        const filtrando = hayCriteriosActivos();
+        mostrarMensaje(filtrando
             ? "No hay clientes que coincidan con la búsqueda."
-            : "No hay clientes que mostrar.");
+            : "No hay clientes que mostrar.", { conLimpiar: filtrando });
         return;
     }
 
-    for (const cliente of clientes) {
-        // Clonamos el contenido del template (un <tr> completo con sus <td>).
+    for (const [indice, cliente] of clientes.entries()) {
+        // Clonamos el contenido del template (un <tr> completo con sus celdas).
         const fila = plantillaFila.content.cloneNode(true);
 
         // textContent escapa el texto: seguro frente a nombres con < o &.
         fila.querySelector(".cliente-nombre").textContent = cliente.nombre;
         fila.querySelector(".cliente-cif").textContent = cliente.nifCif;
-        fila.querySelector(".cliente-email").textContent = cliente.email;
-        fila.querySelector(".cliente-telefono").textContent = cliente.telefono;
+        pintarEnlace(fila.querySelector(".cliente-email"), cliente.email,
+            (valor) => `mailto:${valor}`, "Escribir a este correo");
+        pintarEnlace(fila.querySelector(".cliente-telefono"), cliente.telefono,
+            (valor) => `tel:${valor.replace(/\s+/g, "")}`, "Llamar a este número");
         fila.querySelector(".cliente-alta").textContent = formatearFecha(cliente.fechaAlta);
 
         // Guardamos el id en la fila por si los botones de acción lo necesitan.
-        fila.querySelector("tr").dataset.clienteId = cliente.idCliente;
+        const filaCliente = fila.querySelector("tr");
+        filaCliente.dataset.clienteId = cliente.idCliente;
+
+        // El rayado lo marcamos aquí, por CLIENTE. Con el table-striped de Bootstrap
+        // (nth-of-type) cada panel de detalle insertado invierte la alternancia de todo lo
+        // que viene detrás, y la tabla acaba con dos filas blancas seguidas.
+        filaCliente.classList.toggle("fila-par", indice % 2 === 1);
+
+        nombrarAcciones(filaCliente, cliente.nombre);
+
+        // Deja la fila en estado "cerrada": aria-expanded a false y el texto del aviso.
+        marcarFila(filaCliente, null);
 
         cuerpoTabla.appendChild(fila);
     }
+
+    reabrirDespliegues();
+}
+
+/**
+ * Pinta una celda como enlace útil (escribir un correo, llamar por teléfono), o con un guion
+ * si no hay dato.
+ *
+ * El esquema (mailto:, tel:) lo construye SIEMPRE el código, nunca el valor que llega del
+ * servidor: así un dato manipulado no puede colar un href de tipo javascript:.
+ *
+ * @param {Element} celda la celda de la tabla
+ * @param {string|null} valor el dato del cliente
+ * @param {Function} construirHref función que arma el href a partir del valor
+ * @param {string} pista qué dice el aviso emergente al pasar el ratón. El enlace lleva el
+ *        suyo porque, si no, heredaría el de la celda ("Ver detalles") y estaría anunciando
+ *        algo distinto de lo que hace al pulsarlo
+ */
+function pintarEnlace(celda, valor, construirHref, pista) {
+    const texto = (valor ?? "").trim();
+    if (!texto) {
+        celda.textContent = "—";
+        return;
+    }
+
+    const enlace = document.createElement("a");
+    enlace.className = "enlace-celda";
+    enlace.href = construirHref(texto);
+    enlace.textContent = texto;
+    enlace.dataset.bsTitle = pista;
+    celda.replaceChildren(enlace);
+}
+
+/**
+ * Mete el nombre del cliente en el nombre accesible de cada botón de la fila.
+ *
+ * Sin esto, quien navega con lector de pantalla y pide la lista de botones de la página oye
+ * diez veces "Editar cliente" sin saber a cuál pertenece cada uno. El texto visible no
+ * cambia: son botones de icono y el nombre solo existe para la tecnología asistiva.
+ *
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {string} nombre el nombre del cliente
+ */
+function nombrarAcciones(fila, nombre) {
+    fila.querySelector(".btn-ver").setAttribute("aria-label", `Ver detalles de ${nombre}`);
+    fila.querySelector(".btn-editar").setAttribute("aria-label", `Editar ${nombre}`);
+    fila.querySelector(".btn-eliminar").setAttribute("aria-label", `Eliminar ${nombre}`);
 }
 
 /**
@@ -272,17 +396,64 @@ function hayCriteriosActivos() {
  */
 function aplicarCriterios() {
     pintarControlesOrden();
+    pintarEstadoFiltros();
     cargarClientes(0);
 }
 
-/** Pinta una fila que ocupa toda la tabla con un mensaje informativo. */
-function mostrarMensaje(texto) {
+/**
+ * Marca qué controles tienen un filtro puesto y cuántos son en total.
+ *
+ * Es la única parte de la barra donde el color dice algo en vez de decorar: con tres
+ * controles que por fuera son idénticos estén o no usados, la pregunta "¿por qué solo salen
+ * 4 clientes?" obligaba a abrir los desplegables uno a uno.
+ */
+function pintarEstadoFiltros() {
+    const activos = [criterios.busqueda, criterios.provincia, criterios.poblacion]
+        .filter(Boolean).length;
+
+    contenedorBuscador.classList.toggle("activo", Boolean(criterios.busqueda));
+    selectProvincia.closest(".control-filtro")
+        .classList.toggle("activo", Boolean(criterios.provincia));
+    selectPoblacion.closest(".control-filtro")
+        .classList.toggle("activo", Boolean(criterios.poblacion));
+
+    // La cuenta se ve en un globo junto a "Limpiar"; para quien no lo ve, va en el nombre
+    // accesible del botón, porque el globo es aria-hidden y diría un número suelto.
+    //
+    // El nombre EMPIEZA por "Limpiar", que es lo que pone en el botón: si se sustituyera por
+    // otra frase, quien maneja el ordenador por voz diría "pulsa Limpiar" y no pasaría nada
+    // (criterio 2.5.3 de WCAG, el nombre tiene que contener el texto visible).
+    contadorFiltros.textContent = String(activos);
+    contadorFiltros.hidden = activos === 0;
+    btnLimpiar.setAttribute("aria-label", activos === 0
+        ? "Limpiar los filtros y la ordenación"
+        : `Limpiar los ${activos} filtros activos y la ordenación`);
+}
+
+/**
+ * Pinta una fila que ocupa toda la tabla con un mensaje informativo.
+ * @param {string} texto el mensaje
+ * @param {Object} opciones
+ * @param {boolean} opciones.conLimpiar añade el botón de quitar filtros: cuando la tabla
+ *        sale vacía por un filtro, la salida tiene que estar donde se ve el problema
+ */
+function mostrarMensaje(texto, { conLimpiar = false } = {}) {
     cuerpoTabla.replaceChildren();
     const fila = document.createElement("tr");
     const celda = document.createElement("td");
-    celda.colSpan = 6; // la tabla tiene 6 columnas
+    celda.colSpan = COLUMNAS_TABLA;
     celda.className = "text-center text-muted py-4";
     celda.textContent = texto;
+
+    if (conLimpiar) {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.className = "btn btn-sm btn-link";
+        boton.textContent = "Quitar los filtros";
+        boton.addEventListener("click", limpiarCriterios);
+        celda.append(" ", boton);
+    }
+
     fila.appendChild(celda);
     cuerpoTabla.appendChild(fila);
 }
@@ -407,7 +578,11 @@ cabecerasOrdenables.forEach((cabecera) => {
     });
 });
 
-btnLimpiar.addEventListener("click", async () => {
+/**
+ * Deja la pantalla como recién cargada: sin búsqueda, sin filtros y con la ordenación por
+ * defecto. Está aparte del botón porque también se ofrece desde la tabla vacía.
+ */
+async function limpiarCriterios() {
     criterios.busqueda = "";
     criterios.provincia = "";
     criterios.poblacion = "";
@@ -420,7 +595,9 @@ btnLimpiar.addEventListener("click", async () => {
     await cargarPoblaciones("");
 
     aplicarCriterios();
-});
+}
+
+btnLimpiar.addEventListener("click", limpiarCriterios);
 
 // --- Paginación ---
 btnAnterior.addEventListener("click", () => cargarClientes(paginaActual - 1));
@@ -432,32 +609,616 @@ btnSiguiente.addEventListener("click", () => cargarClientes(paginaActual + 1));
 // Ellos solo hacen: document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
 document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActual));
 
+/* ============================================================================
+ * DESPLIEGUE DE LA FILA: ver detalle y editar
+ * ============================================================================
+ *
+ * Al pulsar una fila (o el botón del ojo) se inserta DEBAJO una fila hermana que ocupa todas
+ * las columnas y enseña los campos que no caben en la tabla. Con el lápiz se abre la misma
+ * fila, pero con los campos editables.
+ *
+ * Un solo panel por cliente y con un modo, en vez de dos filas independientes: así es
+ * imposible tener a la vez el detalle y el formulario del mismo cliente enseñando cosas
+ * distintas, y pasar de uno a otro es cambiar el contenido, no cerrar y abrir.
+ *
+ * Los datos se piden SIEMPRE al backend (GET /cliente/{id}), también al cambiar de modo. Es
+ * la misma decisión que ya tomó el listado —recargar en vez de guardar copias—: un detalle
+ * guardado de antes puede enseñar algo que otro usuario ya cambió, y en el formulario sería
+ * peor todavía, porque se guardaría encima sin haberlo visto.
+ */
+
+/** ¿Qué panel tiene abierto esta fila? "detalle", "edicion" o null si está cerrada. */
+function modoDe(fila) {
+    return filasDesplegadas.get(Number(fila.dataset.clienteId))?.modo ?? null;
+}
+
+/** El panel desplegado de una fila, o null si no lo tiene. */
+function panelDe(fila) {
+    const hermana = fila.nextElementSibling;
+    return hermana?.classList.contains("fila-despliegue") ? hermana : null;
+}
+
+/**
+ * Abre el panel de una fila en el modo indicado (o le cambia el modo si ya estaba abierto),
+ * pide los datos al backend y lo pinta.
+ *
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {string} modo "detalle" o "edicion"
+ * @param {Object} opciones
+ * @param {boolean} opciones.animar false al reabrir tras repintar la tabla: el panel ya
+ *        estaba desplegado y volver a animarlo se vería como un parpadeo
+ * @param {boolean} opciones.enfocar false al reabrir por lo mismo: llevarse el foco mientras
+ *        el usuario escribe en el buscador le sacaría el cursor de donde está
+ */
+async function abrirDespliegue(fila, modo, { animar = true, enfocar = true } = {}) {
+    const idCliente = Number(fila.dataset.clienteId);
+
+    // El borrador se conserva al cambiar de modo: si vuelves de detalle a edición, sigue lo
+    // que habías escrito.
+    const borrador = filasDesplegadas.get(idCliente)?.borrador ?? null;
+    filasDesplegadas.set(idCliente, { modo, borrador });
+
+    const panel = obtenerPanel(fila, animar);
+    const contenido = panel.querySelector(".despliegue-contenido");
+    marcarFila(fila, modo);
+
+    // Al abrir no hay nada que enseñar todavía; al cambiar de modo sí, y sustituirlo por un
+    // "cargando" encogería el panel para volver a estirarlo un instante después. En ese caso
+    // se deja lo que hay puesto, atenuado, hasta que llega el contenido nuevo.
+    if (contenido.childElementCount === 0) {
+        pintarCargando(contenido);
+    } else {
+        contenido.classList.add("cargando");
+    }
+
+    try {
+        const cliente = await pedirJson(`detalle-${idCliente}`, `${API_CLIENTE}/${idCliente}`);
+
+        // Mientras llegaba la respuesta la fila ha podido cerrarse, o la tabla repintarse.
+        const estado = filasDesplegadas.get(idCliente);
+        if (!estado || !panel.isConnected) return;
+
+        if (estado.modo === "edicion") {
+            pintarPanelEdicion(contenido, cliente, estado.borrador, enfocar);
+        } else {
+            pintarPanelDetalle(contenido, cliente);
+        }
+    } catch (error) {
+        // Cancelada por nosotros (se cerró o se cambió de modo deprisa): ya viene otra.
+        if (esCancelacion(error)) return;
+        pintarErrorPanel(contenido, error);
+    } finally {
+        contenido.classList.remove("cargando");
+    }
+}
+
+/** Cierra el panel de una fila y olvida su estado. */
+function cerrarDespliegue(fila) {
+    const idCliente = Number(fila.dataset.clienteId);
+
+    filasDesplegadas.delete(idCliente);
+    marcarFila(fila, null);
+
+    // Si quedaba una petición de detalle en el aire, su respuesta ya no interesa.
+    peticionesEnVuelo[`detalle-${idCliente}`]?.abort();
+
+    const panel = panelDe(fila);
+    if (!panel) return;
+
+    panel.classList.remove("abierto");
+
+    // Se quita del DOM cuando termina de plegarse. Se hace con un temporizador y no
+    // escuchando 'transitionend' porque ese evento burbujea desde los hijos (un input del
+    // formulario con su propia transición lo dispararía antes de tiempo) y porque con las
+    // animaciones desactivadas en el sistema no llegaría a dispararse nunca.
+    panel.dataset.temporizadorCierre = setTimeout(() => panel.remove(), DURACION_PLEGADO_MS);
+}
+
+/**
+ * Traduce un clic en la acción que toca: abrir, cerrar o cambiar de modo.
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {string} modo el modo que pide el control que se ha pulsado
+ */
+function alternarDespliegue(fila, modo) {
+    const modoActual = modoDe(fila);
+
+    // El aviso emergente se queda flotando con el texto de antes si no se esconde al pulsar.
+    ocultarPistas(fila);
+
+    if (modoActual === null) {
+        abrirDespliegue(fila, modo);
+        return;
+    }
+
+    if (modoActual === "edicion" && !confirmarDescarte(fila)) return;
+
+    if (modoActual === modo) {
+        cerrarDespliegue(fila);
+    } else {
+        // Ya está desplegado: solo cambia lo de dentro, sin volver a animar la apertura.
+        abrirDespliegue(fila, modo, { animar: false });
+    }
+}
+
+/**
+ * Devuelve el panel de la fila, creándolo si aún no existe.
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {boolean} animar si se despliega con transición
+ */
+function obtenerPanel(fila, animar) {
+    const existente = panelDe(fila);
+    if (existente) {
+        // Puede estar plegándose de un cierre reciente: se cancela su borrado o desaparecería
+        // a media apertura.
+        clearTimeout(Number(existente.dataset.temporizadorCierre));
+        existente.classList.add("abierto");
+        return existente;
+    }
+
+    const panel = plantillaDespliegue.content.firstElementChild.cloneNode(true);
+    panel.id = `despliegue-${fila.dataset.clienteId}`;
+    panel.dataset.clienteId = fila.dataset.clienteId;
+    fila.after(panel);
+
+    // La clase que lo abre se pone en el frame siguiente: puesta a la vez que se inserta, el
+    // navegador no llega a ver dos estados distintos y no habría transición que animar.
+    if (animar) {
+        requestAnimationFrame(() => panel.classList.add("abierto"));
+    } else {
+        panel.classList.add("abierto");
+    }
+
+    return panel;
+}
+
+/**
+ * Deja la fila coherente con su estado: resaltado, aria-expanded de cada botón y el texto de
+ * los avisos emergentes.
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {string|null} modo el modo abierto, o null si está cerrada
+ */
+function marcarFila(fila, modo) {
+    const botonVer = fila.querySelector(".btn-ver");
+    const botonEditar = fila.querySelector(".btn-editar");
+
+    fila.classList.toggle("desplegada", modo !== null);
+
+    // El color del recuadro que envuelve al bloque: verde para mirar, ámbar para editar. Va
+    // en la fila Y en el panel porque cada uno pinta la mitad del recuadro, y se quita de los
+    // dos a la vez al cerrar para que no quede medio borde dibujado mientras se pliega.
+    for (const elemento of [fila, panelDe(fila)]) {
+        if (!elemento) continue;
+        elemento.classList.toggle("modo-detalle", modo === "detalle");
+        elemento.classList.toggle("modo-edicion", modo === "edicion");
+    }
+
+    // aria-expanded es lo que hace que un lector de pantalla anuncie que ese botón despliega
+    // algo y si está abierto o cerrado. Va en el botón, que es el control de verdad.
+    botonVer.setAttribute("aria-expanded", String(modo === "detalle"));
+    botonEditar.setAttribute("aria-expanded", String(modo === "edicion"));
+
+    if (modo === null) {
+        botonVer.removeAttribute("aria-controls");
+        botonEditar.removeAttribute("aria-controls");
+    } else {
+        const idPanel = `despliegue-${fila.dataset.clienteId}`;
+        botonVer.setAttribute("aria-controls", idPanel);
+        botonEditar.setAttribute("aria-controls", idPanel);
+    }
+
+    // Pulsar la fila o el ojo lleva SIEMPRE al detalle, así que en modo edición el aviso no
+    // puede decir "Ocultar": lo que va a pasar es que se cambie al detalle.
+    const pistaDetalle = modo === "detalle" ? "Ocultar detalles" : "Ver detalles";
+    escribirPista(fila.querySelectorAll("th, td:not(.celda-acciones)"), pistaDetalle);
+    escribirPista([botonVer], pistaDetalle);
+    escribirPista([botonEditar], modo === "edicion" ? "Cancelar la edición" : "Editar cliente");
+
+    // El de eliminar no cambia nunca, pero pasa por aquí para que use el mismo aviso que los
+    // demás: con el title del navegador salía con otro aspecto y con otro retardo.
+    escribirPista([fila.querySelector(".btn-eliminar")], "Eliminar cliente");
+}
+
+/** Vuelve a abrir los paneles que siguieran desplegados antes de repintar la tabla. */
+function reabrirDespliegues() {
+    for (const fila of cuerpoTabla.querySelectorAll("tr.fila-cliente")) {
+        const estado = filasDesplegadas.get(Number(fila.dataset.clienteId));
+        if (estado) {
+            abrirDespliegue(fila, estado.modo, { animar: false, enfocar: false });
+        }
+    }
+}
+
+// --- Contenido del panel ---
+
+/** Pinta el panel de solo lectura con los campos que la tabla no muestra. */
+function pintarPanelDetalle(contenido, cliente) {
+    const panel = plantillaPanelDetalle.content.cloneNode(true);
+
+    // textContent, igual que en la tabla: un dato con < o & se ve tal cual y no puede
+    // inyectar HTML.
+    panel.querySelector(".detalle-id").textContent = cliente.idCliente;
+    panel.querySelector(".detalle-direccion").textContent = textoOGuion(cliente.direccion);
+    panel.querySelector(".detalle-cp").textContent = textoOGuion(cliente.codigoPostal);
+    panel.querySelector(".detalle-poblacion").textContent = textoOGuion(cliente.poblacion);
+    panel.querySelector(".detalle-provincia").textContent = textoOGuion(cliente.provincia);
+
+    contenido.replaceChildren(panel);
+}
+
+/**
+ * Pinta el formulario de edición con los datos del cliente.
+ * @param {Element} contenido el hueco del panel donde va el formulario
+ * @param {Object} cliente lo que hay ahora mismo en la base de datos
+ * @param {Object|null} borrador lo que el usuario tenía escrito antes de un repintado
+ * @param {boolean} enfocar si se lleva el cursor al primer campo
+ */
+function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
+    const panel = plantillaPanelEdicion.content.cloneNode(true);
+    const formulario = panel.querySelector(".formulario-edicion");
+    const valoresBd = valoresDe(cliente);
+
+    // Se rellena con el borrador si lo hay, para no perder lo tecleado.
+    const valores = borrador ?? valoresBd;
+    for (const campo of CAMPOS_EDITABLES) {
+        formulario.elements[campo].value = valores[campo];
+    }
+
+    formulario.dataset.clienteId = cliente.idCliente;
+    // Cómo está el cliente en la BD, para saber al cerrar si hay algo sin guardar. Se compara
+    // contra la BD y no contra el borrador: si el usuario lo deja como estaba, no hay nada
+    // que descartar y no tiene sentido preguntarle.
+    formulario.dataset.valoresOriginales = JSON.stringify(valoresBd);
+
+    contenido.replaceChildren(panel);
+
+    if (enfocar) {
+        formulario.elements.nombre.focus();
+    }
+}
+
+/** Aviso de "cargando" mientras llega la respuesta del backend. */
+function pintarCargando(contenido) {
+    const aviso = document.createElement("p");
+    aviso.className = "panel-aviso";
+    aviso.textContent = "Cargando los datos del cliente…";
+    contenido.replaceChildren(aviso);
+}
+
+/** Aviso de error con un botón para volver a intentarlo, sin cerrar el panel. */
+function pintarErrorPanel(contenido, error) {
+    console.error("No se pudieron cargar los datos del cliente:", error);
+
+    const aviso = document.createElement("p");
+    aviso.className = "panel-aviso panel-aviso-error";
+    aviso.textContent = "No se pudieron cargar los datos del cliente. ";
+
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "btn btn-sm btn-link btn-reintentar";
+    boton.textContent = "Reintentar";
+    aviso.appendChild(boton);
+
+    contenido.replaceChildren(aviso);
+}
+
+/** Los campos vacíos se ven mejor como un guion que como una celda en blanco. */
+function textoOGuion(valor) {
+    return valor && valor.trim() ? valor : "—";
+}
+
+/** Los datos del cliente en la forma que entiende el formulario (sin nulos). */
+function valoresDe(cliente) {
+    const valores = {};
+    for (const campo of CAMPOS_EDITABLES) {
+        valores[campo] = (cliente[campo] ?? "").trim();
+    }
+    return valores;
+}
+
+/** Lo que hay escrito ahora mismo en el formulario. */
+function leerFormulario(formulario) {
+    const valores = {};
+    for (const campo of CAMPOS_EDITABLES) {
+        valores[campo] = formulario.elements[campo].value.trim();
+    }
+    return valores;
+}
+
+/** ¿Se ha tocado algo respecto a lo que hay en la base de datos? */
+function hayCambios(formulario) {
+    return JSON.stringify(leerFormulario(formulario)) !== formulario.dataset.valoresOriginales;
+}
+
+/** Pregunta antes de tirar unos cambios sin guardar. Devuelve si se puede seguir. */
+function confirmarDescarte(fila) {
+    const formulario = panelDe(fila)?.querySelector(".formulario-edicion");
+    if (!formulario || !hayCambios(formulario)) return true;
+
+    return confirm("Hay cambios sin guardar en este cliente. ¿Quieres descartarlos?");
+}
+
+/** Guarda lo escrito en los formularios abiertos antes de que la tabla se repinte. */
+function guardarBorradores() {
+    for (const formulario of cuerpoTabla.querySelectorAll(".formulario-edicion")) {
+        const estado = filasDesplegadas.get(Number(formulario.dataset.clienteId));
+        if (estado) {
+            estado.borrador = leerFormulario(formulario);
+        }
+    }
+}
+
+// --- Avisos emergentes (el "Ver detalles" tras un segundo de ratón encima) ---
+
+/** Escribe el texto del aviso en cada elemento y descarta el globo que ya tuviera. */
+function escribirPista(elementos, texto) {
+    for (const elemento of elementos) {
+        elemento.dataset.bsTitle = texto;
+
+        // El globo se crea en el primer hover y se queda con el texto que hubiera entonces.
+        // Al destruirlo, el siguiente hover lo vuelve a crear ya con el texto nuevo.
+        window.bootstrap?.Tooltip.getInstance(elemento)?.dispose();
+    }
+}
+
+/** Esconde los globos de una fila (al pulsarla diría lo contrario de lo que va a pasar). */
+function ocultarPistas(fila) {
+    for (const elemento of fila.querySelectorAll("[data-bs-title]")) {
+        window.bootstrap?.Tooltip.getInstance(elemento)?.hide();
+    }
+}
+
+/** Destruye los globos de la tabla actual, antes de tirar sus filas. */
+function limpiarPistas() {
+    for (const elemento of cuerpoTabla.querySelectorAll("[data-bs-title]")) {
+        window.bootstrap?.Tooltip.getInstance(elemento)?.dispose();
+    }
+}
+
+// Un único aviso delegado en el <tbody>, no uno por celda: así vale también para las filas
+// que todavía no se han pintado y no hay que crearlos y destruirlos en cada repintado.
+// container: 'body' porque la tabla va dentro de .table-responsive, que tiene overflow y
+// recortaría el globo por arriba.
+if (window.bootstrap) {
+    new bootstrap.Tooltip(cuerpoTabla, {
+        // El del enlace va el primero por claridad, pero el orden da igual: Bootstrap se
+        // queda con el elemento coincidente MÁS INTERNO, así que el aviso del correo gana al
+        // de su celda.
+        selector: ".enlace-celda, .fila-cliente th, .fila-cliente td:not(.celda-acciones), .celda-acciones .btn[data-bs-title]",
+        delay: { show: RETARDO_PISTA_MS, hide: 0 },
+        container: "body",
+        placement: "top",
+        trigger: "hover focus",
+    });
+}
+
+// --- Enlazado de los clics de la tabla ---
+
+// Un solo listener en el <tbody>, y no uno por botón: los botones se crean y se destruyen en
+// cada repintado, así que los suyos habría que volver a enlazarlos cada vez (y los que había
+// antes en este archivo ni siquiera llegaban a enlazarse, porque se registraban al cargar la
+// página, cuando los botones aún vivían dentro del <template>).
+cuerpoTabla.addEventListener("click", (evento) => {
+    // Primero los controles del panel: viven en la fila hermana, no en la del cliente.
+    const panel = evento.target.closest("tr.fila-despliegue");
+    if (panel) {
+        manejarClicPanel(evento, panel);
+        return;
+    }
+
+    const fila = evento.target.closest("tr.fila-cliente");
+    if (!fila) return;
+
+    const boton = evento.target.closest(".celda-acciones .btn");
+    if (boton) {
+        if (boton.classList.contains("btn-ver")) alternarDespliegue(fila, "detalle");
+        else if (boton.classList.contains("btn-editar")) alternarDespliegue(fila, "edicion");
+        // El de eliminar es de otra feature: aquí no se toca.
+        return;
+    }
+
+    // Un enlace de email o de teléfono hace lo suyo y nada más: desplegar además la fila
+    // sería un segundo efecto que nadie ha pedido al pulsarlo.
+    if (evento.target.closest("a")) return;
+
+    // Si estaba seleccionando texto de la fila, no quería desplegar nada.
+    if (window.getSelection()?.toString()) return;
+
+    alternarDespliegue(fila, "detalle");
+});
+
+/** Clic dentro de un panel abierto: cancelar la edición o reintentar la carga. */
+function manejarClicPanel(evento, panel) {
+    const fila = panel.previousElementSibling;
+
+    if (evento.target.closest(".btn-cancelar")) {
+        if (!confirmarDescarte(fila)) return;
+        cerrarDespliegue(fila);
+        // El foco vuelve al lápiz que abrió el formulario: si no, se quedaría en un botón que
+        // acaba de desaparecer y saltaría al principio de la página.
+        fila.querySelector(".btn-editar").focus();
+        return;
+    }
+
+    if (evento.target.closest(".btn-reintentar")) {
+        abrirDespliegue(fila, modoDe(fila) ?? "detalle", { animar: false });
+    }
+}
+
+// El aviso de NIF repetido lo pone el servidor: en cuanto se toca ese campo deja de tener
+// sentido seguir viéndolo en rojo.
+cuerpoTabla.addEventListener("input", (evento) => {
+    if (evento.target.name === "nifCif") {
+        evento.target.classList.remove("is-invalid");
+    }
+});
+
+// --- Guardado de la edición ---
+
+// El envío se atiende también aquí arriba, por lo mismo: el formulario aparece y desaparece.
+cuerpoTabla.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+
+    const formulario = evento.target.closest(".formulario-edicion");
+    if (formulario) {
+        guardarEdicion(formulario);
+    }
+});
+
+/**
+ * Manda los cambios al backend y actúa según lo que responda.
+ *
+ * No se llama guardarCliente a propósito: ese nombre lo usa el onclick del modal de "Añadir
+ * Cliente" (de otra feature, y hoy sin definir), y si lo ocupáramos su botón acabaría
+ * llamando a esta función con los argumentos vacíos.
+ *
+ * @param {HTMLFormElement} formulario el formulario de la fila que se está editando
+ */
+async function guardarEdicion(formulario) {
+    const idCliente = Number(formulario.dataset.clienteId);
+    const fila = cuerpoTabla.querySelector(`tr.fila-cliente[data-cliente-id="${idCliente}"]`);
+
+    limpiarErrores(formulario);
+
+    // Las restricciones del HTML (required, maxlength, type=email) son las mismas que valida
+    // el backend, así que el navegador corta aquí lo que el servidor rechazaría con un 400 y
+    // nos ahorramos la petición. was-validated es lo que hace que Bootstrap pinte en rojo el
+    // campo que falla y enseñe su mensaje.
+    formulario.classList.add("was-validated");
+    if (!formulario.checkValidity()) {
+        formulario.querySelector(":invalid")?.focus();
+        return;
+    }
+
+    const boton = formulario.querySelector(".btn-guardar");
+    boton.disabled = true;   // sin esto, dos clics seguidos mandan dos PUT
+
+    try {
+        const respuesta = await enviarJson(`guardar-${idCliente}`, "PUT",
+            `${API_CLIENTE}/${idCliente}`, cuerpoPeticion(formulario));
+
+        if (respuesta.estado === 200) {
+            if (fila) cerrarDespliegue(fila);
+            // El contrato del proyecto para avisar de un cambio. La tabla se recarga sola, así
+            // que la fila enseña lo guardado y se recoloca si el orden la ha movido de sitio.
+            document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+            return;
+        }
+
+        mostrarErrorGuardado(formulario, respuesta.estado);
+    } catch (error) {
+        if (esCancelacion(error)) return;
+        console.error("No se pudo guardar el cliente:", error);
+        mostrarErrorGuardado(formulario, 0);
+    } finally {
+        boton.disabled = false;
+    }
+}
+
+/** El cuerpo JSON del PUT, con la forma que espera ClienteRequest. */
+function cuerpoPeticion(formulario) {
+    const valores = leerFormulario(formulario);
+
+    // Los opcionales vacíos viajan como null y no como "": esas columnas admiten NULL y es lo
+    // que hay en las filas que nunca se rellenaron. Mandar cadenas vacías dejaría dos formas
+    // distintas de decir "no hay dato" conviviendo en la misma tabla.
+    for (const campo of CAMPOS_OPCIONALES) {
+        if (!valores[campo]) valores[campo] = null;
+    }
+
+    return valores;
+}
+
+/**
+ * Cuenta qué ha pasado según el código que devolvió el servidor.
+ * @param {HTMLFormElement} formulario el formulario que se intentó guardar
+ * @param {number} estado el código HTTP (0 si ni siquiera hubo respuesta)
+ */
+function mostrarErrorGuardado(formulario, estado) {
+    // El NIF/CIF tiene un índice UNIQUE en la base de datos: es el único dato que puede chocar
+    // con otro cliente, así que el 409 se señala en SU campo. Un aviso general obligaría al
+    // usuario a adivinar cuál de los ocho campos es el del problema.
+    if (estado === 409) {
+        const campo = formulario.elements.nifCif;
+        campo.classList.add("is-invalid");
+        campo.nextElementSibling.textContent = "Ya existe otro cliente con este NIF/CIF.";
+        campo.focus();
+        return;
+    }
+
+    const alerta = formulario.querySelector(".alerta-edicion");
+
+    if (estado === 404) {
+        // Alguien lo ha borrado mientras se editaba: no hay nada que guardar y la tabla que se
+        // está viendo ya no es la que hay en la base de datos.
+        alerta.textContent = "Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.";
+        document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+    } else if (estado === 400) {
+        alerta.textContent = "El servidor ha rechazado los datos. Revisa los campos marcados.";
+    } else {
+        alerta.textContent = "No se pudo guardar. Inténtalo de nuevo en unos segundos.";
+    }
+
+    alerta.hidden = false;
+}
+
+/** Borra las marcas del intento anterior para no mezclar errores viejos con nuevos. */
+function limpiarErrores(formulario) {
+    const alerta = formulario.querySelector(".alerta-edicion");
+    alerta.hidden = true;
+    alerta.textContent = "";
+
+    const campo = formulario.elements.nifCif;
+    campo.classList.remove("is-invalid");
+    campo.nextElementSibling.textContent = "El NIF/CIF es obligatorio.";
+}
+
+/**
+ * Manda un JSON al backend y devuelve el código y el cuerpo de la respuesta.
+ *
+ * Es la hermana de pedirJson para las peticiones que escriben. La diferencia importante es
+ * que aquí un 4xx NO se trata como excepción: el 404 y el 409 son respuestas útiles que la
+ * pantalla tiene que saber contar, cada una con su mensaje.
+ *
+ * @param {string} canal nombre del flujo de peticiones (una por fila que se guarda)
+ * @param {string} metodo el método HTTP ("PUT")
+ * @param {string} url la URL a la que se manda
+ * @param {Object} cuerpo el objeto que viaja como JSON
+ * @return {Promise<{estado: number, datos: Object|null}>}
+ */
+async function enviarJson(canal, metodo, url, cuerpo) {
+    peticionesEnVuelo[canal]?.abort();
+    const controlador = new AbortController();
+    peticionesEnVuelo[canal] = controlador;
+
+    const respuesta = await fetch(url, {
+        method: metodo,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cuerpo),
+        signal: controlador.signal,
+    });
+
+    return { estado: respuesta.status, datos: await leerJsonSiLoHay(respuesta) };
+}
+
+/** El JSON de la respuesta, o null: los errores del backend llegan con el cuerpo vacío. */
+async function leerJsonSiLoHay(respuesta) {
+    try {
+        return await respuesta.json();
+    } catch {
+        return null;
+    }
+}
+
 // --- Carga inicial ---
 pintarControlesOrden();
+pintarEstadoFiltros();
 cargarProvincias();
 cargarPoblaciones("");
 cargarClientes(0);
 
 
-// 1. Botón VER
-document.querySelectorAll('.btn-ver').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id;
-
-    console.log('Ver cliente:', idCliente);
-    // Aquí ejecutas tu función, p. ej.: abrirModalVer(idCliente);
-  });
-});
-
-// 2. Botón EDITAR
-document.querySelectorAll('.btn-editar').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id;
-
-    console.log('Editar cliente:', idCliente);
-    // Aquí ejecutas tu función, p. ej.: abrirModalEditar(idCliente);
-  });
-});
+// Los botones de VER y EDITAR se atienden con delegación en el <tbody>, arriba, en la
+// sección del despliegue de la fila.
 
 // 3. Botón ELIMINAR
 document.querySelectorAll('.btn-eliminar').forEach(boton => {
@@ -485,19 +1246,23 @@ botonAnadirCliente.addEventListener('click', () => {
 });
 
 
-// Buscador: se despliega al pulsar en él y se recoge al salir, si está vacío.
-const contenedorBuscador = document.querySelector('.buscador-clientes');
+/*
+ * Buscador: se despliega al ENFOCARLO y se recoge al salir, si está vacío.
+ *
+ * Antes esto era un listener de clic en todo el documento, y ahí estaba el fallo: quien
+ * llegaba al buscador con el tabulador se quedaba dentro de una píldora de 9rem sin ver el
+ * campo ni lo que escribía, porque nada lo abría. focusin/focusout cubren el ratón y el
+ * teclado con el mismo código (el clic acaba enfocando el input igual), y de paso ya no hace
+ * falta vigilar cada clic de la página para saber cuándo cerrarlo.
+ */
+contenedorBuscador.addEventListener("focusin", () => {
+    contenedorBuscador.classList.add("expandido");
+});
 
-document.addEventListener('click', (evento) => {
-    // Verificamos si el clic ocurrió DENTRO del contenedor del buscador
-    if (contenedorBuscador.contains(evento.target)) {
-        // Expandimos y ponemos el cursor dentro
-        contenedorBuscador.classList.add('expandido');
-        inputBuscador.focus();
-    } else {
-        // Si hizo clic FUERA, verificamos si el input está vacío antes de cerrarlo
-        if (inputBuscador.value.trim() === '') {
-            contenedorBuscador.classList.remove('expandido');
-        }
+contenedorBuscador.addEventListener("focusout", () => {
+    // Con texto escrito se queda abierto: es un filtro activo, y plegarlo escondería la
+    // razón por la que la tabla enseña lo que enseña.
+    if (!inputBuscador.value.trim()) {
+        contenedorBuscador.classList.remove("expandido");
     }
 });

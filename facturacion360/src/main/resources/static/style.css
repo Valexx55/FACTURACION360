@@ -8,6 +8,19 @@
     --text-main: #1f2937;
     --white: #ffffff;
     --focus-ring: #f59e0b; /* Contraste alto para accesibilidad */
+
+    /* Colores de estado de la fila desplegada. Son las versiones OSCURAS del verde y el
+       ámbar: los tonos claros de Bootstrap (#198754 vale, pero #ffc107 da 1.6:1 sobre
+       blanco) no llegan al 3:1 que pide el criterio 1.4.11 de WCAG para un borde que
+       transmite información. */
+    --estado-detalle: #157347;
+    --estado-edicion: #b45309;
+
+    /* Alto común de la barra de filtros: el buscador y los desplegables tienen que medir
+       lo mismo o la fila se ve escalonada. */
+    --alto-control: 40px;
+    --borde-suave: #cbd5e1;
+    --radio-tabla: 0.75rem;
 }
 
 body {
@@ -247,12 +260,12 @@ footer {
    opciones ("Todas las provincias") sin recortarlo. */
 .barra-filtros .control-filtro {
     width: auto;
-    min-width: 195px;
+    min-width: 210px;
 }
 
 .barra-filtros .control-orden {
     width: auto;
-    min-width: 265px;
+    min-width: 290px;
 }
 
 /* Los controles de Bootstrap con el mismo aire que el buscador: bordes suaves y
@@ -261,13 +274,31 @@ footer {
 .barra-filtros .form-select,
 .barra-filtros .input-group-text,
 .barra-filtros .btn-direccion {
-    border-color: #cbd5e1;
+    border-color: var(--borde-suave);
     background-color: var(--white);
     color: var(--text-main);
+    height: var(--alto-control);
 }
 
+/* El icono en azul de marca sobre un fondo apenas teñido: en gris pasaba por adorno y
+   costaba ver dónde empieza cada control. */
 .barra-filtros .input-group-text {
-    color: #9ca3af;   /* mismo gris que la lupa del buscador */
+    color: var(--primary-color);
+    background-color: #f2f6ff;
+}
+
+/* Filtro PUESTO. Es lo único de la barra donde el color aporta información en vez de
+   decorar: de un vistazo se ve por qué la tabla enseña 4 clientes y no 28. El peso de
+   la letra acompaña al color para no depender solo de él. */
+.barra-filtros .control-filtro.activo .input-group-text {
+    color: var(--white);
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.barra-filtros .control-filtro.activo .form-select {
+    border-color: var(--primary-color);
+    font-weight: 600;
 }
 
 .barra-filtros .form-select:focus,
@@ -295,10 +326,20 @@ footer {
     text-decoration: none;
     white-space: nowrap;
     margin-left: auto;   /* se va al extremo derecho de la fila */
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: var(--alto-control);
 }
 
 .barra-filtros .btn-limpiar:hover {
     color: var(--primary-color);
+}
+
+/* Contador de filtros activos: pequeño, no compite con el texto del botón. */
+.barra-filtros .btn-limpiar .badge {
+    padding: 0.25em 0.55em;
+    font-size: 0.7rem;
 }
 
 /* --- Cabeceras de tabla ordenables --- */
@@ -334,73 +375,361 @@ footer {
     opacity: 1;
 }
 
-/* --- Buscador de clientes ---
-   Campo redondeado, borde fino y una lupa gris dentro, a la izquierda, imitando
-   el diseño de Figma. */
-/* --- Buscador de clientes animado --- */
+/* --- Buscador de clientes animado ---
+   Cerrado es una píldora con la lupa y la palabra "Buscar"; al enfocarlo se estira hasta
+   el campo completo. Antes era un círculo de 50px con la lupa sola: un icono suelto no
+   comunica que se pueda pulsar y, con el placeholder oculto, no quedaba ninguna pista de
+   que ahí se buscaba. La palabra es la única señal que nadie tiene que adivinar. */
 .buscador-clientes {
+    /* Estas dos medidas tienen que cuadrar entre sí, así que viven aquí como variables en
+       vez de repartidas por los bloques de abajo. El ancho cerrado DEBE superar el relleno
+       (3.2rem de la lupa + 1rem) o, con box-sizing:border-box, el input se dibuja más ancho
+       que su contenedor y vuelve a meterse por debajo del filtro de provincia. */
+    --hueco-lupa: 3.2rem;
+    --ancho-cerrado: 9rem;
+
     position: relative;
-    width: 50px;  /* Tamaño inicial (solo el círculo de la lupa) */
-    height: 50px; /* Alto fijo para que sea un círculo perfecto */
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); /* Transición suave */
-    /* margin: 0 auto; Si quieres que esté centrado al estar cerrado, descomenta esto */
+    /* En la barra de filtros es un elemento flex más: sin esto puede encogerse por debajo
+       de su ancho y el desbordamiento sería aún mayor. */
+    flex: 0 0 auto;
+    width: var(--ancho-cerrado);
+    height: var(--alto-control);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Clase que añadiremos con JS para expandirlo */
+/* Clase que añadimos con JS al enfocar (ratón o teclado) */
 .buscador-clientes.expandido {
-    width: 100%; /* Puedes bajarlo a 90% si no quieres que ocupe absolutamente todo */
-    max-width: 800px; /* Límite para pantallas muy grandes */
+    width: 100%;
+    max-width: 800px;
 }
 
 .buscador-clientes .buscador-input {
+    box-sizing: border-box;
     width: 100%;
     height: 100%;
-    padding: 0 1rem 0 3.2rem;  /* Hueco a la izquierda para la lupa */
-    border: 1px solid #cbd5e1;
-    border-radius: 25px; /* Forma de píldora para que se vea bien cerrado y abierto */
+    padding: 0 1rem 0 var(--hueco-lupa);   /* hueco a la izquierda para la lupa */
+    border: 1px solid var(--borde-suave);
+    border-radius: calc(var(--alto-control) / 2);   /* píldora, abierta y cerrada */
     font-size: 1rem;
     color: var(--text-main);
     background-color: var(--white);
     outline: none;
-    cursor: pointer; /* Cursor de mano cuando está cerrado */
+    cursor: pointer;   /* cerrado se pulsa, no se escribe */
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Ocultar el texto del placeholder cuando está cerrado para que no sobresalga */
+/* La palabra "Buscar" ocupa el sitio del placeholder mientras está cerrado. Es decorativa
+   para los lectores de pantalla (el input ya tiene su aria-label) y no intercepta el clic,
+   que va a parar al input de debajo. */
+.buscador-clientes .buscador-etiqueta {
+    position: absolute;
+    top: 50%;
+    left: var(--hueco-lupa);
+    transform: translateY(-50%);
+    color: #6b7280;
+    font-weight: 500;
+    pointer-events: none;
+    white-space: nowrap;
+    transition: opacity 0.2s ease;
+    z-index: 2;
+}
+
+.buscador-clientes.expandido .buscador-etiqueta {
+    opacity: 0;
+}
+
+/* El placeholder solo cuando hay sitio para leerlo entero */
 .buscador-clientes .buscador-input::placeholder {
     color: transparent;
     transition: color 0.2s ease;
 }
 
-/* Mostrar el placeholder cuando está abierto */
 .buscador-clientes.expandido .buscador-input::placeholder {
     color: #9ca3af;
-    transition-delay: 0.15s; /* Pequeño retardo para que el texto aparezca tras abrirse */
+    transition-delay: 0.15s;   /* aparece cuando la píldora ya se ha abierto */
 }
 
-/* Ajustes cuando está enfocado y abierto */
-.buscador-clientes.expandido .buscador-input:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+.buscador-clientes.expandido .buscador-input {
     cursor: text;
 }
 
-/* Icono (Lupa) */
+.buscador-clientes .buscador-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+}
+
+/* La lupa vive en su hueco, calculado desde la misma variable que usa el relleno del
+   input: así los dos no pueden descuadrarse. */
 .buscador-clientes .buscador-icono {
     position: absolute;
     top: 50%;
-    left: 17px; /* Calculado para quedar justo en el centro del círculo de 50px */
-    transform: translateY(-50%);
-    color: #9ca3af;
+    left: calc(var(--hueco-lupa) / 2);
+    transform: translate(-50%, -50%);
+    color: var(--primary-color);
     pointer-events: none;
-    transition: color 0.3s ease;
     z-index: 2;
 }
 
-/* Efecto: la lupa se vuelve del color primario al abrirse */
-.buscador-clientes.expandido .buscador-icono {
-    color: var(--primary-color);
+/* Con texto escrito, el buscador es un filtro más y se marca como los desplegables. */
+.buscador-clientes.activo .buscador-input {
+    border-color: var(--primary-color);
+    font-weight: 600;
 }
+
+/* ==========================================
+   TABLA DE CLIENTES
+   ========================================== */
+
+/* Las cuatro esquinas redondeadas van en el contenedor, no en la tabla: con
+   border-collapse:collapse (que es lo que hereda cualquier <table>), el radio de la tabla
+   no recorta el fondo de las celdas y la cabecera azul seguiría saliendo en pico. El
+   contenedor ya tiene overflow-x:auto, así que recorta sin tocar el scroll horizontal. */
+.table-responsive {
+    border: 1px solid #dbe3ef;
+    border-radius: var(--radio-tabla);
+    background-color: var(--white);
+}
+
+/* El margen inferior que Bootstrap le da a toda .table dejaría una franja blanca dentro del
+   recuadro, entre la última fila y el borde redondeado. */
+.tabla-clientes {
+    margin-bottom: 0;
+}
+
+/* La última fila no lleva su raya: se juntaría con el borde del contenedor y se vería
+   una línea doble justo en el redondeo. */
+.tabla-clientes > tbody > tr:last-child > * {
+    border-bottom: 0;
+}
+
+/* El nombre es un <th> dentro del cuerpo; sin esto saldría en negrita de navegador y
+   pesaría más que el resto de la fila. */
+.tabla-clientes > tbody > tr > th {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* Rayado alterno en azul muy suave, pintado por cliente y no por fila del DOM: lo marca
+   clientes.js, de modo que insertar paneles de detalle no descoloca la alternancia. */
+.tabla-clientes .fila-cliente.fila-par > * {
+    background-color: #f6f9ff;
+}
+
+/* Email y teléfono como enlaces útiles, pero sin el azul subrayado de un enlace suelto:
+   dentro de una celda eso convertiría la tabla en un mar de azul. */
+.enlace-celda {
+    color: inherit;
+    text-decoration: none;
+}
+
+.enlace-celda:hover,
+.enlace-celda:focus-visible {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+/* Mientras llega la página siguiente se atenúa lo que hay: sin esto la tabla enseña datos
+   viejos como si fueran los nuevos. El aria-busy lo pone clientes.js. */
+#tabla-clientes[aria-busy="true"] {
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+/* ==========================================
+   DESPLIEGUE DE LA FILA (ver detalle / editar)
+   ========================================== */
+
+/* La fila se lee como pulsable, que es el gesto que se le presupone a una tabla así. */
+.fila-cliente {
+    cursor: pointer;
+}
+
+/* Color del estado: verde si se está viendo, ámbar si se está editando. Se declara en la
+   fila y lo heredan las celdas y el panel, así que el borde de todo el bloque cambia de
+   color con una sola clase. */
+.fila-cliente.modo-detalle,
+.fila-despliegue.modo-detalle {
+    --color-modo: var(--estado-detalle);
+}
+
+.fila-cliente.modo-edicion,
+.fila-despliegue.modo-edicion {
+    --color-modo: var(--estado-edicion);
+}
+
+/* La fila abierta y su panel se resaltan juntos para que se vea de un vistazo a quién
+   pertenece lo que hay debajo.
+
+   El 'box-shadow: none' no es decorativo: Bootstrap pinta el resaltado de table-hover con
+   una sombra interior que cubre la celda entera (inset 0 0 0 9999px). Sin quitarla,
+   taparía este fondo y el bloque se vería partido en dos tonos distintos. */
+.tabla-clientes .fila-cliente.desplegada > *,
+.tabla-clientes .fila-despliegue > td {
+    background-color: #e7efff;
+    box-shadow: none;
+}
+
+/* Sin esto la fila abierta pierde toda respuesta al ratón, porque le hemos quitado la
+   sombra con la que Bootstrap pinta el hover. */
+.tabla-clientes .fila-cliente.desplegada:hover > * {
+    background-color: #dbe7ff;
+}
+
+/* Recuadro del bloque "cliente + panel": la fila pone tres lados y el panel el cuarto, de
+   modo que los dos <tr> se leen como una sola tarjeta. La raya de abajo de la fila se
+   quita porque, si no, cruzaría el recuadro por la mitad. */
+.fila-cliente.desplegada > * {
+    border-top: 2px solid var(--color-modo);
+    border-bottom: 0;
+}
+
+.fila-cliente.desplegada > *:first-child,
+.fila-despliegue > td {
+    border-left: 2px solid var(--color-modo);
+}
+
+.fila-cliente.desplegada > *:last-child,
+.fila-despliegue > td {
+    border-right: 2px solid var(--color-modo);
+}
+
+.fila-despliegue > td {
+    padding: 0;
+    border-top: 0;
+    border-bottom: 2px solid var(--color-modo);
+}
+
+/* Cartel de estado del panel. El borde de color por sí solo no vale: quien no distingue
+   verde de ámbar necesita leerlo (criterio 1.4.1 de WCAG). */
+.etiqueta-estado {
+    margin: 0 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.etiqueta-detalle {
+    color: var(--estado-detalle);
+}
+
+.etiqueta-edicion {
+    color: var(--estado-edicion);
+}
+
+/* Truco de grid para animar una altura que no se conoce de antemano: 0fr -> 1fr sí
+   transiciona y 'height: auto' no. Va en un div y no en el <tr> porque las filas de una
+   tabla no admiten este tipo de animación. */
+.despliegue-envoltorio {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.25s ease;
+}
+
+.fila-despliegue.abierto .despliegue-envoltorio {
+    grid-template-rows: 1fr;
+}
+
+/* Imprescindible: es lo que recorta el contenido mientras la fila del grid vale 0fr. */
+.despliegue-contenido {
+    overflow: hidden;
+}
+
+/* Al cambiar de modo se atenúa lo que ya había en vez de vaciarlo: el panel no se encoge
+   para volver a estirarse y no da el salto. */
+.despliegue-contenido.cargando {
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.despliegue-contenido > * {
+    padding: 0.75rem 1rem;
+}
+
+/* Las cabeceras del panel, más discretas que las de la tabla principal: son de un detalle,
+   no de la lista. */
+.tabla-panel {
+    background-color: transparent;
+    margin-bottom: 0;
+}
+
+.tabla-panel th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #64748b;
+    font-weight: 600;
+    background-color: transparent;
+    border-bottom-color: #cbd5e1;
+}
+
+.tabla-panel td {
+    background-color: transparent;
+    vertical-align: top;
+}
+
+.panel-aviso {
+    margin: 0;
+    color: #64748b;
+}
+
+.panel-aviso-error {
+    color: #b91c1c;
+}
+
+/* --- Formulario de edición en la propia fila --- */
+
+.formulario-edicion .marca-obligatorio {
+    color: #dc3545;
+}
+
+/* Bootstrap pinta de verde y con un tic todo lo que está bien; con ocho campos a la vez eso
+   es más ruido que información, así que dejamos solo el rojo de lo que falla. */
+.formulario-edicion.was-validated .form-control:valid {
+    border-color: #cbd5e1;
+    background-image: none;
+    padding-right: 0.5rem;
+}
+
+.formulario-edicion.was-validated .form-control:valid:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(71, 118, 247, 0.15);
+}
+
+.pie-edicion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.alerta-edicion {
+    margin: 0;
+    color: #b91c1c;
+    font-size: 0.9rem;
+}
+
+.acciones-edicion {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+/* Quien tenga desactivadas las animaciones del sistema abre y cierra sin transición. */
+@media (prefers-reduced-motion: reduce) {
+    .despliegue-envoltorio,
+    .buscador-clientes,
+    .buscador-clientes .buscador-input,
+    .buscador-clientes .buscador-etiqueta,
+    #tabla-clientes {
+        transition: none;
+    }
+}
+
 /* ==========================================
    RESPONSIVE
    ========================================== */

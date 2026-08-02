@@ -319,6 +319,20 @@ Generar la documentación:
 ./mvnw javadoc:javadoc      # sale en target/reports/apidocs/index.html
 ```
 
+> **Ahora mismo ese comando falla, y no por nuestro código.** Son tres líneas de Javadoc en
+> métodos de compañeros:
+>
+> - `ClienteController.crear`: dos líneas empiezan por `@Valid` y `@RequestBody`. Javadoc lee
+>   como **etiqueta** cualquier `@algo` al principio de línea, no las conoce y da error. Se
+>   arregla escribiéndolas como `{@code @Valid}` y `{@code @RequestBody}`, o metiéndolas dentro
+>   de la frase en vez de al principio del renglón.
+> - `ClienteRepositoryJdbcImpl.insert`: documenta `@throws SQLException` y el método no la
+>   lanza; javadoc lo comprueba y también es error. Se arregla borrando esa línea.
+>
+> No lo tocamos porque es código de otra persona y cambiarlo por nuestra cuenta sería
+> apropiarnos de su parte. Queda anotado aquí para quien lo escribió: con esas tres líneas
+> arregladas, el comando termina bien (lo demás son solo avisos).
+
 ### Refresco automático tras cambios
 
 Cuando se crea, edita o elimina un cliente, la tabla debe reflejarlo. Lo resolvemos con un **evento
@@ -365,10 +379,18 @@ paneles abiertos se perderían. Por eso el estado vive en un `Map` (`filasDesple
 `id del cliente -> { modo, borrador }`. Después de pintar las filas, `reabrirDespliegues()`
 vuelve a abrir los que sigan en la página.
 
-- **Los datos se piden SIEMPRE al backend**, también al cambiar de modo. Es la misma decisión
-  que ya tomamos en el listado (*re-fetch* en vez de caché): un detalle guardado de antes
-  puede enseñar algo que otro usuario ya cambió, y en el formulario sería peor todavía,
+- **Abrir un panel a mano pide los datos al backend**, también al cambiar de modo. Es la misma
+  decisión que ya tomamos en el listado (*re-fetch* en vez de caché): un detalle guardado de
+  antes puede enseñar algo que otro usuario ya cambió, y en el formulario sería peor todavía,
   porque se guardaría encima sin haberlo visto.
+- **Reabrirlo tras repintar la tabla, no.** `listar-pagina` devuelve `ClienteResponse`
+  completos, exactamente los mismos campos que `GET /cliente/{id}`, así que los datos acaban de
+  llegar: se guardan en `clientesEnPagina` (id → cliente) y `reabrirDespliegues()` pinta desde
+  ahí. Antes se volvían a pedir uno por uno, y con tres paneles abiertos **cada tecla del
+  buscador eran cuatro peticiones** en vez de una, todas para dibujar lo que la primera acababa
+  de traer. Ese mapa **no es una caché**: se vacía y se rehace en cada repintado, así que nunca
+  contiene nada más viejo que la tabla que se está viendo, que es justo lo que se le criticaba
+  a un caché.
 - **`borrador`**: si la tabla se repinta mientras hay un formulario abierto (basta con teclear
   en el buscador), lo escrito se guarda antes de vaciar el `<tbody>` y se restaura al
   reabrirlo. Sin eso, se perdería sin avisar.
@@ -443,19 +465,45 @@ botón que el usuario tenía pulsado deja de existir. Esta es la secuencia y por
    eso, el foco se va al `<body>` y quien navega con teclado vuelve al principio de la página
    después de cada guardado. Si el cliente ya no está en la página (se ha ido a otra, o ya no
    cumple el filtro), no se fuerza el foco a ningún sitio raro.
-3. **Se anuncia "Cliente guardado"** en la franja `role="status"` que hay entre los filtros y
-   la tabla. Está **fuera** de la tabla a propósito: dentro del panel, el refresco del punto
-   siguiente la borraría en el mismo instante en que se escribe. Guardar cambia la pantalla sin
-   cambiar de contexto y hay que poder enterarse sin verla (criterio **4.1.3**). El mensaje se
-   borra solo a los cinco segundos, porque un "Cliente guardado" fijo acaba pareciendo el
-   resultado de la última acción aunque sea de hace diez minutos.
+3. **Se anuncia "Cliente guardado"** en la franja que hay entre los filtros y la tabla. Está
+   **fuera** de la tabla a propósito: dentro del panel, el refresco del punto siguiente la
+   borraría en el mismo instante en que se escribe. Guardar cambia la pantalla sin cambiar de
+   contexto y hay que poder enterarse sin verla (criterio **4.1.3**). El mensaje se borra solo a
+   los cinco segundos, porque un "Cliente guardado" fijo acaba pareciendo el resultado de la
+   última acción aunque sea de hace diez minutos.
 4. **Se dispara `clientes:cambiaron`**, el mismo evento que usan los compañeros. La tabla se
    recarga sola con `cargarClientes(paginaActual)` y así enseña lo que hay en la BD, incluido
    lo que haya cambiado otro usuario mientras tanto.
 
-**El `404` de "alguien lo ha borrado mientras lo editabas"** va también a esa franja, además de
-a la alerta del formulario, y por lo mismo: ese caso dispara un refresco y el mensaje del panel
-duraría lo que tarda en llegar la respuesta del listado.
+**El `404` de "alguien lo ha borrado mientras lo editabas"** va a esa franja y **no** a la
+alerta del formulario: ese caso dispara un refresco y el mensaje del panel duraría lo que tarda
+en llegar la respuesta del listado. Los demás errores del guardado (`400`, `500`, red) sí se
+quedan en la alerta del formulario, que es donde se va a corregir el problema.
+
+#### Dos sitios para los avisos: uno que se ve y otro que se lee
+
+Hay **dos elementos** para contar lo que pasa, y no es una duplicación:
+
+| Elemento | Qué es | Para qué |
+|---|---|---|
+| `#anuncios` | `role="status"` y `visually-hidden` | Lo único que anuncia. Siempre en el documento y vacío |
+| `#aviso-clientes` | franja verde/roja, sin `role` | Lo que se ve, cuando no hay otro sitio donde verlo |
+
+Son dos por dos motivos concretos:
+
+- **Una región que aparece con el mensaje ya dentro no se anuncia.** Lo que vigila el lector de
+  pantalla es el *cambio de contenido* de algo que ya estaba en el árbol de accesibilidad, así
+  que crear el elemento (o quitarle el `hidden`) con el texto puesto no dispara nada. Por eso
+  `#anuncios` nace vacío y solo se le cambia el texto, y por eso la franja y la alerta del
+  formulario se esconden con `:empty` en el CSS en lugar de con `hidden`.
+- **Hay mensajes que ya se ven en su sitio** —el de la tabla cuando falla la carga, el del panel
+  cuando no se puede abrir el detalle— y escribirlos además en la franja los pondría dos veces
+  en pantalla. Al ser `#anuncios` invisible, puede repetirlos sin que se note.
+
+Con eso, `anunciar(texto, { visible })` escribe siempre en la región invisible y, solo si se le
+pide, también en la franja. El **"cargando" del panel no se anuncia** a propósito: es un mensaje
+de paso que se sustituye en cuanto llega la respuesta, y anunciarlo dejaría al lector leyendo
+algo que ya no está. Que el panel se ha abierto lo dice el `aria-expanded` del botón pulsado.
 
 **Y el `409` del NIF repetido no se marca solo en rojo.** El campo recibe `aria-invalid="true"`
 y un `aria-describedby` que apunta al mensaje —que lleva el id del cliente dentro, porque puede
@@ -490,6 +538,30 @@ Relacionado, el `update` del repositorio quedó **documentado con su trampa**: d
 que se haya guardado igual que estaba, y **no sirve para distinguirlos**. De ahí el `findById`
 previo en la misma transacción.
 
+#### Descartar cambios: un diálogo de Bootstrap, no `confirm()`
+
+Cerrar un formulario con algo escrito pregunta antes. Empezó siendo el `confirm()` del
+navegador, que funciona y es accesible de serie, pero tiene tres pegas: **bloquea la página**
+entera mientras está abierto, no se puede dar estilo (en medio de una pantalla de Bootstrap
+canta) y algunos navegadores ofrecen **silenciarlo** tras el segundo o tercero; silenciado
+devuelve `false`, o sea "no descartes", y la fila no se cerraría nunca sin que el usuario
+entienda por qué. Ahora es el mismo tipo de diálogo que ya usa "Añadir Cliente".
+
+Dos detalles que no son obvios:
+
+- **La promesa se resuelve en `hidden.bs.modal`**, cuando el diálogo ya ha terminado de
+  cerrarse, y no al pulsar el botón. Al cerrarse hay que devolver el foco a donde estaba, y si
+  se respondiera antes, quien preguntó colocaría el foco (en el lápiz de la fila) y esa vuelta
+  se lo llevaría de allí.
+- **Ese retorno del foco lo hacemos nosotros.** Bootstrap solo lo hace con los diálogos que se
+  abren mediante `data-bs-toggle`, y este se abre desde el código: sin guardarnos el elemento
+  activo, quien contesta "Seguir editando" acaba con el foco en el `<body>`, al principio de la
+  página, justo después de decir que quería seguir donde estaba.
+- **Después de preguntar se comprueba que la fila siga en el documento.** Preguntar lleva su
+  tiempo, y en ese rato la tabla ha podido repintarse: la fila de antes ya no está en pantalla y
+  cerrarla no se vería. Con `confirm()` esto no pasaba, porque bloqueaba también los
+  temporizadores.
+
 ### El buscador se solapaba con el filtro de al lado
 
 Estando cerrado, el círculo de la lupa pisaba el desplegable de provincia. No era el icono: era
@@ -513,6 +585,13 @@ sería un salto en vez de un crecimiento) y se le deja **encoger** (`flex-shrink
 suelo de `min-width: var(--ancho-cerrado)`: cuando falta sitio cede él, que es el único con
 espacio de sobra, pero nunca queda más estrecho que cerrado. Con menos de 768 px la barra pasa
 a un control por línea y el `flex-basis` vuelve al `100%`.
+
+> **El ancho se decide en un solo bloque.** Al añadir lo del *flex* quedaron dos reglas
+> hablando del mismo tamaño: `.buscador-clientes` con `flex: 0 0 auto`, `width` y una transición
+> sobre `width`, y `.barra-filtros .buscador-clientes` con `flex: 0 1 basis`. La segunda es más
+> específica, así que ganaba entera y la primera era código muerto —con un comentario que
+> además defendía justo lo contrario de lo que acababa pasando—. Ahora el bloque general solo
+> lleva la posición y el alto, y todo lo que tenga que ver con el ancho vive en el de la barra.
 
 ### La lupa no parecía pulsable (y no se abría con el teclado)
 
@@ -617,9 +696,29 @@ Lo que se ha corregido, y por qué cada cosa:
 - **Los asteriscos de campo obligatorio son `aria-hidden`**: se leerían como "asterisco", que no
   dice nada, y los campos ya llevan `required`, que el lector anuncia como "obligatorio".
 - **Ningún número de columnas escrito a mano.** El `colspan` de la fila desplegada y el de la
-  fila de mensajes salen de contar los `<th>` de la tabla (`COLUMNAS_TABLA`), y el texto por
-  defecto del error del NIF se lee del propio `<template>` al arrancar. Son los dos sitios
-  donde una copia a mano se queda vieja sin que nadie se entere.
+  fila de mensajes salen de contar los `<th>` de la tabla, y el texto por defecto del error del
+  NIF se lee del propio `<template>` al arrancar. Son los dos sitios donde una copia a mano se
+  queda vieja sin que nadie se entere. Y se cuentan **las cabeceras visibles**, no todas: en
+  móvil hay dos ocultas con `d-none`, y un `colspan` de 6 en una tabla de 4 columnas inventa dos
+  columnas más, con lo que el mensaje de "no hay clientes" se centra respecto a un ancho mayor
+  que el de la tabla y se sale por la derecha. El `ResizeObserver` que ya vigila el tamaño
+  reajusta ese `colspan` al estrechar la ventana con un panel abierto.
+- **La fecha se formatea en UTC.** El backend manda un día suelto, sin hora, y el navegador lo
+  interpreta como medianoche **UTC**; al pasarlo a la hora local de un huso negativo esa
+  medianoche cae en el día anterior y el alta se vería con un día menos. Se formatea con
+  `timeZone: "UTC"`, que es el huso en el que está expresado el dato.
+- **El buscador acota a 60 caracteres** (`maxlength`), que es el `@Size` de `CriteriosCliente` y,
+  a su vez, lo que mide la columna `nombre`: pasarse solo sirve para gastar una petición que el
+  servidor va a rechazar con un `400`. Mismo criterio que en el formulario de edición. Y
+  **`Enter` busca sin esperar** los 300 ms del *debounce*: pulsar `Enter` es decir "ya he
+  terminado de escribir", y que no pasara nada durante un tercio de segundo se sentía como que
+  la tecla no hacía nada.
+- **Las tres etiquetas de CDN llevan `integrity`** (Bootstrap CSS y JS, Font Awesome): el
+  navegador comprueba que lo que descarga es exactamente el fichero esperado y, si no, no lo
+  usa. Las huellas se calcularon descargando esas mismas URL, no copiándolas de ningún sitio.
+  **Google Fonts se queda fuera** a propósito: devuelve un CSS distinto según el navegador, así
+  que ninguna huella fija valdría para todos y la fuente dejaría de cargar. Solo está puesto en
+  `clientes.html`, que es nuestra página; las demás siguen igual.
 - **Se ha quitado el `querySelectorAll('.btn-eliminar')` del final de `clientes.js`**: no
   enganchaba nada, porque al ejecutarse ese código los botones todavía viven dentro del
   `<template>`. En su sitio queda un comentario que explica que las acciones de la fila van por
@@ -633,10 +732,24 @@ la granularidad adecuada:
 
 - **Repositorio** (`findUltimos`): `log.debug("findUltimos({}) -> {} filas", ...)` — nivel `DEBUG`
   porque es detalle técnico de la consulta.
-- **Servicio** (`listarUltimos`): `log.info("listarUltimos({}) -> {} clientes", ...)`.
-- **Controller** (`listarUltimos`): `log.info(...)` al recibir la petición (con el `limite`) y al
-  responder (con el nº de clientes).
+- **Servicio** (`listarUltimos`): `log.info("listarUltimos({}) -> {} clientes", ...)` — el hecho
+  de negocio: qué se ha encontrado, qué se ha guardado, qué no existía.
+- **Controller** (`listarUltimos`): `log.info(...)` al recibir la petición (con sus parámetros) y
+  al responder, y **lo que registra al responder es el código HTTP** (`GET /cliente/7 -> 200`).
 - **RowMapper**: **sin log a propósito** — se ejecuta una vez por CADA fila y llenaría la consola.
+
+**Cada capa cuenta lo suyo, y no lo mismo.** El controller y el service escribían dos líneas
+seguidas diciendo lo mismo con otras palabras (*"cliente actualizado"* dos veces), que es ruido
+que además engaña: al leer el log parecen dos cosas distintas. Ahora el service dice **qué ha
+pasado** y el controller **con qué se responde**, que es una información que el service no
+tiene. Y el nivel va por quién tiene el problema: `warn` para lo que arregla quien llama (un
+`400` por datos mal formados, un `404`, el `409` del NIF repetido, **sin traza**: no hay nada
+roto que ir a mirar) y `error`, con la excepción entera, solo para los fallos del servidor.
+
+Los `log.debug` del repositorio **no se veían**: `application.properties` solo subía a `DEBUG`
+el paquete de Spring que imprime el SQL, así que el nuestro se quedaba en `INFO`. Con
+`logging.level.edu.xtd.facturacion360=DEBUG` la capa de log que describe este apartado existe
+de verdad.
 
 Fíjate que para poder loguear el valor **primero lo guardamos en una variable y luego lo
 devolvemos** (ver ["Decisiones de estilo"](#a-decisiones-de-estilo-inyección-de-dependencias-y-forma-del-return)).
@@ -644,6 +757,73 @@ devolvemos** (ver ["Decisiones de estilo"](#a-decisiones-de-estilo-inyección-de
 **Errores**: el controller envuelve la operación en `try/catch (DataAccessException)`. Si la BD
 falla, `log.error("...", e)` deja el fallo (con su traza) **en el log**, y al navegador le
 respondemos un **`500`** limpio (cuerpo vacío) en vez de soltarle una traza interna.
+
+**Y el `400` del listado también sale limpio.** `listarPagina` valida las longitudes con
+`@Valid`, pero sin un `BindingResult` detrás del `@ModelAttribute` esa validación la resuelve
+Spring **antes** de entrar en el método: lanza `BindException` y el cuerpo de la respuesta pasa
+a ser la página de error por defecto —con la traza dentro mientras `devtools` esté en el
+*classpath*—, justo lo contrario de lo que hacen los demás endpoints. Con el `BindingResult`,
+el `400` se devuelve desde aquí, con cuerpo vacío, igual que el del `PUT`.
+
+> Queda un `400` que no pasa por nosotros: `/cliente/abc`, cuando el `{id}` no es un número.
+> Ese lo rechaza Spring al convertir el parámetro, antes de llegar al método, y su cuerpo sigue
+> siendo la página de error. Unificarlo es cosa del `@RestControllerAdvice` del TODO B, porque
+> afecta a los endpoints de todo el equipo. El frontend no genera nunca esa URL.
+
+## Tests automáticos
+
+Tres clases en `src/test/java`, **ninguna necesita base de datos**, que es la condición para que
+se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Se lanzan con
+`./mvnw test`.
+
+| Clase | Qué asegura |
+|---|---|
+| `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null` y que el `offset` no desborde |
+| `ClienteRepositoryJdbcImplTest` | El SQL que se construye: comodines de `LIKE` escapados, lista blanca del `ORDER BY`, filtros acumulados y el recuento con los mismos filtros que la página |
+| `ClienteControllerTest` | Los códigos HTTP del detalle y del guardado: `200`, `400`, `404`, `409`, y que salgan con el cuerpo vacío |
+
+Por qué esas tres y no otras:
+
+- **`CriteriosCliente`** es donde se decide qué es un criterio válido para toda la aplicación:
+  el controller, el service y el repositorio dan por hecho que lo que reciben viene normalizado
+  y no lo vuelven a comprobar. Si eso se rompe, se rompe en silencio y el fallo aparece tres
+  capas más abajo, con un `OFFSET` negativo o un filtro por la cadena vacía.
+- **El repositorio** guarda dos defensas que no se ven en pantalla y solo se notan cuando
+  fallan. Se prueban con un `JdbcTemplate` **simulado**, porque lo que importa es la consulta
+  que se entrega, no lo que devolvería MySQL. Los parámetros se recogen desde la propia
+  respuesta simulada y no con un `ArgumentCaptor`: el último argumento de `query` es variable y
+  un captor ahí solo recoge un valor, mientras que estas consultas llevan hasta seis.
+- **El controller** no calcula nada; lo suyo es traducir un `Optional` vacío o una excepción de
+  clave duplicada al código que le toca. Justo eso es lo que el frontend da por supuesto para
+  decidir si pinta el formulario en rojo, si avisa de que el cliente ya no existe o si refresca
+  la tabla: cambiarlo sin querer rompe la pantalla sin romper ninguna compilación. Con
+  `@WebMvcTest` se levanta **solo la capa web** y el service se sustituye por un doble
+  (`@MockitoBean`), así que casos casi imposibles de provocar a mano —como el `409`— se piden y
+  ya está.
+
+> Al ejecutar los tests, Mockito avisa de que se está *auto-adjuntando* como agente. Es un aviso
+> suyo de cara a futuras versiones de la JDK, no un fallo; se quita configurando el `argLine` de
+> surefire, que es tocar el `pom.xml` compartido.
+
+Lo que **no** cubren: nada que hable de verdad con MySQL. Un `@JdbcTest` necesita una BD de
+test (H2 con su script, o Testcontainers) y H2 no se comporta igual que MySQL en lo que aquí
+importa —la *collation* que ignora mayúsculas y acentos, el `ESCAPE` del `LIKE`—, así que un
+test verde ahí no probaría lo que parece. Queda para cuando se decida esa infraestructura.
+
+## Limitaciones conocidas
+
+Dos cosas que se han mirado y se dejan como están, a propósito:
+
+- **La última edición gana, sin avisar.** Si dos personas abren el mismo cliente y guardan, la
+  segunda pisa lo de la primera y nadie se entera. Resolverlo bien pide una columna de versión
+  en la tabla (bloqueo optimista): el `UPDATE` llevaría `WHERE version = ?`, 0 filas afectadas
+  significaría "alguien ha guardado antes que tú" y eso sería un `409`. Es un cambio de esquema
+  y afecta a todo el equipo, así que no entra aquí. Con un usuario a la vez —que es como se
+  usa— no se nota.
+- **`filasDesplegadas` conserva la entrada de un cliente borrado** durante lo que dure la
+  sesión. Es el precio de que un panel abierto sobreviva a buscar y a paginar: no hay forma de
+  distinguir "este cliente ya no está en la página" de "ya no está en la base de datos" sin
+  preguntar por él. Son unos pocos objetos pequeños y se van al recargar la página.
 
 ## Base de datos
 
@@ -751,6 +931,33 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
     menos, cada control ocupa su propia línea completa.
 38. **Recuadro del último cliente**: abrir el detalle del **último** cliente de la página → el
     recuadro de color tiene que cerrar por abajo (antes le faltaba esa raya).
+39. **Sin peticiones de más al repintar** (pestaña Network, filtro `cliente/`): abrir tres
+    paneles, borrar el filtro de Network y **teclear una letra en el buscador** → tiene que
+    salir **una sola** petición, la de `listar-pagina`. Ninguna a `/cliente/{id}`. Abrir un
+    panel a mano sí pide su detalle, como antes.
+40. **Los datos del panel reabierto son los buenos**: con un detalle abierto, cambiar ese mismo
+    cliente desde otra pestaña y refrescar → el panel enseña los datos nuevos, no los de antes.
+41. **Búsqueda demasiado larga**: `GET /cliente/listar-pagina?busqueda=` + 61 caracteres → `400`
+    con **cuerpo vacío** (en las herramientas del navegador, `Content-Length: 0`), no la página
+    de error de Spring. Desde la pantalla no se puede llegar: el campo corta en 60.
+42. **Enter en el buscador**: escribir y pulsar `Enter` → la búsqueda sale al momento, sin la
+    espera de 300 ms, y **una sola vez** (no dos).
+43. **Descartar cambios**: escribir en un campo y pulsar la fila → sale el diálogo de Bootstrap,
+    no el del navegador. "Seguir editando" → el foco vuelve al control desde el que se preguntó
+    y no se pierde nada. "Descartar" → se cierra la fila y el foco acaba en su lápiz. Probarlo
+    también con `Escape` y pulsando el fondo oscuro: las dos cosas equivalen a "seguir
+    editando".
+44. **Fallo de red anunciado**: parar la aplicación y paginar → el mensaje sale en la tabla y,
+    con un lector de pantalla, **se anuncia** (antes se escribía en el `<tbody>`, que no anuncia
+    nada). Lo mismo con el error del panel de detalle.
+45. **`integrity` de los CDN**: recargar con la caché desactivada → la página tiene que verse
+    con sus estilos y con los avisos emergentes funcionando. Si algo fuera mal con las huellas,
+    se vería al instante: la página saldría sin estilo y sin Bootstrap.
+46. **Mensaje centrado en móvil**: a 360 px de ancho, buscar algo que no exista → el mensaje de
+    "no hay clientes" tiene que quedar centrado **dentro** de la tabla. Con un panel abierto,
+    estrechar la ventana de escritorio a móvil → el panel sigue ocupando el ancho justo.
+47. **Tests**: `./mvnw test` desde `facturacion360/` → 25 pruebas en verde **sin MySQL
+    arrancado**.
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 
@@ -843,7 +1050,13 @@ global para todos los controllers.
   Con esto das respuestas **limpias y uniformes** y no
   repites `try/catch` en cada endpoint.
 
-### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`)
+### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`) — ✅ HECHA LA PARTE QUE NO NECESITA BD
+**Ya están escritos** los tests del `@WebMvcTest` y los que no tocan la base de datos; se
+describen en ["Tests automáticos"](#tests-automáticos). Queda pendiente **solo** el `@JdbcTest`,
+que necesita decidir antes qué base de datos de test se usa (H2 no imita la *collation* ni el
+`ESCAPE` de MySQL, así que haría falta Testcontainers) y eso es infraestructura de todo el
+equipo. El resto de este apartado se conserva como explicación de los conceptos.
+
 **Concepto**: un test es código que **comprueba solo** que otro código hace lo que debe. Spring
 permite probar **una capa aislada** sin levantar toda la app. Un "mock" (o doble) es un objeto
 falso que simula a otro para no depender de él (p. ej. simular el service para probar el

@@ -65,9 +65,22 @@ public class ClienteController {
 
 	private static final Logger log = LoggerFactory.getLogger(ClienteController.class);
 
-	// Los usa listarUltimos para acotar su parámetro 'limite'. El listado paginado ya no
-	// los necesita: sus topes viven en CriteriosCliente, junto a los datos que acotan.
+	/**
+	 * Mínimo de clientes que puede pedir {@link #listarUltimos(int)}. Pedir cero o un número
+	 * negativo no es un error del que haya que avisar: se sube hasta aquí y se responde con
+	 * un cliente.
+	 *
+	 * <p>El listado paginado NO usa estas dos constantes: sus topes viven en
+	 * {@link CriteriosCliente}, junto a los datos que acotan, para que quien añada un
+	 * criterio nuevo los encuentre sin salir del record.</p>
+	 */
 	private static final int LIMITE_MIN = 1;
+
+	/**
+	 * Tope de clientes que puede pedir {@link #listarUltimos(int)}, para que nadie se traiga
+	 * la tabla entera con un {@code ?limite=999999}. Lo que pase de aquí se recorta en
+	 * silencio, y el log deja constancia del valor pedido y del que se ha usado de verdad.
+	 */
 	private static final int LIMITE_MAX = 100;
 
 	@Autowired
@@ -142,9 +155,9 @@ public class ClienteController {
 	 * endpoint aparte. Ejemplo de uso:
 	 * {@code GET /cliente/listar-pagina?pagina=0&tamano=10&busqueda=garcia&provincia=Valencia&ordenarPor=nombre&direccion=asc}
 	 *
-	 * Buscar es "listar con un filtro de texto más", por eso comparte endpoint con el
+	 * <p>Buscar es "listar con un filtro de texto más", por eso comparte endpoint con el
 	 * listado: así la búsqueda hereda la paginación y los metadatos, y el frontend usa
-	 * un único camino de código tanto si hay término de búsqueda como si no.
+	 * un único camino de código tanto si hay término de búsqueda como si no.</p>
 	 *
 	 * <p>El {@code BindingResult} detrás del {@code @ModelAttribute} cumple aquí el mismo
 	 * papel que en {@link #actualizar(int, ClienteRequest, BindingResult)}: sin él, pasar

@@ -54,25 +54,44 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 			""";
 
-	// Columnas que se seleccionan en las consultas de clientes (para no repetirlas).
+	/**
+	 * Columnas que seleccionan TODAS las consultas de clientes de esta clase. Está en una
+	 * constante para que el detalle y el listado no puedan acabar devolviendo campos
+	 * distintos: si mañana se añade una columna, se añade una sola vez y la traen las tres.
+	 */
 	private static final String COLUMNAS_CLIENTE = "idcliente, nombre, nif_cif, direccion, codigopostal, "
 			+ "poblacion, provincia, telefono, email, fecha_alta";
 
-	// LISTA BLANCA de ordenaciones permitidas. La CLAVE es lo que puede mandar el cliente
-	// por la URL; el VALOR es el nombre real de la columna, escrito por nosotros. Como el
-	// ORDER BY no admite '?', esta traducción es lo que impide que el texto del usuario
-	// llegue nunca al SQL: si la clave no está en el mapa, se usa la de por defecto.
-	// Para permitir ordenar por una columna más, basta con añadir aquí una línea: funciona
-	// automáticamente en ambos sentidos (ver sqlOrden).
+	/**
+	 * <strong>Lista blanca</strong> de ordenaciones permitidas. La CLAVE es lo que puede
+	 * mandar el cliente por la URL; el VALOR es el nombre real de la columna, escrito por
+	 * nosotros.
+	 *
+	 * <p>Como el {@code ORDER BY} no admite '?', esta traducción es lo que impide que el
+	 * texto del usuario llegue nunca al SQL: si la clave no está en el mapa, se usa
+	 * {@link #COLUMNA_ORDEN_DEFECTO}. Es la defensa contra la inyección SQL en el único
+	 * punto de la consulta donde no puede haber un parámetro.</p>
+	 *
+	 * <p>Para permitir ordenar por una columna más basta con añadir aquí una línea:
+	 * funciona automáticamente en ambos sentidos (ver {@link #sqlOrden(String, String)}).</p>
+	 */
 	private static final Map<String, String> COLUMNAS_ORDEN = Map.of(
 			"nombre", "nombre",
 			"fecha_alta", "fecha_alta");
 
-	// Columna por la que se ordena si no piden otra cosa (o piden algo que no existe).
+	/**
+	 * Columna por la que se ordena si no piden otra cosa, o si piden una que no está en
+	 * {@link #COLUMNAS_ORDEN}. Lo más reciente primero es lo que espera ver quien abre la
+	 * pantalla.
+	 */
 	private static final String COLUMNA_ORDEN_DEFECTO = "fecha_alta";
 
-	// Carácter con el que se neutralizan los comodines de LIKE. Ver escaparComodines: no es
-	// la barra invertida a propósito, y ese "a propósito" es importante.
+	/**
+	 * Carácter con el que se neutralizan los comodines de LIKE.
+	 *
+	 * <p>No es la barra invertida <strong>a propósito</strong>, y ese "a propósito" arregla
+	 * un fallo real: {@link #escaparComodines(String)} lo explica entero.</p>
+	 */
 	private static final String ESCAPE_LIKE = "!";
 
 	@Autowired
@@ -193,14 +212,16 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 * cada uno montara su propio WHERE, el total y las filas mostradas podrían dejar de
 	 * cuadrar en cuanto alguien tocara uno y se olvidara del otro.
 	 *
-	 * Cada valor se añade como '?' a {@code args}, en orden, para que viaje aparte del
+	 * <p>Cada valor se añade como '?' a {@code args}, en orden, para que viaje aparte del
 	 * texto SQL (PreparedStatement): así el dato NUNCA se interpreta como instrucción y
-	 * no hay inyección SQL.
+	 * no hay inyección SQL.</p>
 	 *
 	 * @param sql       consulta en construcción; se le concatenan las condiciones
 	 * @param args      valores de los '?', en el mismo orden en que aparecen
 	 * @param criterios de aquí se usan la búsqueda, la provincia y la población; la
 	 *                  paginación y la ordenación no forman parte del WHERE
+	 * @autor AngelDanielC0des
+	 * @see #escaparComodines(String)
 	 */
 	private void anadirFiltros(StringBuilder sql, List<Object> args, CriteriosCliente criterios) {
 		// Vamos juntando condiciones y al final las unimos con AND. Así no hace falta ir
@@ -240,11 +261,11 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	/**
 	 * Neutraliza los comodines de LIKE dentro del texto que escribe el usuario.
 	 *
-	 * En LIKE, '%' significa "cualquier cosa" y '_' "un carácter cualquiera". Si el
+	 * <p>En LIKE, '%' significa "cualquier cosa" y '_' "un carácter cualquiera". Si el
 	 * término llega sin tratar, buscar "%" genera el patrón '%%%', que casa con TODAS
 	 * las filas: el buscador dejaría de filtrar y devolvería la tabla entera. No es
 	 * inyección SQL (el valor sigue viajando como '?'), pero sí un modo de saltarse
-	 * el filtro, así que los escapamos para que se busquen como caracteres normales.
+	 * el filtro, así que los escapamos para que se busquen como caracteres normales.</p>
 	 *
 	 * <p><strong>Por qué el carácter de escape es '!' y no la barra invertida</strong>, que es
 	 * lo que se ve en la mayoría de los ejemplos. Por dos motivos, y el segundo es un fallo
@@ -272,6 +293,8 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 *
 	 * @param termino texto tal cual lo escribió el usuario
 	 * @return el mismo texto con '!', '%' y '_' escapados; se usa junto a ESCAPE '!'
+	 * @autor AngelDanielC0des
+	 * @see #anadirFiltros(StringBuilder, List, CriteriosCliente)
 	 */
 	private String escaparComodines(String termino) {
 		// Variable y un solo return, como el resto del proyecto: aquí no hay log, pero es el
@@ -289,14 +312,16 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 * '?': sin esta traducción habría que concatenar el texto del cliente en el SQL y
 	 * eso sí abriría la puerta a la INYECCIÓN SQL.
 	 *
-	 * Fíjate en que el texto del usuario nunca se concatena: solo se usa como CLAVE
+	 * <p>Fíjate en que el texto del usuario nunca se concatena: solo se usa como CLAVE
 	 * para buscar en el mapa. Si pide una columna que no está en la lista, se ignora y
 	 * cae en el valor por defecto. La dirección se resuelve con una comparación, así
-	 * que solo puede acabar valiendo "ASC" o "DESC".
+	 * que solo puede acabar valiendo "ASC" o "DESC".</p>
 	 *
 	 * @param ordenarPor columna pedida; ver {@link #COLUMNAS_ORDEN}
 	 * @param direccion  "asc" o "desc"; cualquier otra cosa se trata como "desc"
 	 * @return el fragmento " ORDER BY ..." correspondiente, nunca {@code null}
+	 * @autor AngelDanielC0des
+	 * @see #findPagina(CriteriosCliente)
 	 */
 	private String sqlOrden(String ordenarPor, String direccion) {
 		// El null se filtra ANTES de consultar el mapa: Map.of() crea un mapa inmutable

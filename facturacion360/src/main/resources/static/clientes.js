@@ -1,8 +1,7 @@
-/*
- * clientes.js
- * -----------
- * Pide al backend una PÁGINA de clientes y la pinta en la tabla, con buscador,
- * filtros por provincia/población, ordenación y paginación.
+/**
+ * @file Pantalla de clientes: pide al backend una PÁGINA de clientes y la pinta en la
+ * tabla, con buscador, filtros por provincia/población, ordenación, paginación, y el
+ * despliegue en la propia fila para ver el detalle y para editar.
  *
  * Endpoint: GET /cliente/listar-pagina?pagina=0&tamano=10&busqueda=&provincia=
  *                                     &poblacion=&ordenarPor=&direccion=
@@ -17,6 +16,10 @@
  * Idea: separar "pedir" (cargarClientes) de "pintar" (pintarFilas / pintarPaginacion).
  * Usamos el <template> del HTML como molde y textContent (no innerHTML) para que un
  * nombre con < o & no pueda inyectar HTML.
+ *
+ * @author AngelDanielC0des
+ * @see clientes.html — los <template> que se clonan aquí
+ * @see edu.xtd.facturacion360.controller.ClienteController — el otro extremo de cada fetch
  */
 
 // Rutas relativas: el HTML lo sirve el propio Spring Boot, mismo origen (sin CORS).
@@ -241,7 +244,9 @@ async function pedirJson(canal, url) {
  *
  * Cancelar es algo que provocamos a propósito, no un fallo: si lo tratáramos como tal,
  * el usuario vería el mensaje de error justo mientras escribe en el buscador.
+ *
  * @param {Error} error el error capturado
+ * @return {boolean} true si lo canceló el AbortController de su canal, no el servidor
  */
 function esCancelacion(error) {
     return error.name === "AbortError";
@@ -584,7 +589,12 @@ function columnasVisibles() {
     return visibles.length || CABECERAS_TABLA.length;
 }
 
-/** ¿Hay algún filtro o búsqueda puesto? (la ordenación no cuenta: siempre hay una) */
+/**
+ * ¿Hay algún filtro o búsqueda puesto? La ordenación no cuenta: siempre hay una, así que
+ * si contase, el botón de limpiar y el contador estarían activos desde que se abre la página.
+ *
+ * @return {boolean} true si hay búsqueda, provincia o población
+ */
 function hayCriteriosActivos() {
     return Boolean(criterios.busqueda || criterios.provincia || criterios.poblacion);
 }
@@ -893,7 +903,12 @@ function modoDe(fila) {
     return filasDesplegadas.get(Number(fila.dataset.clienteId))?.modo ?? null;
 }
 
-/** El panel desplegado de una fila, o null si no lo tiene. */
+/**
+ * El panel desplegado de una fila.
+ *
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @return {HTMLElement|null} el panel, o null si la fila está cerrada
+ */
 function panelDe(fila) {
     const hermana = fila.nextElementSibling;
     return hermana?.classList.contains("fila-despliegue") ? hermana : null;
@@ -1098,7 +1113,14 @@ function fallaComprobacion(idCliente, error) {
     console.warn(`No se pudo comprobar si el cliente ${idCliente} había cambiado:`, error);
 }
 
-/** ¿Los dos clientes dicen exactamente lo mismo? */
+/**
+ * ¿Los dos clientes dicen exactamente lo mismo? Es lo que decide si el panel recién pintado
+ * con los datos del listado hay que repintarlo con los que acaba de traer el servidor.
+ *
+ * @param {Object} uno un cliente
+ * @param {Object} otro el otro
+ * @return {boolean} true si coinciden en los CAMPOS_CLIENTE (null y "" cuentan como iguales)
+ */
 function mismosDatos(uno, otro) {
     return CAMPOS_CLIENTE.every((campo) => (uno[campo] ?? "") === (otro[campo] ?? ""));
 }
@@ -1200,8 +1222,10 @@ async function alternarDespliegue(fila, modo) {
 
 /**
  * Devuelve el panel de la fila, creándolo si aún no existe.
+ *
  * @param {HTMLTableRowElement} fila la fila del cliente
  * @param {boolean} animar si se despliega con transición
+ * @return {HTMLElement} el panel, nuevo o el que ya estaba abierto
  */
 function obtenerPanel(fila, animar) {
     const existente = panelDe(fila);
@@ -1433,6 +1457,8 @@ function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
  * la región de anuncios a propósito. Es un mensaje de paso, que se sustituye en cuanto llega
  * la respuesta, y anunciarlo dejaría al lector de pantalla leyendo algo que ya no está. Que el
  * panel se ha abierto ya lo dice el aria-expanded del botón que se acaba de pulsar.
+ *
+ * @param {HTMLElement} contenido el hueco del panel, cuyo contenido se sustituye entero
  */
 function pintarCargando(contenido) {
     const aviso = document.createElement("p");
@@ -1441,7 +1467,13 @@ function pintarCargando(contenido) {
     contenido.replaceChildren(aviso);
 }
 
-/** Aviso de error con un botón para volver a intentarlo, sin cerrar el panel. */
+/**
+ * Aviso de error con un botón para volver a intentarlo, sin cerrar el panel: cerrarlo
+ * obligaría a buscar otra vez la fila para reabrirla.
+ *
+ * @param {HTMLElement} contenido el hueco del panel, cuyo contenido se sustituye entero
+ * @param {Error} error el fallo que se va a explicar
+ */
 function pintarErrorPanel(contenido, error) {
     console.error("No se pudieron cargar los datos del cliente:", error);
 
@@ -1463,12 +1495,24 @@ function pintarErrorPanel(contenido, error) {
     contenido.replaceChildren(aviso);
 }
 
-/** Los campos vacíos se ven mejor como un guion que como una celda en blanco. */
+/**
+ * Los campos vacíos se ven mejor como un guion que como una celda en blanco.
+ *
+ * @param {string|null|undefined} valor el dato tal cual viene del backend
+ * @return {string} el valor, o un guion largo si no había nada que enseñar
+ */
 function textoOGuion(valor) {
     return valor && valor.trim() ? valor : "—";
 }
 
-/** Los datos del cliente en la forma que entiende el formulario (sin nulos). */
+/**
+ * Los datos del cliente en la forma que entiende el formulario: solo los campos editables,
+ * sin nulos y sin espacios sobrantes. Un input al que se le asigna null escribe la palabra
+ * "null" dentro, así que la conversión no es opcional.
+ *
+ * @param {Object} cliente el cliente tal cual llega del backend
+ * @return {Object.<string, string>} un valor por cada campo de CAMPOS_EDITABLES
+ */
 function valoresDe(cliente) {
     const valores = {};
     for (const campo of CAMPOS_EDITABLES) {
@@ -1477,7 +1521,13 @@ function valoresDe(cliente) {
     return valores;
 }
 
-/** Lo que hay escrito ahora mismo en el formulario. */
+/**
+ * Lo que hay escrito ahora mismo en el formulario. Devuelve la MISMA forma que
+ * {@link valoresDe} para que las dos se puedan comparar campo a campo (ver hayCambios).
+ *
+ * @param {HTMLFormElement} formulario el formulario de edición
+ * @return {Object.<string, string>} un valor por cada campo de CAMPOS_EDITABLES
+ */
 function leerFormulario(formulario) {
     const valores = {};
     for (const campo of CAMPOS_EDITABLES) {
@@ -1827,7 +1877,13 @@ function contarErrorGuardado(idCliente, estado) {
         { visible: true, esError: true });
 }
 
-/** El cuerpo JSON del PUT, con la forma que espera ClienteRequest. */
+/**
+ * El cuerpo JSON del PUT, con la forma que espera ClienteRequest. No lleva ni el id (viaja
+ * en la URL) ni la fecha de alta (no es editable y el service conserva la que hay en la BD).
+ *
+ * @param {HTMLFormElement} formulario el formulario de edición
+ * @return {string} el JSON listo para el body del fetch
+ */
 function cuerpoPeticion(formulario) {
     const valores = leerFormulario(formulario);
 

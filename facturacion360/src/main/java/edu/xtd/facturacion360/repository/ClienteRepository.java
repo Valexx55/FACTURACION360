@@ -119,6 +119,7 @@ public interface ClienteRepository {
 	 * @throws DataAccessException si falla el acceso a la base de datos; en particular
 	 *                             {@code DuplicateKeyException} si el NIF/CIF ya es de otro
 	 *                             cliente, porque la columna tiene un índice único
+	 * @autor AngelDanielC0des
 	 * @see #findById(int)
 	 */
 	public boolean update (Cliente cliente);

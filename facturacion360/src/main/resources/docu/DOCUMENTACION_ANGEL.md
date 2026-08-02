@@ -122,7 +122,7 @@ preguntando en cada `if` "¿soy la primera, pongo `WHERE` o `AND`?".
 La búsqueda usa `LIKE` con comodines alrededor del término:
 
 ```sql
-WHERE (nombre LIKE ? ESCAPE '\' OR nif_cif LIKE ? ESCAPE '\')
+WHERE (nombre LIKE ? ESCAPE '!' OR nif_cif LIKE ? ESCAPE '!')
 ```
 
 - **Los paréntesis del `OR` son obligatorios**: sin ellos, los `AND` de los filtros solo se
@@ -132,14 +132,39 @@ WHERE (nombre LIKE ? ESCAPE '\' OR nif_cif LIKE ? ESCAPE '\')
   que casa con **TODAS** las filas: el buscador deja de filtrar y devuelve la tabla entera. Por eso
   `escaparComodines()` los neutraliza antes de envolver el término. **No es inyección SQL** (el
   valor sigue viajando como `?`), pero sí una forma de saltarse el filtro.
-- **El orden de escapado importa**: la barra invertida va **primero**. Si se escapara la última,
-  volvería a escapar las barras que acabamos de introducir para `%` y `_`.
-- **En el SQL de verdad pone `ESCAPE '\\'`, con dos barras, y no es un error.** Dentro de una
-  cadena de MySQL la barra invertida escapa al carácter siguiente, así que `'\'` dejaría la
-  comilla de cierre escapada y la consulta no compilaría; `'\\'` es la forma de decir "una
-  barra". Y como además hay que escaparlas para el `String` de Java, en el código se leen
-  **cuatro**. Es el sitio donde más fácil es equivocarse al tocar esta consulta, y por eso el
-  test compara el fragmento entero en vez de solo comprobar que aparece la palabra `ESCAPE`.
+- **El orden de escapado importa**: el propio carácter de escape va **primero**. Si se
+  sustituyera el último, volvería a escapar los que acabamos de introducir para `%` y `_`.
+
+#### Por qué el carácter de escape es `!` y no la barra invertida
+
+Casi todos los ejemplos que se encuentran usan `\`, y así empezó esto. Se cambió por dos
+motivos, y el segundo es un fallo de verdad:
+
+**1. Con la barra, el mismo carácter se escribía de cuatro maneras.** Dentro de una cadena de
+MySQL la barra invertida escapa al carácter siguiente, así que `ESCAPE '\'` no compila: la
+comilla de cierre quedaría escapada. Hay que poner `'\\'`, y como además hay que escaparlas
+para el `String` de Java, en el código se leían **cuatro**:
+
+```java
+// Antes: cuatro barras en Java para decir una en la base de datos
+condiciones.add("(nombre LIKE ? ESCAPE '\\\\' OR nif_cif LIKE ? ESCAPE '\\\\')");
+```
+
+Era el sitio del repositorio donde más fácil resultaba equivocarse: quitar o añadir una barra
+compila igual y solo se nota consultando.
+
+**2. Con el `sql_mode` `NO_BACKSLASH_ESCAPES`, la consulta entera se rompía.** Ese modo hace que
+MySQL deje de tratar la barra invertida como carácter de escape dentro de las cadenas, así que
+`'\\'` pasa a ser una cadena de **dos** caracteres y `ESCAPE` solo admite uno: la respuesta es
+`Incorrect arguments to ESCAPE` y el listado —la pantalla principal— devolvía un **500**. No es
+el modo por defecto, pero lo activa `mysqldump` y hay instalaciones que lo dejan puesto, así que
+la aplicación funcionaba o no según cómo estuviera configurado el servidor de cada uno.
+
+El `!` no significa nada en ninguno de los dos modos. La consulta se lee igual en el código y en
+la base de datos, y el término que contenga un `!` se escapa como cualquier otro carácter
+especial. Por eso el test compara el fragmento `ESCAPE` **entero** y no solo que aparezca la
+palabra: cambiarlo sin querer no rompe la compilación, se nota en la base de datos.
+
 - **Sin `LOWER()`**: la tabla es `utf8mb4_0900_ai_ci`, y ese `ai_ci` significa *accent insensitive,
   case insensitive*: ya compara ignorando mayúsculas **y** acentos, así que `garcia` encuentra
   `García`. Envolver la columna en `LOWER()` no cambiaría el resultado y además la volvería
@@ -418,7 +443,9 @@ vuelve a abrir los que sigan en la página.
 
 Enseñar algo y cambiarlo un instante después puede ser peor que la espera, así que hay reglas:
 
-- **Si no ha cambiado nada, no se toca el DOM.** Se comparan los diez campos y se sale. Es el
+- **Si no ha cambiado nada, no se toca el DOM.** Se comparan los nueve campos que pueden venir
+  distintos (los ocho editables más la fecha de alta; el id no, porque es la clave con la que se
+  ha buscado el cliente) y se sale. Es el
   caso habitual y tiene que ser invisible.
 - **Se actualiza también la fila**, no solo el panel: si cambió el nombre, dejar el viejo en la
   tabla y el nuevo justo debajo es peor que no haber comprobado nada. Como los nombres
@@ -803,6 +830,36 @@ de verdad.
 Fíjate que para poder loguear el valor **primero lo guardamos en una variable y luego lo
 devolvemos** (ver ["Decisiones de estilo"](#a-decisiones-de-estilo-inyección-de-dependencias-y-forma-del-return)).
 
+### Qué registra cada endpoint
+
+La regla es **dos líneas por petición en el controller**: una al entrar, con lo que ha pedido
+quien llama, y otra al salir, con el código HTTP. Ni una más (el hecho de negocio lo cuenta el
+service) ni una menos. Esta es la tabla completa, que sirve para comprobarlo de un vistazo:
+
+| Endpoint | Al entrar | Al responder | Nivel de los errores |
+|---|---|---|---|
+| `GET /cliente/listar-ultimos` | `?limite=` y el valor acotado | `-> 200 (N clientes)` | `error` (500) |
+| `GET /cliente/listar-pagina` | los criterios ya normalizados | `-> 200 (pagina X de Y)` | `warn` (400) · `error` (500) |
+| `GET /cliente/provincias` | la ruta | `-> 200 (N provincias)` | `error` (500) |
+| `GET /cliente/poblaciones` | `?provincia=` | `-> 200 (N poblaciones)` | `error` (500) |
+| `GET /cliente/{id}` | el id | `-> 200` | `warn` (404) · `error` (500) |
+| `PUT /cliente/{id}` | el id | `-> 200` | `warn` (400, 404, 409) · `error` (500) |
+
+> **Lo que faltaba.** `listar-pagina`, `provincias` y `poblaciones` registraban su entrada y sus
+> errores, pero **no su 200**: eran los tres únicos endpoints cuyo camino bueno no dejaba
+> rastro. Y `listar-pagina` es el más usado de toda la pantalla, así que el log solo hablaba de
+> él cuando algo iba mal, lo que da una idea muy engañosa de lo que está pasando. Ahora los
+> seis siguen la misma regla.
+
+> **Los criterios se limpian de saltos de línea antes de guardarse.** El log del listado vuelca
+> el `toString()` del record, y `busqueda` acepta hasta 60 caracteres, saltos de línea
+> incluidos. Buscar `garcia\n2026-08-02 INFO Cliente 7 eliminado` partía la traza en dos y
+> dejaba la segunda mitad con el aspecto de una línea escrita por la propia aplicación: quien
+> leyera el log vería un borrado que nunca ocurrió. Es el ataque conocido como *log forging*
+> (CWE-117). Se neutraliza en `CriteriosCliente.normalizar`, que ya es el único sitio donde se
+> decide qué es un criterio válido, y para buscar en la base de datos un salto de línea no
+> aporta nada.
+
 **Errores**: el controller envuelve la operación en `try/catch (DataAccessException)`. Si la BD
 falla, `log.error("...", e)` deja el fallo (con su traza) **en el log**, y al navegador le
 respondemos un **`500`** limpio (cuerpo vacío) en vez de soltarle una traza interna.
@@ -827,32 +884,53 @@ el `400` se devuelve desde aquí, con cuerpo vacío, igual que el del `PUT`.
 > y solo salen cuatro campos: `timestamp`, `status`, `error` y `path`. O sea: la parte fea se
 > queda en desarrollo, y lo que llegaría a producción es una incoherencia de formato.
 >
-> **No se arregla aquí** porque ninguna de las tres formas se queda dentro de lo nuestro. La
-> buena es el `@ExceptionHandler(MethodArgumentTypeMismatchException.class)` del
-> `@RestControllerAdvice` del TODO B, y por definición se aplica a los endpoints de todo el
-> equipo. Meterlo dentro de `ClienteController` no acota nada: `crear` y `eliminar` también
-> reciben `@PathVariable int id` y cambiarían igual. Y restringir la ruta con `{id:\\d+}`, que
-> parece lo más inocente, es lo peor: al no casar el patrón la respuesta pasa a ser un `404`, y
-> decir "no existe" cuando lo que pasa es "eso no es un identificador" informa peor que ahora.
+> **No se arregla aquí** porque ninguna de las formas posibles se queda dentro de lo nuestro:
+> le corresponde a la **gestión centralizada de excepciones**, que es una feature aparte del
+> proyecto. Lo que sigue es el análisis ya hecho, para que quien la implemente no tenga que
+> repetirlo.
 >
-> Es la misma familia que `?limite=abc` o `?pagina=abc`: cualquier conversión de tipo que falle
-> antes de entrar al método. Se arreglan todas de una vez o ninguna; parchear una sola dejaría
-> las demás igual y encima parecería resuelto. El frontend no genera nunca esas URL: los
-> identificadores salen de `dataset.clienteId`, que se rellenó con lo que devolvió el backend.
+> El frontend no genera nunca esas URL: los identificadores salen de `dataset.clienteId`, que se
+> rellenó con lo que devolvió el backend. Para llegar a este `400` hay que escribir la dirección
+> a mano o llamar a la API desde fuera.
+
+> ### 📌 Para la gestión centralizada de excepciones
+>
+> **Lo que hace falta**: un `@ExceptionHandler(MethodArgumentTypeMismatchException.class)` en el
+> `@RestControllerAdvice` que devuelva `400` con **cuerpo vacío**, o con `ProblemDetail` si el
+> equipo decide adoptar ese formato para toda la API. Si se opta por `ProblemDetail`, conviene
+> cambiar también los `build()` de nuestros endpoints para que no convivan dos formatos de error.
+>
+> **A qué afecta**: a `/cliente/abc`, a `?limite=abc` y a `?pagina=abc` por igual. Son todas
+> conversiones de tipo que fallan **antes** de entrar al método, así que se arreglan de una vez
+> o ninguna; parchear una sola dejaría las demás igual y encima parecería resuelto.
+>
+> **Dos caminos que ya se han descartado, para no perder el tiempo con ellos:**
+>
+> - Meter el `@ExceptionHandler` dentro de `ClienteController` **no acota nada**: `crear` y
+>   `eliminar` también reciben `@PathVariable int id` y cambiarían igual, solo que de forma
+>   menos visible que con un advice global.
+> - Restringir la ruta con `@GetMapping("/{id:\\d+}")` parece lo más inocente y es lo peor: al
+>   no casar el patrón, Spring deja de encontrar el método y responde **`404`**. Decir "no
+>   existe" cuando lo que pasa es "eso no es un identificador" informa peor que ahora.
+>
+> **Lo que ya está probado y no hay que tocar**: `?pagina=abc` **sí** sale con cuerpo vacío,
+> porque los criterios se enlazan por el constructor del record y el fallo de conversión acaba
+> en el `BindingResult`. Está fijado en `ClienteControllerTest.listadoConPaginaNoNumerica`.
 
 ## Tests automáticos
 
-Tres clases en `src/test/java`, **ninguna necesita base de datos**, que es la condición para que
-se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Se lanzan con
-`./mvnw test`.
+Cuatro clases en `src/test/java`, **ninguna necesita base de datos**, que es la condición para
+que se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Se lanzan con
+`./mvnw test` y son **36 pruebas**.
 
 | Clase | Qué asegura |
 |---|---|
-| `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null` y que el `offset` no desborde |
+| `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null`, los saltos de línea neutralizados y que el `offset` no desborde |
 | `ClienteRepositoryJdbcImplTest` | El SQL que se construye: comodines de `LIKE` escapados, lista blanca del `ORDER BY`, filtros acumulados y el recuento con los mismos filtros que la página |
-| `ClienteControllerTest` | Los códigos HTTP del detalle y del guardado: `200`, `400`, `404`, `409`, y que salgan con el cuerpo vacío |
+| `ClienteServiceImplTest` | La lógica de `actualizar`: no tocar la BD si el cliente no existe, conservar la fecha de alta, usar el id de la ruta y que guardar sin cambios siga siendo un guardado correcto |
+| `ClienteControllerTest` | Los códigos HTTP del detalle, el guardado y el listado: `200`, `400`, `404`, `409` y `500`, y que todos los errores salgan con el cuerpo vacío |
 
-Por qué esas tres y no otras:
+Por qué esas cuatro y no otras:
 
 - **`CriteriosCliente`** es donde se decide qué es un criterio válido para toda la aplicación:
   el controller, el service y el repositorio dan por hecho que lo que reciben viene normalizado
@@ -863,13 +941,21 @@ Por qué esas tres y no otras:
   que se entrega, no lo que devolvería MySQL. Los parámetros se recogen desde la propia
   respuesta simulada y no con un `ArgumentCaptor`: el último argumento de `query` es variable y
   un captor ahí solo recoge un valor, mientras que estas consultas llevan hasta seis.
+- **El service** es donde vive la única lógica de negocio de verdad del módulo, y sus tres
+  decisiones se romperían **en silencio**: conservar la fecha de alta, distinguir "no existe" de
+  "guardado sin cambios" e ignorar a propósito el `boolean` del `update`. Hacía falta probarlo
+  ahí y no desde el controller, porque el test del controller **sustituye el service entero por
+  un doble**: lo que comprobaba era el contrato del doble, no el de la clase. Sin
+  `ClienteServiceImplTest`, alguien podía "simplificar" el método usando el booleano del
+  repositorio y la pantalla empezaba a responder `404` al guardar sin tocar ningún campo, con
+  todas las demás pruebas en verde.
 - **El controller** no calcula nada; lo suyo es traducir un `Optional` vacío o una excepción de
   clave duplicada al código que le toca. Justo eso es lo que el frontend da por supuesto para
   decidir si pinta el formulario en rojo, si avisa de que el cliente ya no existe o si refresca
   la tabla: cambiarlo sin querer rompe la pantalla sin romper ninguna compilación. Con
   `@WebMvcTest` se levanta **solo la capa web** y el service se sustituye por un doble
-  (`@MockitoBean`), así que casos casi imposibles de provocar a mano —como el `409`— se piden y
-  ya está.
+  (`@MockitoBean`), así que casos casi imposibles de provocar a mano —el `409`, o un fallo de
+  base de datos para comprobar que el `500` sale sin traza— se piden y ya está.
 
 > **Dos cosas de Spring Boot 4 que despistan al copiar ejemplos de internet.** `@WebMvcTest` ha
 > cambiado de paquete (ahora es `org.springframework.boot.webmvc.test.autoconfigure`), y
@@ -888,7 +974,16 @@ test verde ahí no probaría lo que parece. Queda para cuando se decida esa infr
 
 ## Limitaciones conocidas
 
-Dos cosas que se han mirado y se dejan como están, a propósito:
+Tres cosas que se han mirado y se dejan como están, a propósito:
+
+- **El modal de "Añadir Cliente" no funciona, y su botón está inhabilitado.** El alta de
+  clientes en frontend no es parte de esta feature: la función `guardarCliente()` que llamaba
+  ese botón no existe en ningún sitio, así que pulsarlo solo dejaba un `ReferenceError` en la
+  consola. Se ha inhabilitado para que no parezca que hace algo. Además el formulario recoge
+  cuatro de los siete campos que `ClienteRequest` exige —le faltan dirección, población y
+  provincia, las tres `@NotBlank`—, con lo que el `POST` devolvería `400` aunque se conectara.
+  Quien la implemente tiene las instrucciones en un comentario junto al propio botón, en
+  `clientes.html`.
 
 - **La última edición gana, sin avisar.** Si dos personas abren el mismo cliente y guardan, la
   segunda pisa lo de la primera y nadie se entera. Resolverlo bien pide una columna de versión
@@ -1040,7 +1135,7 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 46. **Mensaje centrado en móvil**: a 360 px de ancho, buscar algo que no exista → el mensaje de
     "no hay clientes" tiene que quedar centrado **dentro** de la tabla. Con un panel abierto,
     estrechar la ventana de escritorio a móvil → el panel sigue ocupando el ancho justo.
-47. **Tests**: `./mvnw test` desde `facturacion360/` → 25 pruebas en verde **sin MySQL
+47. **Tests**: `./mvnw test` desde `facturacion360/` → 36 pruebas en verde **sin MySQL
     arrancado**.
 48. **El panel se abre lleno**: en Network, poner "Slow 3G" y pulsar una fila → los datos
     aparecen **al instante**, sin pasar por "Cargando", y la petición a `/cliente/{id}` sigue
@@ -1059,6 +1154,28 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 52. **Un fallo de la comprobación no rompe nada**: parar la aplicación y abrir un panel → los
     datos del listado se quedan en pantalla y el fallo solo se ve en la consola. La tabla no se
     queda a medias ni sale el panel de error.
+53. **El escape del `LIKE` aguanta cualquier `sql_mode`**: en MySQL, `SET SESSION sql_mode =
+    'NO_BACKSLASH_ESCAPES';` y repetir el punto 6 (`?busqueda=%25` y `?busqueda=_`) → siguen
+    devolviendo `contenido: []`. Con el escape anterior, esta misma prueba daba un `500` con
+    *"Incorrect arguments to ESCAPE"*. Devolver el modo a su valor con `SET SESSION sql_mode =
+    DEFAULT;`.
+54. **El error de guardado no se pierde aunque la tabla se repinte**: abrir el lápiz, poner el
+    NIF de **otro** cliente y, justo antes de pulsar Guardar, **teclear una letra en el
+    buscador** (eso repinta la tabla mientras viaja el `PUT`) → el aviso del `409` tiene que
+    verse igualmente. Si el panel ha desaparecido del todo, sale en la franja de arriba. Antes
+    no salía en ningún sitio y parecía que se había guardado.
+55. **La tabla vacía se anuncia**: con NVDA o el Narrador, buscar algo que no exista → tiene que
+    leerse *"No hay clientes que coincidan con la búsqueda. Puedes quitar los filtros."*, no
+    solo el "Sin resultados" del pie.
+56. **Dos avisos iguales seguidos se leen los dos**: con lector de pantalla, guardar un cliente
+    y guardar otro a continuación → "Cliente guardado" tiene que sonar **las dos veces**.
+57. **Los logs no repiten ni se saltan nada**: paginar, filtrar por provincia y abrir un detalle
+    → en la consola, cada endpoint deja **exactamente dos líneas** del controller (la de entrada
+    y la del código HTTP) más la del service. Ninguna duplicada, ninguna ausente. Comprobar en
+    particular que `listar-pagina` deja su `-> 200 (pagina X de Y)`.
+58. **Un salto de línea en el buscador no ensucia el log**: pegar en el buscador un texto con un
+    salto de línea dentro → en la consola tiene que salir en **una sola línea**, con el salto
+    convertido en espacio.
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 
@@ -1136,7 +1253,19 @@ return c;
 
 
 
-### B. Manejo de errores centralizado (`@RestControllerAdvice`)
+### B. Manejo de errores centralizado (`@RestControllerAdvice`) — 🤝 ASIGNADO A OTRA FEATURE
+
+> **Esto ya no es un pendiente nuestro**: la *gestión centralizada de excepciones* es una feature
+> propia dentro del reparto del equipo. Lo que queda aquí es el análisis hecho, para que quien la
+> implemente lo aproveche en vez de repetirlo; el caso concreto que la justifica, con los dos
+> caminos ya descartados, está en
+> ["Logs y manejo de errores"](#logs-y-manejo-de-errores).
+>
+> **No lo hemos metido en esta rama a propósito.** Un `@RestControllerAdvice` cambia por
+> definición el contrato de respuesta de **todos** los endpoints del proyecto, incluidos el alta,
+> el borrado y los de facturas. Meterlo desde una rama que se llama "ver detalles y editar" es
+> colar en una PR un cambio que su revisor no espera encontrar ahí.
+
 **Concepto**: cuando un endpoint lanza una excepción, Spring puede **desviarla** a una clase
 "guardiana" que decide qué responder, en vez de soltar el error por defecto. 
 Es como un `catch`
@@ -1161,8 +1290,10 @@ global para todos los controllers.
   cosas: quita la repetición y cubre también lo que ocurre fuera del método.
 
 ### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`) — ✅ HECHA LA PARTE QUE NO NECESITA BD
-**Ya están escritos** los tests del `@WebMvcTest` y los que no tocan la base de datos; se
-describen en ["Tests automáticos"](#tests-automáticos). Queda pendiente **solo** el `@JdbcTest`,
+**Ya están escritos** los tests del `@WebMvcTest` y los que no tocan la base de datos: **36
+pruebas en cuatro clases**, descritas en ["Tests automáticos"](#tests-automáticos). Cubren la
+normalización de los criterios, el SQL que se construye, la lógica de `actualizar` en el service
+y los códigos HTTP del controller, incluidos los `500`. Queda pendiente **solo** el `@JdbcTest`,
 que necesita decidir antes qué base de datos de test se usa (H2 no imita la *collation* ni el
 `ESCAPE` de MySQL, así que haría falta Testcontainers) y eso es infraestructura de todo el
 equipo. El resto de este apartado se conserva como explicación de los conceptos.
@@ -1276,4 +1407,43 @@ Notas:
 - **No hay que pasar datos** en el evento ni conocer nuestras funciones: basta con dispararlo.
 - Nosotros recargamos la **página actual**. Si al **crear** queréis que el cliente nuevo se vea al
   instante (aparece el primero, en la página 0), llevad además al usuario a esa primera página.
+
+### Si vais a tocar la pantalla de clientes
+
+Dos cosas que ahorran un rato de depuración.
+
+**1) Los botones de la fila no se enganchan uno a uno.** Las filas se clonan de un `<template>`
+y se crean y se destruyen en cada repintado, así que un `document.querySelectorAll('.btn-...')`
+al cargar la página **no encuentra ningún botón** y no engancha nada. (Había uno así para
+eliminar, y por eso no hacía nada.) Todo va por **delegación** en un único listener sobre el
+`<tbody>`; el sitio para añadir una acción nueva es este `if`, en `clientes.js`:
+
+```js
+const boton = evento.target.closest(".celda-acciones .btn");
+if (boton) {
+    if (boton.classList.contains("btn-ver")) alternarDespliegue(fila, "detalle");
+    else if (boton.classList.contains("btn-editar")) alternarDespliegue(fila, "edicion");
+    // ← aquí va el caso de .btn-eliminar
+    return;
+}
+```
+
+El id del cliente está en `fila.dataset.clienteId`. Después de un `await` (una confirmación, un
+`fetch`), **no reutilicéis esa variable `fila`**: la tabla puede haberse repintado y ese `<tr>`
+ya no estar en el documento. Para eso están `filaViva(id)` y `formularioVivo(id)`.
+
+**2) `clientes.js` ocupa el ámbito global de la página.** No es un módulo porque el HTML necesita
+poder llamar a alguna función desde un `onclick`. Si añadís otro `<script>` a `clientes.html`,
+evitad estos nombres o se pisarán en silencio:
+
+| Tipo | Nombres ocupados |
+|---|---|
+| Estado | `criterios`, `paginaActual`, `filasDesplegadas`, `clientesEnPagina`, `peticionesEnVuelo`, `focoPendiente`, `listadosEnVuelo` |
+| Peticiones | `pedirJson`, `enviarJson`, `cerrarCanal`, `cargarClientes`, `cargarProvincias`, `cargarPoblaciones` |
+| Pintado | `pintarFilas`, `pintarCeldasFila`, `pintarPaginacion`, `pintarEnlace`, `mostrarMensaje`, `mostrarError` |
+| Despliegue | `abrirDespliegue`, `cerrarDespliegue`, `alternarDespliegue`, `marcarFila`, `filaViva`, `formularioVivo` |
+| Avisos | `anunciar`, `escribirPista`, `ocultarPistas`, `limpiarPistas` |
+
+El nombre **`guardarCliente` está libre a propósito**: es el que le corresponde al alta de
+clientes. La función que guarda la edición en la fila se llama `guardarEdicion` para no ocuparlo.
 

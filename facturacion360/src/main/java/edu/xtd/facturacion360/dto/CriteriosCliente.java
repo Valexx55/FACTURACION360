@@ -111,7 +111,12 @@ public record CriteriosCliente(
 	 * @return el número de filas a saltar; nunca negativo
 	 */
 	public long offset() {
-		return (long) pagina.intValue() * tamano.intValue();
+		// Variable y un solo return, como el resto del proyecto: un offset mal calculado es de
+		// las cosas que solo se ven mirándolo, porque la consulta no falla, simplemente
+		// devuelve la página equivocada.
+		long desplazamiento = (long) pagina.intValue() * tamano.intValue();
+
+		return desplazamiento;
 	}
 
 	/**
@@ -132,6 +137,10 @@ public record CriteriosCliente(
 	 *         contenido
 	 */
 	private static String normalizar(String valor) {
-		return (valor == null || valor.isBlank()) ? null : valor.trim().replaceAll("[\\r\\n]+", " ");
+		String valorNormalizado = (valor == null || valor.isBlank())
+				? null
+				: valor.trim().replaceAll("[\\r\\n]+", " ");
+
+		return valorNormalizado;
 	}
 }

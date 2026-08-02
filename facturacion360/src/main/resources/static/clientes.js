@@ -67,7 +67,7 @@ const btnDireccion = document.getElementById("btn-direccion");
 const iconoDireccion = document.getElementById("icono-direccion");
 const etiquetaDireccion = document.getElementById("etiqueta-direccion");
 const btnLimpiar = document.getElementById("btn-limpiar");
-const cabecerasOrdenables = document.querySelectorAll(".th-ordenable");
+const cabecerasOrdenables = document.querySelectorAll(".cabecera-ordenable");
 const regionAnuncios = document.getElementById("anuncios");
 const avisoClientes = document.getElementById("aviso-clientes");
 const contenedorTabla = cuerpoTabla.closest(".table-responsive");
@@ -531,7 +531,7 @@ function pintarPaginacion(datos) {
 }
 
 /**
- * Repinta TODOS los controles de ordenación (el selector, el botón y los carets de las
+ * Repinta TODOS los controles de ordenación (el selector, el botón y las flechas de las
  * cabeceras) leyendo del estado.
  *
  * Es una sola función a propósito: el usuario puede cambiar el orden desde el botón o
@@ -549,14 +549,14 @@ function pintarControlesOrden() {
     // Cada cabecera muestra si es la columna activa y en qué sentido.
     cabecerasOrdenables.forEach((cabecera) => {
         const esColumnaActiva = cabecera.dataset.columna === ordenarPor;
-        const caret = cabecera.querySelector(".caret-orden");
+        const flecha = cabecera.querySelector(".flecha-orden");
 
         cabecera.classList.toggle("activa", esColumnaActiva);
 
         if (esColumnaActiva) {
-            caret.className = `fa-solid caret-orden ${direccion === "asc" ? "fa-arrow-up-long" : "fa-arrow-down-long"}`;
+            flecha.className = `fa-solid flecha-orden ${direccion === "asc" ? "fa-arrow-up-long" : "fa-arrow-down-long"}`;
         } else {
-            caret.className = "fa-solid fa-sort caret-orden";
+            flecha.className = "fa-solid fa-sort flecha-orden";
         }
 
         // aria-sort es lo que hace que un lector de pantalla anuncie por qué columna
@@ -1684,7 +1684,11 @@ cuerpoTabla.addEventListener("click", (evento) => {
 
 /** Clic dentro de un panel abierto: cancelar la edición o reintentar la carga. */
 async function manejarClicPanel(evento, panel) {
-    const fila = panel.previousElementSibling;
+    // Por el id que el propio panel lleva, y no por previousElementSibling: fiarse de la
+    // posición en el documento obliga a que el panel esté siempre justo debajo de su fila, y
+    // eso es una suposición que nadie ve al leer el código de al lado.
+    const fila = filaViva(Number(panel.dataset.clienteId));
+    if (!fila) return;
 
     if (evento.target.closest(".btn-cancelar")) {
         if (!await confirmarDescarte(fila)) return;

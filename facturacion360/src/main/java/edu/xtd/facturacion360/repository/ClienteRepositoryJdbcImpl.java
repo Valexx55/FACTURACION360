@@ -274,9 +274,13 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 * @return el mismo texto con '!', '%' y '_' escapados; se usa junto a ESCAPE '!'
 	 */
 	private String escaparComodines(String termino) {
-		return termino.replace(ESCAPE_LIKE, ESCAPE_LIKE + ESCAPE_LIKE)
+		// Variable y un solo return, como el resto del proyecto: aquí no hay log, pero es el
+		// punto donde uno quiere poner un breakpoint si el buscador deja de filtrar.
+		String terminoEscapado = termino.replace(ESCAPE_LIKE, ESCAPE_LIKE + ESCAPE_LIKE)
 				.replace("%", ESCAPE_LIKE + "%")
 				.replace("_", ESCAPE_LIKE + "_");
+
+		return terminoEscapado;
 	}
 
 	/**
@@ -311,7 +315,15 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		// 'idcliente' es el desempate: sin él, dos clientes con la misma fecha (o el mismo
 		// nombre) podrían intercambiarse entre consultas y, al paginar, verse repetidos en
 		// una página y desaparecer de la siguiente.
-		return " ORDER BY " + columna + " IS NULL, " + columna + " " + sentido + ", idcliente " + sentido;
+		//
+		// El fragmento se guarda en una variable antes de devolverlo, como el resto del
+		// proyecto. Aquí importa más que en ningún otro sitio: este método ES la defensa
+		// contra la inyección SQL, así que es justo donde uno quiere poder mirar en el
+		// depurador qué se ha montado de verdad con lo que llegó por la URL.
+		String fragmentoOrden = " ORDER BY " + columna + " IS NULL, " + columna + " " + sentido
+				+ ", idcliente " + sentido;
+
+		return fragmentoOrden;
 	}
 
 	/**

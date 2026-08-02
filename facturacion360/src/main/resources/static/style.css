@@ -364,7 +364,7 @@ footer {
 
 /* Es un <button> de verdad (para poder usarlo con el teclado), así que hay que
    quitarle el aspecto de botón y devolverle el de cabecera. */
-.th-ordenable {
+.cabecera-ordenable {
     background: none;
     border: none;
     padding: 0;
@@ -377,19 +377,19 @@ footer {
     gap: 0.4rem;
 }
 
-.th-ordenable:hover {
+.cabecera-ordenable:hover {
     text-decoration: underline;
 }
 
 /* La flecha se ve tenue en las columnas por las que NO se está ordenando: así se
    sabe que son pulsables sin competir con la que marca el orden real. */
-.caret-orden {
+.flecha-orden {
     opacity: 0.45;
     font-size: 0.85em;
     transition: opacity 0.2s ease;
 }
 
-.th-ordenable.activa .caret-orden {
+.cabecera-ordenable.activa .flecha-orden {
     opacity: 1;
 }
 

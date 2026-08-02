@@ -144,7 +144,9 @@ const filasDesplegadas = new Map();
  * y una por panel, todas para pintar lo que la primera acababa de traer.
  *
  * No es una caché: se tira y se rehace en cada repintado, así que nunca contiene nada más
- * viejo que la tabla que se está viendo. Abrir un panel a mano sigue preguntando al servidor.
+ * viejo que la tabla que se está viendo. Al abrir un panel a mano se pinta desde aquí para no
+ * hacer esperar a nadie, pero se pregunta igualmente al servidor y se pone al día si difiere
+ * (ver abrirDespliegue).
  */
 const clientesEnPagina = new Map();
 
@@ -156,6 +158,10 @@ const CAMPOS_EDITABLES = ["nombre", "nifCif", "email", "telefono",
 
 // Los que la BD admite a NULL (el resto son NOT NULL y el formulario los exige).
 const CAMPOS_OPCIONALES = ["email", "telefono", "codigoPostal"];
+
+// Todo lo que un cliente puede traer distinto de una vez a otra. La fecha de alta no se edita
+// desde aquí, pero se compara igual: si cambiara, la columna "Alta" tendría que enseñarlo.
+const CAMPOS_CLIENTE = [...CAMPOS_EDITABLES, "fechaAlta"];
 
 /*
  * Etiqueta e icono del botón según lo que se esté viendo AHORA. Decir "Más recientes"
@@ -197,7 +203,8 @@ const peticionesEnVuelo = {};
  * @param {string} canal nombre del flujo de peticiones ("listado", "provincias"...)
  * @param {string} url la URL a pedir
  * @return {Promise<Object>} el JSON de la respuesta
- * @throws {Error} si el servidor responde con un código que no es 2xx
+ * @throws {Error} si el servidor responde con un código que no es 2xx; el error lleva ese
+ *         código en la propiedad `estado`
  */
 async function pedirJson(canal, url) {
     peticionesEnVuelo[canal]?.abort();
@@ -209,7 +216,13 @@ async function pedirJson(canal, url) {
 
         // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
         if (!respuesta.ok) {
-            throw new Error(`El servidor respondió ${respuesta.status}`);
+            const error = new Error(`El servidor respondió ${respuesta.status}`);
+
+            // El código va aparte del mensaje porque hay quien necesita distinguirlos: un 404
+            // al comprobar un detalle significa "lo han borrado" y se trata distinto del
+            // resto. Leerlo del texto del mensaje sería frágil.
+            error.estado = respuesta.status;
+            throw error;
         }
         return await respuesta.json();
     } finally {
@@ -326,14 +339,7 @@ function pintarFilas(clientes) {
         // Clonamos el contenido del template (un <tr> completo con sus celdas).
         const fila = plantillaFila.content.cloneNode(true);
 
-        // textContent escapa el texto: seguro frente a nombres con < o &.
-        fila.querySelector(".cliente-nombre").textContent = cliente.nombre;
-        fila.querySelector(".cliente-cif").textContent = cliente.nifCif;
-        pintarEnlace(fila.querySelector(".cliente-email"), cliente.email,
-            (valor) => `mailto:${valor}`, "Escribir a este correo");
-        pintarEnlace(fila.querySelector(".cliente-telefono"), cliente.telefono,
-            (valor) => `tel:${valor.replace(/\s+/g, "")}`, "Llamar a este número");
-        fila.querySelector(".cliente-alta").textContent = formatearFecha(cliente.fechaAlta);
+        pintarCeldasFila(fila, cliente);
 
         // Guardamos el id en la fila por si los botones de acción lo necesitan.
         const filaCliente = fila.querySelector("tr");
@@ -353,6 +359,27 @@ function pintarFilas(clientes) {
 
     reabrirDespliegues();
     devolverFoco();
+}
+
+/**
+ * Escribe los datos del cliente en las celdas de su fila.
+ *
+ * Está aparte de pintarFilas porque también se usa al comprobar que un cliente no ha cambiado
+ * mientras se miraba: si ha cambiado, la fila tiene que enseñar lo nuevo igual que el panel, o
+ * quedaría un nombre en la tabla y otro distinto justo debajo.
+ *
+ * @param {DocumentFragment|Element} fila la fila (o el clon del template) que se rellena
+ * @param {Object} cliente el ClienteResponse que se pinta
+ */
+function pintarCeldasFila(fila, cliente) {
+    // textContent escapa el texto: seguro frente a nombres con < o &.
+    fila.querySelector(".cliente-nombre").textContent = cliente.nombre;
+    fila.querySelector(".cliente-cif").textContent = cliente.nifCif;
+    pintarEnlace(fila.querySelector(".cliente-email"), cliente.email,
+        (valor) => `mailto:${valor}`, "Escribir a este correo");
+    pintarEnlace(fila.querySelector(".cliente-telefono"), cliente.telefono,
+        (valor) => `tel:${valor.replace(/\s+/g, "")}`, "Llamar a este número");
+    fila.querySelector(".cliente-alta").textContent = formatearFecha(cliente.fechaAlta);
 }
 
 /**
@@ -805,8 +832,17 @@ function panelDe(fila) {
 }
 
 /**
- * Abre el panel de una fila en el modo indicado (o le cambia el modo si ya estaba abierto),
- * pide los datos al backend y lo pinta.
+ * Abre el panel de una fila en el modo indicado (o le cambia el modo si ya estaba abierto).
+ *
+ * Se pinta **al momento** con el cliente que trajo el listado, que tiene los mismos campos que
+ * `GET /cliente/{id}`, y solo después se comprueba contra el servidor que sigue siendo lo que
+ * hay en la base de datos. Esperar a esa comprobación para enseñar algo era medio segundo de
+ * "cargando" para dibujar, casi siempre, lo que ya estaba en memoria.
+ *
+ * La comprobación no sobra: la tabla puede llevar cargada un buen rato, y abrir un cliente
+ * —sobre todo para editarlo— es el momento en que sus datos tienen que estar al día. El
+ * formulario manda de vuelta los ocho campos, así que trabajar sobre una foto vieja revierte
+ * sin querer lo que haya cambiado otro.
  *
  * @param {HTMLTableRowElement} fila la fila del cliente
  * @param {string} modo "detalle" o "edicion"
@@ -815,10 +851,15 @@ function panelDe(fila) {
  *        estaba desplegado y volver a animarlo se vería como un parpadeo
  * @param {boolean} opciones.enfocar false al reabrir por lo mismo: llevarse el foco mientras
  *        el usuario escribe en el buscador le sacaría el cursor de donde está
- * @param {Object|null} opciones.cliente los datos ya conocidos. Si vienen, se pinta con ellos
- *        y no se pide nada; si no, se piden al backend
+ * @param {Object|null} opciones.cliente los datos con los que pintar. Si no vienen, se cogen
+ *        del listado y, si tampoco estuvieran, se piden al backend
+ * @param {boolean} opciones.revalidar false al reabrir tras repintar: los datos acaban de
+ *        llegar con el listado y volver a pedirlos uno por uno es la ráfaga de peticiones que
+ *        se quitó en su día
  */
-async function abrirDespliegue(fila, modo, { animar = true, enfocar = true, cliente = null } = {}) {
+async function abrirDespliegue(fila, modo,
+    { animar = true, enfocar = true, cliente = null, revalidar = true } = {}) {
+
     const idCliente = Number(fila.dataset.clienteId);
 
     // El borrador se conserva al cambiar de modo: si vuelves de detalle a edición, sigue lo
@@ -830,21 +871,24 @@ async function abrirDespliegue(fila, modo, { animar = true, enfocar = true, clie
     const contenido = panel.querySelector(".despliegue-contenido");
     marcarFila(fila, modo);
 
-    if (cliente) {
-        // Con los datos en la mano no hay espera que anunciar ni petición que esperar: se
-        // pinta y se acabó. Si quedaba una en el aire de una apertura anterior, se cancela;
-        // su respuesta ya no aporta nada y llegaría a pintar por encima de esto.
-        peticionesEnVuelo[`detalle-${idCliente}`]?.abort();
-        pintarContenidoPanel(contenido, modo, cliente, borrador, enfocar);
-        return;
-    }
+    const conocido = cliente ?? clientesEnPagina.get(idCliente) ?? null;
 
-    // Al abrir no hay nada que enseñar todavía; al cambiar de modo sí, y sustituirlo por un
-    // "cargando" encogería el panel para volver a estirarlo un instante después. En ese caso
-    // se deja lo que hay puesto, atenuado, hasta que llega el contenido nuevo.
-    if (contenido.childElementCount === 0) {
+    if (conocido) {
+        pintarContenidoPanel(contenido, modo, conocido, borrador, enfocar);
+
+        if (!revalidar) {
+            // Si quedaba una petición en el aire de una apertura anterior, se cancela: su
+            // respuesta ya no aporta nada y llegaría a pintar por encima de esto.
+            peticionesEnVuelo[`detalle-${idCliente}`]?.abort();
+            return;
+        }
+    } else if (contenido.childElementCount === 0) {
+        // Sin nada que enseñar todavía. Es un caso de reserva: la fila viene del listado, así
+        // que su cliente está en el mapa salvo que algo haya ido muy mal.
         pintarCargando(contenido);
     } else {
+        // Al cambiar de modo sí hay contenido, y sustituirlo por un "cargando" encogería el
+        // panel para volver a estirarlo un instante después: se deja atenuado.
         contenido.classList.add("cargando");
     }
 
@@ -855,14 +899,150 @@ async function abrirDespliegue(fila, modo, { animar = true, enfocar = true, clie
         const estado = filasDesplegadas.get(idCliente);
         if (!estado || !panel.isConnected) return;
 
-        pintarContenidoPanel(contenido, estado.modo, recibido, estado.borrador, enfocar);
+        if (conocido) {
+            conciliar(fila, contenido, estado.modo, recibido);
+        } else {
+            pintarContenidoPanel(contenido, estado.modo, recibido, estado.borrador, enfocar);
+        }
     } catch (error) {
         // Cancelada por nosotros (se cerró o se cambió de modo deprisa): ya viene otra.
         if (esCancelacion(error)) return;
-        pintarErrorPanel(contenido, error);
+
+        if (conocido) {
+            fallaComprobacion(idCliente, error);
+        } else {
+            pintarErrorPanel(contenido, error);
+        }
     } finally {
         contenido.classList.remove("cargando");
     }
+}
+
+/**
+ * Pone al día la fila y su panel cuando el servidor devuelve algo distinto de lo que se pintó.
+ *
+ * Lo normal es que no haya cambiado nada y esto no haga absolutamente nada, que es justo lo
+ * que se busca: la comprobación tiene que ser invisible salvo cuando aporta.
+ *
+ * @param {HTMLTableRowElement} fila la fila del cliente
+ * @param {Element} contenido el hueco del panel
+ * @param {string} modo "detalle" o "edicion"
+ * @param {Object} recibido el cliente tal y como está ahora en la base de datos
+ */
+function conciliar(fila, contenido, modo, recibido) {
+    const anterior = clientesEnPagina.get(recibido.idCliente);
+    if (anterior && mismosDatos(anterior, recibido)) return;
+
+    clientesEnPagina.set(recibido.idCliente, recibido);
+
+    // Los avisos emergentes de las celdas que se van a reemplazar, fuera: si no, Bootstrap se
+    // queda con una instancia apuntando a un elemento que ya no está en el documento.
+    limpiarPistas(fila);
+    pintarCeldasFila(fila, recibido);
+
+    // Los nombres accesibles de los botones llevan dentro el del cliente ("Editar cliente
+    // García S.L."), así que si el nombre ha cambiado hay que volver a escribirlos.
+    marcarFila(fila, modo);
+
+    if (modo !== "edicion") {
+        pintarPanelDetalle(contenido, recibido);
+        anunciar("Los datos de este cliente han cambiado y se han actualizado.");
+        return;
+    }
+
+    conciliarFormulario(contenido.querySelector(".formulario-edicion"), recibido);
+}
+
+/**
+ * Mete los datos nuevos en el formulario abierto **sin pisar lo que el usuario esté
+ * escribiendo**, y le cuenta lo que ha pasado.
+ *
+ * Un campo se considera intacto si su contenido sigue siendo el que se pintó desde la base de
+ * datos; en ese caso se actualiza sin más. Si lo ha tocado, mandan sus letras: perder lo
+ * escrito por un refresco que nadie ha pedido es de las cosas que más molestan de una pantalla.
+ *
+ * @param {HTMLFormElement} formulario el formulario de edición abierto
+ * @param {Object} recibido el cliente tal y como está ahora en la base de datos
+ */
+function conciliarFormulario(formulario, recibido) {
+    if (!formulario) return;
+
+    const valoresNuevos = valoresDe(recibido);
+    const valoresPintados = JSON.parse(formulario.dataset.valoresOriginales);
+    const actualizados = [];
+    const respetados = [];
+
+    for (const campo of CAMPOS_EDITABLES) {
+        if (valoresNuevos[campo] === valoresPintados[campo]) continue;
+
+        const control = formulario.elements[campo];
+
+        // El usuario ha escrito justo lo mismo que acaba de aparecer en la base de datos: no
+        // hay nada que actualizar ni nada que contarle.
+        if (control.value.trim() === valoresNuevos[campo]) continue;
+
+        if (control.value.trim() === valoresPintados[campo]) {
+            control.value = valoresNuevos[campo];
+            actualizados.push(etiquetaDe(control));
+        } else {
+            respetados.push(etiquetaDe(control));
+        }
+    }
+
+    // La referencia para saber si queda algo sin guardar pasa a ser lo que hay AHORA en la
+    // base de datos. Sin esto, al cerrar se preguntaría por unos cambios que ya no existen.
+    formulario.dataset.valoresOriginales = JSON.stringify(valoresNuevos);
+
+    if (actualizados.length === 0 && respetados.length === 0) return;
+
+    const partes = ["Otra persona ha cambiado este cliente mientras lo editabas."];
+    if (actualizados.length > 0) {
+        partes.push(`Se ha actualizado: ${actualizados.join(", ")}.`);
+    }
+    if (respetados.length > 0) {
+        partes.push(`Se ha conservado lo que escribiste en: ${respetados.join(", ")}.`);
+    }
+
+    // En la alerta del propio formulario, que es donde está mirando: es role="alert" y estaba
+    // en el documento desde que se pintó, así que escribir dentro basta para que se anuncie.
+    formulario.querySelector(".alerta-edicion").textContent = partes.join(" ");
+}
+
+/**
+ * Qué hacer cuando la comprobación no llega a buen puerto.
+ *
+ * @param {number} idCliente el cliente que se estaba comprobando
+ * @param {Error} error lo que devolvió pedirJson, con su código en `estado`
+ */
+function fallaComprobacion(idCliente, error) {
+    if (error.estado === 404) {
+        // Lo han borrado. Se avisa fuera de la tabla, que es lo único que sobrevive al
+        // refresco, y se olvida el panel para que no se reabra sobre una fila que ya no viene.
+        anunciar("Este cliente ya no existe: alguien lo ha eliminado.",
+            { visible: true, esError: true });
+        filasDesplegadas.delete(idCliente);
+        document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+        return;
+    }
+
+    // Cualquier otro fallo se calla: en pantalla hay datos buenos, los que acaba de traer el
+    // listado, y cambiarlos por un mensaje de error sería empeorar lo que el usuario ya ve.
+    console.warn(`No se pudo comprobar si el cliente ${idCliente} había cambiado:`, error);
+}
+
+/** ¿Los dos clientes dicen exactamente lo mismo? */
+function mismosDatos(uno, otro) {
+    return CAMPOS_CLIENTE.every((campo) => (uno[campo] ?? "") === (otro[campo] ?? ""));
+}
+
+/**
+ * El nombre visible de un campo del formulario.
+ *
+ * Se lee del aria-label del propio control en vez de tener aquí una lista de nombres: son los
+ * mismos textos y una copia acabaría diciendo algo distinto del formulario que describe.
+ */
+function etiquetaDe(control) {
+    return control.getAttribute("aria-label") ?? control.name;
 }
 
 /**
@@ -1052,10 +1232,11 @@ function nombrarAccion(boton, accion, comienzoNombre) {
 /**
  * Vuelve a abrir los paneles que siguieran desplegados antes de repintar la tabla.
  *
- * Se pintan con el cliente que acaba de traer el listado, no pidiéndolo otra vez: son los
- * mismos datos y la respuesta está recién llegada. El cliente estará siempre en el mapa
+ * Se pintan con el cliente que acaba de traer el listado y **no se comprueban** contra el
+ * servidor: la respuesta acaba de llegar, así que preguntar otra vez por cada panel abierto
+ * sería una ráfaga de peticiones para dibujar lo mismo. El cliente estará siempre en el mapa
  * (la fila existe porque venía en esa respuesta), pero si faltara se pasa null y
- * abrirDespliegue lo pide, que es lo que hacía antes.
+ * abrirDespliegue lo pide.
  */
 function reabrirDespliegues() {
     for (const fila of cuerpoTabla.querySelectorAll("tr.fila-cliente")) {
@@ -1067,6 +1248,7 @@ function reabrirDespliegues() {
                 animar: false,
                 enfocar: false,
                 cliente: clientesEnPagina.get(idCliente) ?? null,
+                revalidar: false,
             });
         }
     }
@@ -1306,9 +1488,14 @@ function ocultarPistas(fila) {
     }
 }
 
-/** Destruye los globos de la tabla actual, antes de tirar sus filas. */
-function limpiarPistas() {
-    for (const elemento of cuerpoTabla.querySelectorAll("[data-bs-title]")) {
+/**
+ * Destruye los globos de una zona antes de tirar los elementos que los tienen.
+ *
+ * @param {Element} raiz la tabla entera al repintarla, o una sola fila si solo se rehacen sus
+ *        celdas
+ */
+function limpiarPistas(raiz = cuerpoTabla) {
+    for (const elemento of raiz.querySelectorAll("[data-bs-title]")) {
         window.bootstrap?.Tooltip.getInstance(elemento)?.dispose();
     }
 }

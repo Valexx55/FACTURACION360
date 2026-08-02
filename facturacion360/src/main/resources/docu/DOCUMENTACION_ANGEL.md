@@ -394,18 +394,52 @@ paneles abiertos se perderían. Por eso el estado vive en un `Map` (`filasDesple
 `id del cliente -> { modo, borrador }`. Después de pintar las filas, `reabrirDespliegues()`
 vuelve a abrir los que sigan en la página.
 
-- **Abrir un panel a mano pide los datos al backend**, también al cambiar de modo. Es la misma
-  decisión que ya tomamos en el listado (*re-fetch* en vez de caché): un detalle guardado de
-  antes puede enseñar algo que otro usuario ya cambió, y en el formulario sería peor todavía,
-  porque se guardaría encima sin haberlo visto.
-- **Reabrirlo tras repintar la tabla, no.** `listar-pagina` devuelve `ClienteResponse`
-  completos, exactamente los mismos campos que `GET /cliente/{id}`, así que los datos acaban de
-  llegar: se guardan en `clientesEnPagina` (id → cliente) y `reabrirDespliegues()` pinta desde
-  ahí. Antes se volvían a pedir uno por uno, y con tres paneles abiertos **cada tecla del
-  buscador eran cuatro peticiones** en vez de una, todas para dibujar lo que la primera acababa
-  de traer. Ese mapa **no es una caché**: se vacía y se rehace en cada repintado, así que nunca
-  contiene nada más viejo que la tabla que se está viendo, que es justo lo que se le criticaba
-  a un caché.
+- **Reabrirlo tras repintar la tabla no cuesta ninguna petición.** `listar-pagina` devuelve
+  `ClienteResponse` completos, exactamente los mismos campos que `GET /cliente/{id}`, así que
+  los datos acaban de llegar: se guardan en `clientesEnPagina` (id → cliente) y
+  `reabrirDespliegues()` pinta desde ahí. Antes se volvían a pedir uno por uno, y con tres
+  paneles abiertos **cada tecla del buscador eran cuatro peticiones** en vez de una, todas para
+  dibujar lo que la primera acababa de traer. Ese mapa **no es una caché**: se vacía y se rehace
+  en cada repintado, así que nunca contiene nada más viejo que la tabla que se está viendo, que
+  es justo lo que se le criticaba a un caché.
+- **Abrir un panel a mano pinta ya, y comprueba después.** Ver el detalle es la acción más
+  repetida de la pantalla, y esperar a la respuesta para enseñar algo era medio segundo de
+  "cargando" para acabar dibujando, casi siempre, lo que ya estaba en memoria. Ahora se pinta
+  con lo del listado y **la petición sale igual**, en paralelo: si lo que llega es idéntico
+  —el caso normal— no pasa nada de nada; si difiere, se ponen al día la fila y el panel.
+
+  La comprobación no sobra. La tabla puede llevar cargada un buen rato, y abrir un cliente es
+  un acto deliberado; abrirlo **para editarlo**, más: el formulario devuelve los ocho campos, y
+  partir de una foto vieja revierte sin querer lo que haya cambiado otra persona.
+
+  Que no ahorre peticiones es a propósito: lo que se gana es que el panel aparezca lleno.
+
+#### Cuando los datos frescos no coinciden: `conciliar()`
+
+Enseñar algo y cambiarlo un instante después puede ser peor que la espera, así que hay reglas:
+
+- **Si no ha cambiado nada, no se toca el DOM.** Se comparan los diez campos y se sale. Es el
+  caso habitual y tiene que ser invisible.
+- **Se actualiza también la fila**, no solo el panel: si cambió el nombre, dejar el viejo en la
+  tabla y el nuevo justo debajo es peor que no haber comprobado nada. Como los nombres
+  accesibles de los botones llevan dentro el del cliente, se vuelven a escribir con
+  `marcarFila()`.
+- **En el formulario se va campo a campo, y manda lo que el usuario haya escrito.** Un campo se
+  considera intacto si sigue teniendo el valor que se pintó desde la BD; ese se actualiza sin
+  más. Si lo ha tocado, se respeta su texto y se le dice cuál era, con un aviso en la alerta del
+  propio formulario: *"Otra persona ha cambiado este cliente mientras lo editabas. Se ha
+  actualizado: Teléfono. Se ha conservado lo que escribiste en: Nombre o empresa."* Los nombres
+  de los campos salen de su `aria-label`, para no tener una segunda lista que se desactualice.
+  Y la referencia de "hay cambios sin guardar" pasa a ser el dato nuevo, o al cerrar preguntaría
+  por unos cambios que ya no existen.
+- **Un `404` significa que lo han borrado**: se avisa en la franja de fuera —lo único que
+  sobrevive al refresco—, se olvida el panel y se dispara `clientes:cambiaron`. Es el mismo
+  camino que ya tenía ese caso al pulsar Guardar.
+- **Cualquier otro fallo se calla** (solo un `console.warn`). En pantalla hay datos buenos, los
+  del listado: sustituirlos por un mensaje de error porque una comprobación de fondo no ha ido
+  sería empeorar lo que el usuario ya está viendo. El panel de error con su botón de reintentar
+  se queda para el único caso en que no hay nada que enseñar: que el cliente no estuviera en el
+  mapa.
 - **`borrador`**: si la tabla se repinta mientras hay un formulario abierto (basta con teclear
   en el buscador), lo escrito se guarda antes de vaciar el `<tbody>` y se restaura al
   reabrirlo. Sin eso, se perdería sin avisar.
@@ -862,6 +896,11 @@ Dos cosas que se han mirado y se dejan como están, a propósito:
   significaría "alguien ha guardado antes que tú" y eso sería un `409`. Es un cambio de esquema
   y afecta a todo el equipo, así que no entra aquí. Con un usuario a la vez —que es como se
   usa— no se nota.
+
+  Lo que sí se ha hecho es **estrechar la ventana**: al abrir un panel se comprueba el cliente
+  contra el servidor, así que se edita sobre lo que hay ahora y no sobre lo que había cuando se
+  cargó la tabla. Sigue sin cubrir lo que cambie **mientras** el formulario está abierto; eso ya
+  es el bloqueo optimista.
 - **`filasDesplegadas` conserva la entrada de un cliente borrado** durante lo que dure la
   sesión. Es el precio de que un panel abierto sobreviva a buscar y a paginar: no hay forma de
   distinguir "este cliente ya no está en la página" de "ya no está en la base de datos" sin
@@ -979,7 +1018,7 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 39. **Sin peticiones de más al repintar** (pestaña Network, filtro `cliente/`): abrir tres
     paneles, borrar el filtro de Network y **teclear una letra en el buscador** → tiene que
     salir **una sola** petición, la de `listar-pagina`. Ninguna a `/cliente/{id}`. Abrir un
-    panel a mano sí pide su detalle, como antes.
+    panel a mano sí pide su detalle, para comprobarlo.
 40. **Los datos del panel reabierto son los buenos**: con un detalle abierto, cambiar ese mismo
     cliente desde otra pestaña y refrescar → el panel enseña los datos nuevos, no los de antes.
 41. **Búsqueda demasiado larga**: `GET /cliente/listar-pagina?busqueda=` + 61 caracteres → `400`
@@ -1003,6 +1042,23 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
     estrechar la ventana de escritorio a móvil → el panel sigue ocupando el ancho justo.
 47. **Tests**: `./mvnw test` desde `facturacion360/` → 25 pruebas en verde **sin MySQL
     arrancado**.
+48. **El panel se abre lleno**: en Network, poner "Slow 3G" y pulsar una fila → los datos
+    aparecen **al instante**, sin pasar por "Cargando", y la petición a `/cliente/{id}` sigue
+    saliendo (es la comprobación). Cuando llega, nada se mueve.
+49. **El detalle se pone al día solo**: abrir el detalle de un cliente, cambiarle la población
+    desde otra pestaña (o con un `PUT` en Swagger) y **volver a abrir** ese detalle → sale el
+    valor de antes durante un instante y se corrige al llegar la respuesta. Comprobar que la
+    **fila** también se actualiza si lo que cambia es el nombre, el CIF, el email, el teléfono
+    o la fecha.
+50. **Lo que estás escribiendo no se pisa**: abrir el lápiz, escribir un nombre nuevo **sin
+    guardar**, cambiar el teléfono de ese cliente desde otra pestaña y volver a pulsar el lápiz
+    (cerrar y abrir) → el teléfono se actualiza, tu nombre a medio escribir **sigue ahí**, y
+    encima del formulario aparece el aviso diciendo exactamente eso.
+51. **Borrado durante la comprobación**: abrir un panel de un cliente que otra pestaña acaba de
+    borrar → aviso de "ya no existe" en la franja y la tabla se refresca sin la fila.
+52. **Un fallo de la comprobación no rompe nada**: parar la aplicación y abrir un panel → los
+    datos del listado se quedan en pantalla y el fallo solo se ve en la consola. La tabla no se
+    queda a medias ni sale el panel de error.
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 

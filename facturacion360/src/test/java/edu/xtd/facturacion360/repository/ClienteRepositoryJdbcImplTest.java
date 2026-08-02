@@ -106,16 +106,18 @@ class ClienteRepositoryJdbcImplTest {
 	}
 
 	@Test
-	@DisplayName("La búsqueda escapa los comodines de LIKE")
+	@DisplayName("La búsqueda escapa los comodines de LIKE y el propio carácter de escape")
 	void laBusquedaEscapaLosComodines() {
-		// Lo que escribe el usuario:  50%_a\b
-		pedirPagina(new CriteriosCliente(0, 10, "50%_a\\b", null, null, null, null));
+		// Lo que escribe el usuario:  50%_a\b!c
+		pedirPagina(new CriteriosCliente(0, 10, "50%_a\\b!c", null, null, null, null));
 
-		// Lo que debe llegar a la BD:  %50\%\_a\\b%
-		// El patrón va dos veces, una por columna (nombre y nif_cif), con los tres caracteres
-		// especiales neutralizados. Sin esto, buscar "%" genera '%%%' y casa con todas las
-		// filas: el buscador dejaría de filtrar sin dar ningún síntoma.
-		String patronEsperado = "%50\\%\\_a\\\\b%";
+		// Lo que debe llegar a la BD:  %50!%!_a\b!!c%
+		// El patrón va dos veces, una por columna (nombre y nif_cif). Se comprueban las tres
+		// cosas de golpe: que '%' y '_' quedan neutralizados (sin esto, buscar "%" genera
+		// '%%%' y casa con TODAS las filas, así que el buscador dejaría de filtrar sin dar
+		// ningún síntoma), que el propio '!' se dobla, y que la barra invertida viaja tal
+		// cual, porque desde que el escape es '!' ha dejado de ser un carácter especial.
+		String patronEsperado = "%50!%!_a\\b!!c%";
 
 		assertThat(parametros).containsExactly(patronEsperado, patronEsperado, 10, 0L);
 	}
@@ -125,9 +127,13 @@ class ClienteRepositoryJdbcImplTest {
 	void laBusquedaMiraNombreYNif() {
 		pedirPagina(new CriteriosCliente(0, 10, "garcia", null, null, null, null));
 
-		// Los paréntesis no son decorativos: sin ellos, AND tiene prioridad sobre OR y los
-		// filtros de provincia y población solo se aplicarían a la mitad de la condición.
-		assertThat(sql).contains("WHERE (nombre LIKE ? ESCAPE '\\\\' OR nif_cif LIKE ? ESCAPE '\\\\')");
+		// Dos cosas en una línea. Los paréntesis no son decorativos: sin ellos, AND tiene
+		// prioridad sobre OR y los filtros de provincia y población solo se aplicarían a la
+		// mitad de la condición. Y el ESCAPE se compara entero, porque el carácter elegido
+		// ('!' en vez de la barra invertida) es lo que hace que la consulta siga funcionando
+		// con el sql_mode NO_BACKSLASH_ESCAPES; cambiarlo aquí sin querer se nota en la BD y
+		// no al compilar.
+		assertThat(sql).contains("WHERE (nombre LIKE ? ESCAPE '!' OR nif_cif LIKE ? ESCAPE '!')");
 	}
 
 	@Test

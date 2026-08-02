@@ -179,6 +179,13 @@ public class ClienteController {
 				// El service trae la página y ya calcula los metadatos (total, hayAnterior,
 				// etc.).
 				PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
+
+				// El código HTTP, igual que en el resto de endpoints: el service ya cuenta
+				// cuántos clientes hay. Sin esta línea, el endpoint más usado de la pantalla
+				// era el único cuyo camino bueno no dejaba rastro, y el log solo hablaba de
+				// listar-pagina cuando algo iba mal.
+				log.info("GET /cliente/listar-pagina -> 200 (pagina {} de {})",
+						pagina.paginaActual() + 1, pagina.totalPaginas());
 				respuestaHttp = ResponseEntity.ok(pagina);
 			} catch (DataAccessException | TransactionException e) {
 				// TransactionException aparte de DataAccessException porque NO son la misma
@@ -214,6 +221,7 @@ public class ClienteController {
 
 		try {
 			List<String> provincias = clienteService.listarProvincias();
+			log.info("GET /cliente/provincias -> 200 ({} provincias)", provincias.size());
 			respuestaHttp = ResponseEntity.ok(provincias);
 		} catch (DataAccessException e) {
 			log.error("Error al listar las provincias", e);
@@ -245,6 +253,7 @@ public class ClienteController {
 
 		try {
 			List<String> poblaciones = clienteService.listarPoblaciones(provincia);
+			log.info("GET /cliente/poblaciones -> 200 ({} poblaciones)", poblaciones.size());
 			respuestaHttp = ResponseEntity.ok(poblaciones);
 		} catch (DataAccessException e) {
 			log.error("Error al listar las poblaciones", e);

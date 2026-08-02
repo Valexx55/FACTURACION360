@@ -71,6 +71,10 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	// Columna por la que se ordena si no piden otra cosa (o piden algo que no existe).
 	private static final String COLUMNA_ORDEN_DEFECTO = "fecha_alta";
 
+	// Carácter con el que se neutralizan los comodines de LIKE. Ver escaparComodines: no es
+	// la barra invertida a propósito, y ese "a propósito" es importante.
+	private static final String ESCAPE_LIKE = "!";
+
 	@Autowired
 	ClienteRowMapper clienteRowMapper;
 
@@ -214,7 +218,7 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 			// Sin LOWER(): la tabla es utf8mb4_0900_ai_ci, que YA compara ignorando
 			// mayúsculas y acentos ('garcia' encuentra 'García'). Envolver la columna en
 			// LOWER() no cambiaría el resultado y además impediría usar índices.
-			condiciones.add("(nombre LIKE ? ESCAPE '\\\\' OR nif_cif LIKE ? ESCAPE '\\\\')");
+			condiciones.add("(nombre LIKE ? ESCAPE '!' OR nif_cif LIKE ? ESCAPE '!')");
 			String patron = "%" + escaparComodines(busqueda) + "%";
 			args.add(patron);
 			args.add(patron);
@@ -242,16 +246,37 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 * inyección SQL (el valor sigue viajando como '?'), pero sí un modo de saltarse
 	 * el filtro, así que los escapamos para que se busquen como caracteres normales.
 	 *
-	 * El orden importa: la barra invertida va PRIMERO. Si se escapara la última,
-	 * volvería a escapar las barras que acabamos de introducir para '%' y '_'.
+	 * <p><strong>Por qué el carácter de escape es '!' y no la barra invertida</strong>, que es
+	 * lo que se ve en la mayoría de los ejemplos. Por dos motivos, y el segundo es un fallo
+	 * real:</p>
+	 *
+	 * <ol>
+	 * <li>La barra invertida tiene significado <em>dentro de las cadenas</em> de MySQL, así que
+	 * escribir {@code ESCAPE '\'} no compila: hay que poner dos barras, y como además hay que
+	 * escaparlas para el {@code String} de Java, en el código se leían cuatro. Era el sitio de
+	 * este repositorio donde más fácil resultaba equivocarse al tocar la consulta.</li>
+	 * <li>Con el {@code sql_mode} <b>NO_BACKSLASH_ESCAPES</b> activado, MySQL deja de
+	 * interpretar {@code '\\'} como una barra y rechaza la sentencia entera con
+	 * <em>"Incorrect arguments to ESCAPE"</em>: el listado, que es la pantalla principal,
+	 * respondía 500 según cómo estuviera configurado el servidor. Ese modo no es el de por
+	 * defecto, pero lo activa {@code mysqldump} y hay instalaciones que lo dejan puesto.</li>
+	 * </ol>
+	 *
+	 * <p>El '!' no significa nada en ninguno de los dos modos, así que la consulta se lee igual
+	 * en el código y en la base de datos. No hace falta que el carácter sea "raro": solo que
+	 * los pocos términos que lo contengan se escapen, y de eso se encarga la primera
+	 * sustitución.</p>
+	 *
+	 * <p>El orden importa: el propio carácter de escape va PRIMERO. Si se sustituyera el
+	 * último, volvería a escapar los que acabamos de introducir para '%' y '_'.</p>
 	 *
 	 * @param termino texto tal cual lo escribió el usuario
-	 * @return el mismo texto con '\', '%' y '_' escapados; se usa junto a ESCAPE '\'
+	 * @return el mismo texto con '!', '%' y '_' escapados; se usa junto a ESCAPE '!'
 	 */
 	private String escaparComodines(String termino) {
-		return termino.replace("\\", "\\\\")
-				.replace("%", "\\%")
-				.replace("_", "\\_");
+		return termino.replace(ESCAPE_LIKE, ESCAPE_LIKE + ESCAPE_LIKE)
+				.replace("%", ESCAPE_LIKE + "%")
+				.replace("_", ESCAPE_LIKE + "_");
 	}
 
 	/**

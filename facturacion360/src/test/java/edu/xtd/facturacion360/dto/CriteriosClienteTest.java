@@ -85,6 +85,23 @@ class CriteriosClienteTest {
 	}
 
 	@Test
+	@DisplayName("Un criterio con saltos de línea no puede partir una línea del log")
+	void losSaltosDeLineaSeNeutralizan() {
+		// El controller escribe los criterios en el log. Con el salto de línea dentro, la
+		// traza se partiría en dos y la segunda mitad parecería una línea escrita por la
+		// propia aplicación (log forging): quien mira el log leería un borrado que no ha
+		// ocurrido. Para buscar en la base de datos un \n no aporta nada.
+		CriteriosCliente criterios = new CriteriosCliente(0, 10,
+				"garcia\n2026-08-02 INFO  Cliente 7 eliminado", "Valencia\r\nfalso", null, null, null);
+
+		assertThat(criterios.busqueda()).doesNotContain("\n").doesNotContain("\r");
+		assertThat(criterios.busqueda()).isEqualTo("garcia 2026-08-02 INFO  Cliente 7 eliminado");
+
+		// \r\n es un único salto, no dos: se sustituye por un solo espacio.
+		assertThat(criterios.provincia()).isEqualTo("Valencia falso");
+	}
+
+	@Test
 	@DisplayName("La ordenación nunca queda vacía: siempre se ordena de alguna manera")
 	void laOrdenacionNuncaQuedaVacia() {
 		CriteriosCliente criterios = new CriteriosCliente(0, 10, null, null, null, "   ", "");

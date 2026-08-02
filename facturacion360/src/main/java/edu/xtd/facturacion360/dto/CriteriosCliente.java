@@ -114,10 +114,19 @@ public record CriteriosCliente(
 	 * para que el repositorio maneje un único convenio ("null = sin filtro") en vez de
 	 * distinguir entre {@code null}, {@code ""} y {@code "   "}.
 	 *
+	 * <p>Los saltos de línea se cambian por un espacio. No es cosmética: el controller
+	 * escribe estos criterios en el log ({@code log.info("... -> {}", criterios)}), así que un
+	 * término de búsqueda que llevara un {@code \n} dentro partiría la traza en dos y dejaría
+	 * la segunda mitad con el aspecto de una línea escrita por la propia aplicación. Es el
+	 * ataque conocido como <em>log forging</em>. Para buscar en la base de datos un salto de
+	 * línea no aporta nada, así que se neutraliza aquí, en el único sitio donde se decide qué
+	 * es un criterio válido.</p>
+	 *
 	 * @param valor el texto tal cual llega de la URL
-	 * @return el texto sin espacios alrededor, o {@code null} si no había contenido
+	 * @return el texto sin espacios alrededor ni saltos de línea, o {@code null} si no había
+	 *         contenido
 	 */
 	private static String normalizar(String valor) {
-		return (valor == null || valor.isBlank()) ? null : valor.trim();
+		return (valor == null || valor.isBlank()) ? null : valor.trim().replaceAll("[\\r\\n]+", " ");
 	}
 }

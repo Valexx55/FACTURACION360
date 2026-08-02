@@ -2015,36 +2015,37 @@ const observadorTabla = new ResizeObserver(() => {
 observadorTabla.observe(contenedorTabla);
 observadorTabla.observe(cuerpoTabla.closest("table"));
 
-// --- Carga inicial ---
-pintarControlesOrden();
-pintarEstadoFiltros();
-cargarProvincias();
-cargarPoblaciones("");
-cargarClientes(0);
+// --- Enlazado del modal de "Añadir Cliente" ---
 
-
-// Los botones de la fila se atienden con delegación en el <tbody>, arriba, en la sección del
-// despliegue: las filas se clonan de un <template> y no existen todavía cuando este archivo se
-// ejecuta, así que un querySelectorAll de '.btn-eliminar' aquí no encuentra ningún botón y no
-// engancha nada (había uno y por eso no hacía nada). El borrado es de otra feature: cuando se
-// implemente, su sitio es un caso más en ese manejador, junto a los de ver y editar.
-
-// Buscamos el botón "Añadir Cliente"
-const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
-
-botonAnadirCliente.addEventListener('click', () => {
-  console.log('Hiciste clic en Añadir Cliente');
-
-  // Limpiamos el formulario dentro del modal
-  const formularioCliente = document.querySelector('#clienteModal form');
-  if (formularioCliente) {
-    formularioCliente.reset();
-  }
-});
-
+// Los botones de la fila NO se enlazan aquí: van por delegación en el <tbody>, arriba, en la
+// sección del despliegue. Las filas se clonan de un <template> y no existen todavía cuando
+// este archivo se ejecuta, así que un querySelectorAll de '.btn-eliminar' aquí no encuentra
+// ningún botón y no engancha nada (había uno y por eso no hacía nada). El borrado es de otra
+// feature: cuando se implemente, su sitio es un caso más en ese manejador, junto a los de ver
+// y editar.
 
 /*
- * Buscador: se despliega al ENFOCARLO y se recoge al salir, si está vacío.
+ * El modal de "Añadir Cliente" se vacía cada vez que se abre.
+ *
+ * Bootstrap no lo hace por su cuenta al cerrarlo: si alguien escribe medio cliente, cierra el
+ * diálogo sin guardar y vuelve a abrirlo, se encuentra lo de antes dentro y puede creer que
+ * son los datos de un cliente que ya existe. Se hace al ABRIR y no al cerrar porque el diálogo
+ * se puede cerrar de cuatro maneras (el botón, la X, Escape y el fondo), y así da igual por
+ * cuál se haya ido.
+ *
+ * El alta en sí es otra feature y su botón de guardar está inhabilitado; esto es solo la
+ * higiene del formulario, que servirá igual el día que se implemente.
+ */
+const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
+
+botonAnadirCliente.addEventListener("click", () => {
+    document.querySelector("#clienteModal form")?.reset();
+});
+
+// --- Enlazado del buscador ---
+
+/*
+ * Se despliega al ENFOCARLO y se recoge al salir, si está vacío.
  *
  * Antes esto era un listener de clic en todo el documento, y ahí estaba el fallo: quien
  * llegaba al buscador con el tabulador se quedaba dentro de una píldora de 9rem sin ver el
@@ -2063,3 +2064,14 @@ contenedorBuscador.addEventListener("focusout", () => {
         contenedorBuscador.classList.remove("expandido");
     }
 });
+
+// --- Carga inicial ---
+//
+// Va al FINAL del archivo a propósito: cuando estas cinco llamadas se ejecutan, todo lo que
+// necesitan —las referencias del DOM, los manejadores de eventos y los avisos emergentes— ya
+// está declarado y enlazado. Si se añade algo nuevo, va ANTES de este bloque.
+pintarControlesOrden();
+pintarEstadoFiltros();
+cargarProvincias();
+cargarPoblaciones("");
+cargarClientes(0);

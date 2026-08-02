@@ -833,8 +833,25 @@ Dos detalles que explican por qué se escaparon:
   `table-striped` de Bootstrap alterna con `nth-of-type`, así que **cada panel de detalle
   insertado invierte el rayado de todo lo que viene detrás** y la tabla acaba con dos filas
   blancas seguidas. Como las filas las pinta `pintarFilas()`, la paridad la marca él con la
-  clase `fila-par` y los paneles ya no cuentan. El azul de la raya es muy tenue (`#f6f9ff`)
-  para que el resaltado de la fila abierta (`#e7efff`) siga distinguiéndose de él.
+  clase `fila-par` y los paneles ya no cuentan.
+
+  > **Los tres tonos de fila son una escala, y viven juntos en `:root` por eso.** Al principio
+  > estaban repartidos por la hoja, y pasó lo previsible: se bajó el rayado por su cuenta *"para
+  > que el resaltado de la fila abierta se siguiera distinguiendo"*, con buena intención pero
+  > apretando los tres en un margen de luminancia del 15 %. El resultado era que **ni el rayado
+  > ni el resaltado llegaban a verse**: abrir una fila **par** apenas le cambiaba el fondo
+  > (1,09:1 respecto al rayado) y todo el peso lo llevaba el borde de color.
+  >
+  > | Paso | Antes | Ahora |
+  > |---|---|---|
+  > | fila normal → rayada | 1,055:1 | **1,111:1** |
+  > | rayada → abierta | 1,095:1 | **1,127:1** |
+  > | abierta → con el ratón encima | 1,077:1 | **1,122:1** |
+  >
+  > No era un incumplimiento —el contraste entre fondos alternos no lo regula WCAG, y el texto
+  > se queda entre 10,5:1 y 14,7:1 en los cuatro—, era que los avisos de fondo no hacían su
+  > trabajo. De referencia, el rayado que trae Bootstrap de serie ronda 1,12, así que esto no
+  > es más marcado de lo normal. Si hay que retocarlos, **se mueven los tres**.
 - **Recuadro de color en el bloque abierto**: verde si se está viendo, ámbar si se está
   editando. Envuelve el bloque entero —la fila del cliente **más** las filas del panel, que en
   edición son dos de rótulos y dos de campos— de modo que los dos `<tr>` se leen como una sola
@@ -846,10 +863,17 @@ Dos detalles que explican por qué se escaparon:
   > **Los dos tonos son los oscuros, y el motivo es de contraste medido.** Como borde bastaría
   > con 3:1 (criterio **1.4.11**), que es donde el `#ffc107` de Bootstrap ya se caía: da 1.6:1
   > sobre blanco. Pero estos colores se usan **también para el texto del cartel**, y el texto
-  > necesita 4.5:1 (criterio **1.4.3**). Sobre el fondo del panel abierto (`#e7efff`), el verde
-  > `#157347` da 5.09:1 y el ámbar `#92400e` da 6.14:1. El ámbar que había antes (`#b45309`) se
-  > quedaba en **4.35:1**: valía como borde y no como texto, que es el tipo de fallo que no se
-  > ve mirando la pantalla.
+  > necesita 4.5:1 (criterio **1.4.3**). Sobre el fondo del panel abierto (`--fila-abierta`),
+  > el verde `#157347` da 4.69:1 y el ámbar `#92400e` da 5.66:1. El ámbar que había antes
+  > (`#b45309`) se quedaba en **4.35:1**: valía como borde y no como texto, que es el tipo de
+  > fallo que no se ve mirando la pantalla.
+  >
+  > Como **borde**, los dos van sobrados contra las cuatro superficies con las que se tocan: el
+  > peor caso es el verde contra el borde del contenedor, con 4,54:1 sobre un mínimo de 3:1.
+  >
+  > Y sobre daltonismo: simulados los dos, en deuteranopia el verde se ve `#4a4357` y el ámbar
+  > `#7b8025`, con 2,22:1 entre ellos, así que siguen siendo distinguibles. Aunque no lo fueran,
+  > el criterio 1.4.1 está cubierto por el cartel con letras y por los iconos distintos.
 
   > **El borde del panel va condicionado al modo, no puesto siempre**, y esto costó un fallo
   > entender por qué. Al cerrar, `marcarFila()` quita las clases `modo-detalle` y

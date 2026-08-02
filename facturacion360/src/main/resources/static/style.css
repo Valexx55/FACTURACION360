@@ -38,6 +38,20 @@
     --estado-detalle: #157347;
     --estado-edicion: #92400e;
 
+    /* Los tres tonos de fila de la tabla. Van JUNTOS y aquí a propósito: son una escala, y el
+       valor de cada uno solo tiene sentido mirando los otros dos. Estuvieron repartidos por
+       la hoja y pasó lo previsible: se bajó el rayado por su cuenta "para que el resaltado de
+       la fila abierta se siguiera distinguiendo", y el resultado fue apretar los tres en un
+       15 % de luminancia, con lo que ni el rayado ni el resaltado llegaban a verse. Abrir una
+       fila PAR apenas le cambiaba el fondo.
+
+       Los saltos son de 1,11 · 1,13 · 1,12 respecto al anterior. De referencia: el rayado que
+       trae Bootstrap de serie ronda 1,12, así que esto no es más marcado de lo normal.
+       Si hay que retocarlos, se mueven LOS TRES para no volver a juntarlos. */
+    --fila-rayada: #eef3ff;
+    --fila-abierta: #dbe6ff;
+    --fila-abierta-hover: #c9daff;
+
     /* Alto común de la barra de filtros: el buscador y los desplegables tienen que medir
        lo mismo o la fila se ve escalonada. */
     --alto-control: 40px;
@@ -578,7 +592,7 @@ footer {
 /* Rayado alterno en azul muy suave, pintado por cliente y no por fila del DOM: lo marca
    clientes.js, de modo que insertar paneles de detalle no descoloca la alternancia. */
 .tabla-clientes .fila-cliente.fila-par > * {
-    background-color: #f6f9ff;
+    background-color: var(--fila-rayada);
 }
 
 /* Email y teléfono como enlaces útiles, pero sin el azul subrayado de un enlace suelto:
@@ -636,14 +650,14 @@ footer {
    una forma muy silenciosa de romperse el día que alguien reordene el archivo. */
 .tabla-clientes tr.fila-cliente.desplegada > *,
 .tabla-clientes .fila-despliegue > td {
-    background-color: #e7efff;
+    background-color: var(--fila-abierta);
     box-shadow: none;
 }
 
 /* Sin esto la fila abierta pierde toda respuesta al ratón, porque le hemos quitado la
    sombra con la que Bootstrap pinta el hover. */
 .tabla-clientes tr.fila-cliente.desplegada:hover > * {
-    background-color: #dbe7ff;
+    background-color: var(--fila-abierta-hover);
 }
 
 /* Recuadro del bloque "cliente + panel": la fila pone tres lados y el panel el cuarto, de

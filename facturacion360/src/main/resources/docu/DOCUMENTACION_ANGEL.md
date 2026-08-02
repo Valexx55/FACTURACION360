@@ -1,7 +1,8 @@
-# Clientes — Listado, buscador, filtros y ordenación
+# Clientes — Listado, buscador, filtros, ordenación, detalle y edición
 
 Muestra en la tabla de `clientes.html` **los clientes** dados de alta, con **buscador**,
 **filtros** por provincia y población y **ordenación**, pidiéndolos al backend por `fetch`.
+Cada fila se **despliega** para ver el detalle completo o para **editarlo** allí mismo.
 Está hecha con **JDBC Template + MySQL**,
 siguiendo la arquitectura por capas que subió Val a `master`.
 
@@ -14,9 +15,14 @@ siguiendo la arquitectura por capas que subió Val a `master`.
   → las provincias y poblaciones que existen en la tabla, para rellenarlos.
 - **Listar últimos** (endpoint del profe, se mantiene): `GET /cliente/listar-ultimos` → los **10
   más recientes** en una lista simple.
+- **Ver el detalle**: `GET /cliente/{id}` → todos los datos de un cliente, incluidos los que la
+  tabla no enseña (dirección, código postal, población y provincia).
+- **Editar**: `PUT /cliente/{id}` → guarda los cambios del formulario que se abre en la fila.
 - **Frontend**: `clientes.js` pide una página y pinta la tabla; arriba hay una barra con el
   buscador, los dos desplegables y el control de orden, y debajo los botones
-  **"Anterior" / "Siguiente"** para moverse entre páginas.
+  **"Anterior" / "Siguiente"** para moverse entre páginas. Al pulsar una fila (o el botón del
+  ojo) se despliega **debajo** una fila con el detalle; con el lápiz, con los campos
+  editables.
 
 **¿Por qué buscar NO tiene endpoint propio?** Porque buscar es "listar con un filtro de texto
 más". Si `/cliente/buscar` fuera aparte, habría que darle su propia paginación, sus propios
@@ -325,6 +331,210 @@ Optamos por **re-fetch** (volver a pedir) en vez de tocar el DOM a mano: es más
 la tabla coincide con la BD. Y descartamos **caché** a propósito: con datos que cambian, un caché
 serviría datos viejos (lo contrario de lo que queremos) y habría que invalidarlo en cada cambio.
 
+### Ver el detalle y editar en la propia fila
+
+La tabla enseña cinco columnas, pero un cliente tiene diez campos. Al pulsar una fila —o el
+botón del ojo— se inserta **debajo una fila hermana** que ocupa todas las columnas
+(`colspan`) y muestra el resto de datos con sus propias cabeceras `<th>`. Con el lápiz se
+abre esa misma fila, pero con los campos editables. Se pueden tener **varias abiertas a la
+vez** y cada una se cierra volviendo a pulsarla.
+
+**Un solo panel por cliente, con un modo** (`detalle` o `edicion`), en vez de dos filas
+independientes. Con dos filas se podría acabar viendo a la vez el detalle y el formulario del
+mismo cliente diciendo cosas distintas, y habría que sincronizarlos; con una sola, cambiar de
+modo es cambiar lo de dentro.
+
+#### El backend: `GET /cliente/{id}`
+
+- **`ClienteRepositoryJdbcImpl.findById(id)`** usa `query(...).stream().findFirst()` y **no**
+  `queryForObject`. Este último lanza `EmptyResultDataAccessException` cuando no hay fila, y
+  "ese cliente no existe" es una respuesta prevista (acaba en un `404`), no un fallo de acceso
+  a datos: montar un `try/catch` para un caso normal es tratar como excepción lo que no lo es.
+- **El service devuelve `Optional<Cliente>`** por lo mismo: con `null` es fácil olvidarse de
+  comprobarlo, y el `Optional` obliga.
+- **El controller** traduce ese `Optional` a `200` o `404`, y captura `DataAccessException`
+  para el `500`, igual que el resto de endpoints.
+- **No choca con `/cliente/listar-pagina`**: Spring da prioridad a las rutas literales sobre
+  las que llevan variable. Y `/cliente/abc` devuelve `400` solo, porque no puede convertir el
+  `{id}` a `int`.
+
+#### El frontend: estado fuera del DOM
+
+La tabla **se repinta entera** cada vez que se pagina, se busca o se refresca, así que los
+paneles abiertos se perderían. Por eso el estado vive en un `Map` (`filasDesplegadas`):
+`id del cliente -> { modo, borrador }`. Después de pintar las filas, `reabrirDespliegues()`
+vuelve a abrir los que sigan en la página.
+
+- **Los datos se piden SIEMPRE al backend**, también al cambiar de modo. Es la misma decisión
+  que ya tomamos en el listado (*re-fetch* en vez de caché): un detalle guardado de antes
+  puede enseñar algo que otro usuario ya cambió, y en el formulario sería peor todavía,
+  porque se guardaría encima sin haberlo visto.
+- **`borrador`**: si la tabla se repinta mientras hay un formulario abierto (basta con teclear
+  en el buscador), lo escrito se guarda antes de vaciar el `<tbody>` y se restaura al
+  reabrirlo. Sin eso, se perdería sin avisar.
+- **Delegación de eventos**: un único listener de `click` y otro de `submit` en el `<tbody>`.
+  Los botones se crean y se destruyen en cada repintado, así que enlazarlos uno a uno
+  obligaría a volver a hacerlo cada vez. *(Los `addEventListener` que había sobre `.btn-ver` y
+  `.btn-editar` no llegaban a enlazar nada: se registraban al cargar la página, cuando esos
+  botones todavía vivían dentro del `<template>`.)*
+- **Un canal de `AbortController` por fila** (`detalle-7`, `guardar-7`): abrir dos filas a la
+  vez lanza dos peticiones que no deben cancelarse entre ellas, que es justo por lo que ya
+  había canales separados para el listado y los desplegables.
+
+#### El aviso de "Ver detalles" al segundo de ratón encima
+
+Es un *tooltip* de Bootstrap con `delay: { show: 1000 }`, **delegado** en el `<tbody>`
+(opción `selector`): así vale también para las filas que aún no existen y no hay que crearlo y
+destruirlo en cada repintado. Dos detalles que costaron:
+
+- **`container: 'body'`**: la tabla vive dentro de `.table-responsive`, que tiene `overflow`,
+  y el globo se veía recortado por arriba.
+- El texto cambia según el estado ("Ver detalles" / "Ocultar detalles"), pero el globo se crea
+  en el **primer** hover y se queda con el texto que hubiera entonces. Por eso, al alternar, se
+  reescribe `data-bs-title` y se **destruye** la instancia: el hover siguiente la vuelve a
+  crear ya con el texto nuevo. Y antes de repintar la tabla se destruyen todas, o se quedan
+  globos flotando sobre una fila que ya no existe.
+- El aviso **no sale sobre la celda de acciones**: cada botón de allí explica lo suyo.
+
+#### Editar: dos arreglos en el `PUT` que ya existía
+
+1. **La fecha de alta se perdía en la respuesta.** El `ClienteMapper.toDomain` deja `fechaAlta`
+   a `null` (no viene en el `ClienteRequest`) y el service copiaba ese `null` al objeto que
+   devolvía. La BD conservaba el dato —el `UPDATE` no toca esa columna—, pero el JSON de
+   respuesta lo traía vacío, así que la fila se repintaba con un guion en la columna "Alta".
+   Ahora se lee el cliente antes de actualizar y se conserva su fecha.
+2. **No se distinguía "no existe" de "no cambió nada".** El resultado salía del número de filas
+   que devuelve el `UPDATE`, y ese número no separa los dos casos: con la configuración por
+   defecto del driver funciona de casualidad (MySQL informa de filas *encontradas*), pero basta
+   con activar `useAffectedRows=true` para que guardar sin tocar ningún campo empiece a
+   responder `404`. Ahora se comprueba antes con `findById`, y la lectura y la escritura van en
+   la **misma transacción** para que entre las dos no se cuele un borrado.
+
+Además, el controller no capturaba nada: cambiar el NIF por el de otro cliente viola el índice
+`UNIQUE` de `nif_cif`, la `DuplicateKeyException` se escapaba y el navegador recibía la página
+de error de Spring **con la traza dentro**. Ahora devuelve `409`, igual que hace `crear`.
+
+#### Validación: la misma en los dos lados
+
+Los `input` del formulario llevan **exactamente** las restricciones de `ClienteRequest`
+(`required` donde hay `@NotBlank`, `maxlength` con el mismo número que el `@Size`,
+`type="email"`). Así el navegador corta lo que el servidor rechazaría y no se gasta una
+petición para recibir un `400`. Del servidor solo puede llegar un error que el navegador no
+puede prever: el **`409` del NIF repetido**, y se señala en *su* campo y no en un aviso
+general, porque si no el usuario tendría que adivinar cuál de los ocho campos falla.
+
+> El modal de "Añadir Cliente" (de otra feature) solo tiene cuatro campos, y dirección,
+> población y provincia son obligatorias en el backend: por eso el formulario de edición los
+> lleva **todos**. Y por eso la función de guardar se llama `guardarEdicion` y no
+> `guardarCliente`: ese nombre lo ocupa el `onclick` de ese modal.
+
+### El buscador se solapaba con el filtro de al lado
+
+Estando cerrado, el círculo de la lupa pisaba el desplegable de provincia. No era el icono: era
+el `<input>`. Con `box-sizing: border-box`, **cuando el relleno supera al ancho, el ancho se
+ignora**: los `3.2rem` del hueco de la lupa más `1rem` a la derecha más los bordes suman unos
+69 px, que no caben en los 50 px del círculo, así que el campo se dibujaba 19 px más ancho que
+su contenedor y se metía por debajo del control siguiente (el `gap` de la barra es de 8 px).
+
+El arreglo es que **el ancho cerrado supere al relleno**. Al pasar el círculo a una píldora de
+`9rem` (ver abajo) ya caben de sobra los `3.2rem` de la lupa más el `1rem` de la derecha, así
+que el problema desaparece por construcción y el relleno puede ser el mismo abierto y cerrado.
+De paso, el contenedor lleva `flex: 0 0 auto` para que la barra no pueda encogerlo por debajo
+de ese ancho, y la posición de la lupa se calcula desde la misma variable (`--hueco-lupa`) que
+usa el relleno, para que no puedan volver a descuadrarse por separado.
+
+### La lupa no parecía pulsable (y no se abría con el teclado)
+
+Dos problemas distintos en el mismo control.
+
+**El de teclado era un fallo, no una mejora**: el buscador solo se abría con un listener de
+`click` en todo el documento. Quien llegaba con el tabulador se quedaba dentro de una píldora
+sin ver el campo ni lo que escribía (criterio **2.1.1** de WCAG, todo lo que funciona con ratón
+tiene que funcionar con teclado). Ahora se abre con **`focusin`** y se recoge con **`focusout`**
+si está vacío: el mismo código cubre ratón y teclado, porque un clic acaba enfocando el input
+igual, y ya no hace falta vigilar cada clic de la página para saber cuándo cerrarlo.
+
+**El de descubribilidad**: un icono suelto no comunica que se pueda pulsar, y con el campo
+plegado tampoco hay placeholder que lo insinúe. Cerrado ya no es un círculo con la lupa, sino
+una **píldora con la lupa y la palabra "Buscar"**. El texto es la única señal que nadie tiene
+que adivinar; al enfocarla se estira y aparece el placeholder completo. La palabra es
+`aria-hidden`, porque el `<input>` ya tiene su `aria-label` y si no se leería dos veces.
+
+### Accesibilidad y semántica de la tabla y la barra de filtros
+
+Lo que se ha corregido, y por qué cada cosa:
+
+- **El nombre del cliente es `<th scope="row">`**, no un `<td>`. Es la cabecera de su fila: con
+  eso un lector de pantalla dice *"García S.L., email: ..."* al recorrer las celdas, en vez de
+  leer valores sueltos sin saber de quién son.
+- **La tabla tiene `<caption>`** (oculto visualmente) y el contenedor con scroll horizontal es
+  un `role="region"` con `tabindex="0"`: una zona que se desplaza tiene que poder recorrerse
+  con el teclado, o las columnas de la derecha son inalcanzables sin ratón.
+- **Los botones de acción llevan el nombre del cliente** en su `aria-label`, puesto desde
+  `nombrarAcciones()` al pintar cada fila. Sin eso, pedir la lista de botones de la página
+  devuelve diez veces *"Editar cliente"* sin saber a cuál pertenece cada uno. El texto visible
+  no cambia: son botones de icono y ese nombre solo existe para la tecnología asistiva.
+- **El estado abierto/cerrado lo dice `aria-expanded`**, no el nombre del botón: el nombre se
+  mantiene estable ("Ver detalles de X") y es el atributo el que cambia. Es el patrón estándar
+  de *disclosure*.
+- **La barra de filtros es un `<search>`** (con `role="search"` explícito para los navegadores
+  anteriores a 2023), el título de la página es un `<h1>` —antes empezaba en `<h2>`— y el enlace
+  activo del menú lleva `aria-current="page"`, que es lo que hace que se anuncie como la página
+  actual; la clase `active` solo pinta.
+- **La etiqueta del botón de orden es `aria-live="polite"`**: cambia sola al pulsarlo ("Más
+  recientes" → "A → Z") y sin eso quien no ve la pantalla pulsa y no se entera del resultado.
+- **Los iconos decorativos llevan `aria-hidden="true"`** y el botón de eliminar ha dejado el
+  `title` nativo (que además duplicaba su `aria-label`) para usar el mismo aviso emergente que
+  los demás.
+- **El nombre accesible del botón "Limpiar" empieza por "Limpiar"**, aunque siga con la cuenta
+  de filtros. Si se sustituyera por otra frase, quien maneja el ordenador por voz diría *"pulsa
+  Limpiar"* y no pasaría nada (criterio **2.5.3**, *label in name*).
+
+### Estilo: lo que se ve y por qué
+
+- **Rayado alterno azul/blanco, pintado por cliente y no por fila del DOM.** El
+  `table-striped` de Bootstrap alterna con `nth-of-type`, así que **cada panel de detalle
+  insertado invierte el rayado de todo lo que viene detrás** y la tabla acaba con dos filas
+  blancas seguidas. Como las filas las pinta `pintarFilas()`, la paridad la marca él con la
+  clase `fila-par` y los paneles ya no cuentan. El azul de la raya es muy tenue (`#f6f9ff`)
+  para que el resaltado de la fila abierta (`#e7efff`) siga distinguiéndose de él.
+- **Recuadro de color en el bloque abierto**: verde si se está viendo, ámbar si se está
+  editando. La fila pone el borde de arriba y los laterales, el panel el de abajo, y el color
+  viaja en una variable (`--color-modo`) declarada en las dos filas. Son las versiones
+  **oscuras** del verde y el ámbar: el `#ffc107` de Bootstrap da 1.6:1 sobre blanco y un borde
+  que transmite información necesita 3:1 (criterio **1.4.11**). Y como el color por sí solo no
+  vale (criterio **1.4.1**), el panel lo dice además con letras: "Viendo detalles" / "Editando".
+- **Esquinas redondeadas**: van en el contenedor, no en la `<table>`. Con
+  `border-collapse: collapse` el radio de la tabla no recorta el fondo de las celdas y la
+  cabecera azul seguiría saliendo en pico; el `.table-responsive` ya tiene `overflow-x: auto`,
+  así que recorta sin tocar el scroll.
+- **Iconos de los filtros en azul de marca** sobre un fondo apenas teñido, y **el control se
+  marca cuando tiene filtro puesto** (icono en sólido, borde azul, texto en negrita), con un
+  contador junto a "Limpiar". Es el único sitio de la barra donde el color aporta información
+  en vez de decorar: con tres controles idénticos estén o no usados, la pregunta "¿por qué solo
+  salen 4 clientes?" obligaba a abrir los desplegables uno a uno. Cambian dos iconos: `fa-map`
+  para provincia (`fa-map-location-dot` es una mancha a 14 px) y `fa-filter-circle-xmark` para
+  Limpiar, que dice "quitar filtros" y no "borrar".
+- **Todos los controles de la barra miden lo mismo** (`--alto-control`): el buscador medía 50 px
+  y los desplegables `input-group-sm` 31 px, y la fila se veía escalonada.
+
+### Otros detalles de uso
+
+- **Email y teléfono son enlaces** `mailto:` y `tel:`. El esquema lo construye siempre el
+  código y nunca el dato del servidor, así que un valor manipulado no puede colar un `href`
+  de tipo `javascript:`. Pulsar el enlace **no** despliega además la fila, y su aviso emergente
+  dice lo que hace ("Escribir a este correo") en vez de heredar el "Ver detalles" de la celda.
+- **En móvil se ocultan email y teléfono** (`d-none d-md-table-cell`): seis columnas obligan a
+  desplazar en horizontal y esos dos datos siguen estando a un clic, en el detalle.
+- **Mientras carga una página, la tabla se atenúa** y lleva `aria-busy="true"`; si no, se ven
+  los datos de la página anterior como si fueran los nuevos. El "cargando" se apaga con un
+  **contador** de peticiones en vuelo, no con un booleano: una petición cancelada termina
+  *después* de que arranque la que la sustituye y apagaría el estado de la que sigue viva.
+- **Si la tabla sale vacía por un filtro, el botón de quitarlo está ahí mismo**, en el propio
+  mensaje: la salida tiene que estar donde se ve el problema.
+- En el formulario de edición, `autocomplete="off"` (son datos de otra persona, no de quien
+  rellena) e `inputmode` numérico/telefónico para que en móvil salga el teclado correcto.
+
 ## Logs y manejo de errores
 
 Usamos **SLF4J** (`private static final Logger log = LoggerFactory.getLogger(...)`), que escribe
@@ -384,6 +594,51 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
     `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → la tabla se recarga sola.
 14. **Logs y errores**: mira la consola (`GET /cliente/...`, `listarUltimos(...) -> N`); si paras
     MySQL y repites, la respuesta es `500` y aparece un `log.error`.
+15. **Detalle (API)**: `GET http://localhost:8080/cliente/1` → `200` con los diez campos;
+    `GET /cliente/99999` → `404` **con el cuerpo vacío** (si trae una traza dentro, es que la
+    excepción se ha escapado); `GET /cliente/abc` → `400`.
+16. **Detalle (pantalla)**: pulsar una fila la despliega y vuelve a pulsarla la cierra; abrir
+    **tres a la vez** y cerrar la del medio; con dos abiertas, paginar y volver → siguen
+    abiertas; buscar algo que las deje fuera → desaparecen, y al limpiar el buscador vuelven.
+17. **Aviso a 1 segundo**: dejar el ratón quieto sobre una fila cerrada → "Ver detalles"; sobre
+    una abierta → "Ocultar detalles"; sobre la celda de los botones → no sale el de la fila,
+    sale el del botón que se esté señalando.
+18. **Teclado**: con `Tab` hasta el botón del ojo y `Enter` se despliega igual, y el botón
+    anuncia `aria-expanded="true"`.
+19. **Editar**: el lápiz abre el formulario con los datos de la BD. Guardar **sin cambiar
+    nada** → `200` y la fila se queda igual (si diera `404`, la comprobación de existencia
+    está mal). Cambiar el nombre con la tabla ordenada por nombre → al guardar, la fila se
+    recoloca sola.
+20. **La fecha de alta sobrevive**: tras guardar, la columna "Alta" sigue con su fecha y no con
+    un guion. En Swagger, la respuesta del `PUT` trae `fechaAlta` informada.
+21. **Errores del formulario**: dejar el nombre vacío → lo corta el navegador y no sale
+    petición; poner el NIF de otro cliente → `409` señalado en ese campo; borrar el cliente
+    desde otra pestaña y guardar → `409`/`404` con su aviso y la tabla se refresca.
+22. **Cambios sin guardar**: escribir en un campo y pulsar la fila para cerrarla → pregunta
+    antes de descartar. Escribir y **teclear en el buscador** (que repinta la tabla) → al
+    volver, lo escrito sigue ahí.
+23. **Solapamiento del buscador**: el ancho calculado de `#buscador-clientes` cerrado tiene que
+    coincidir con el de su contenedor (**144 px**, `9rem`) y no pisar al filtro de provincia.
+    Comprobarlo a 1440, 1200, 992, 768 y 360 px de ancho de ventana.
+24. **Buscador con teclado**: desde la barra de navegación, pulsar `Tab` hasta el buscador → se
+    abre solo, se ve el placeholder y lo que se escribe. Salir con `Tab` estando vacío → se
+    recoge; salir con texto escrito → se queda abierto y con el borde azul de "filtro puesto".
+25. **Filtros marcados**: elegir provincia y población → los dos iconos pasan a azul sólido y
+    junto a "Limpiar" aparece un `2`. Pulsar "Limpiar" → vuelven a su gris y el contador
+    desaparece.
+26. **Rayado con paneles abiertos**: abrir el detalle de la 1.ª y la 3.ª fila y comprobar que
+    las filas de cliente **siguen alternando** color (con `table-striped` no lo hacían).
+27. **Colores de estado**: abrir el detalle → recuadro verde y el cartel "Viendo detalles";
+    pulsar el lápiz de esa misma fila → el recuadro pasa a ámbar y el cartel a "Editando".
+28. **Enlaces de la tabla**: pulsar el email → abre el cliente de correo y **la fila no se
+    despliega**; pulsar en el hueco de esa misma celda, al lado del enlace → sí se despliega.
+29. **Lector de pantalla** (NVDA o el Narrador de Windows): en la lista de botones, cada uno
+    dice el nombre de su cliente ("Editar García S.L."). Al recorrer las celdas con las flechas
+    de tabla, cada valor va precedido del nombre del cliente.
+30. **Zona desplazable**: a 360 px de ancho, `Tab` tiene que parar en la tabla y las flechas
+    moverla en horizontal. Email y teléfono no se ven a ese ancho (están en el detalle).
+31. **Cargando**: con la pestaña Network en "Slow 3G", paginar → la tabla se atenúa mientras
+    llega la respuesta y vuelve a su opacidad al pintarse.
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 

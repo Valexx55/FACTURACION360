@@ -80,6 +80,15 @@ public class ClienteController {
 	 * Devuelve los últimos clientes dados de alta (por defecto 10) como JSON.
 	 * Ejemplo de uso: {@code GET /cliente/listar-ultimos?limite=25}
 	 *
+	 * @deprecated Lo sustituye {@link #listarPagina(CriteriosCliente, BindingResult)}, que hace
+	 *             lo mismo y además admite búsqueda, filtros y ordenación, y devuelve los
+	 *             metadatos de paginación que necesita la pantalla. Este endpoint <b>sigue
+	 *             funcionando y con sus pruebas</b>: obsoleto no es lo mismo que roto. Se
+	 *             mantiene porque es con el que se montó el listado y sirve de ejemplo del caso
+	 *             simple, pero no debería usarse en código nuevo. La marca está para que quien
+	 *             lo encuentre en Swagger sepa que no es el camino bueno; hasta ahora no había
+	 *             forma de saberlo.
+	 *
 	 * @param limite cuántos clientes devolver; llega por la URL (?limite=). Si no
 	 *               se manda, vale 10 (defaultValue). Se acota internamente al
 	 *               rango [1, 100].
@@ -88,7 +97,11 @@ public class ClienteController {
 	 * @autor AngelDanielC0des
 	 * @see #listarPagina(CriteriosCliente, BindingResult)
 	 */
-	@Operation(summary = "Lista los últimos clientes", description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100.")
+	@Deprecated
+	@Operation(summary = "Lista los últimos clientes", deprecated = true,
+			description = "OBSOLETO: usa GET /cliente/listar-pagina, que admite además búsqueda, "
+					+ "filtros y ordenación, y devuelve los metadatos de paginación. Este se "
+					+ "mantiene funcionando porque es con el que se montó el listado.")
 	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
 	@GetMapping("/listar-ultimos")
 	public ResponseEntity<List<ClienteResponse>> listarUltimos(

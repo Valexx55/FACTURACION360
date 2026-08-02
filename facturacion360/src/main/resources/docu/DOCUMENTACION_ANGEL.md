@@ -13,7 +13,7 @@ siguiendo la arquitectura por capas que subió Val a `master`.
   → devuelve una **página** de clientes + metadatos de paginación, como JSON.
 - **Desplegables de filtro**: `GET /cliente/provincias` y `GET /cliente/poblaciones?provincia=`
   → las provincias y poblaciones que existen en la tabla, para rellenarlos.
-- **Listar últimos** (endpoint del profe, se mantiene): `GET /cliente/listar-ultimos` → los **10
+- **Listar últimos** (⚠️ **obsoleto**, ver abajo): `GET /cliente/listar-ultimos` → los **10
   más recientes** en una lista simple.
 - **Ver el detalle**: `GET /cliente/{id}` → todos los datos de un cliente, incluidos los que la
   tabla no enseña (dirección, código postal, población y provincia).
@@ -48,6 +48,16 @@ Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)
 | **Mapper** | `dto/ClienteMapper.java` | Traduce `Cliente` (dominio) → `ClienteResponse` (JSON). |
 
 ## Cómo lo hemos hecho 
+
+> ⚠️ **`listar-ultimos` está marcado como obsoleto (`@Deprecated`).** Lo que sigue explica cómo
+> funciona, porque es el endpoint con el que se montó el listado y sirve de ejemplo del caso
+> simple, pero **el camino bueno es `listar-pagina`**: hace lo mismo y además admite búsqueda,
+> filtros y ordenación, y devuelve los metadatos de paginación.
+>
+> **Obsoleto no es lo mismo que roto**: sigue funcionando, con sus dos pruebas, y no se borra
+> porque lo consume `cors/inicio.js`. Lo que se ha añadido es `deprecated = true` en su
+> `@Operation`, para que Swagger lo pinte tachado: hasta ahora, quien lo encontrara ahí no
+> tenía ninguna forma de saber que no era el camino a seguir.
 
 1. **`ClienteRepositoryJdbcImpl.findUltimos(limite)`** — ejecuta con `JdbcTemplate`:
    ```sql
@@ -1091,7 +1101,26 @@ test verde ahí no probaría lo que parece. Queda para cuando se decida esa infr
 
 ## Limitaciones conocidas
 
-Tres cosas que se han mirado y se dejan como están, a propósito:
+Cuatro cosas que se han mirado y se dejan como están, a propósito:
+
+- **El NIF/CIF y el código postal solo se validan por longitud, no por formato.** Un `????` de
+  diez caracteres pasa como NIF, y `ABCDE` como código postal. Lo suyo sería un `@Pattern` en
+  `ClienteRequest`, y no se ha puesto por dos motivos concretos:
+
+  El primero es que **rompería la aplicación con los datos que hay**. En
+  `backupFacturacion360.sql`, el cliente 6 es `(6,'Fundación Once','G6975841', ...)`: ese CIF
+  tiene siete dígitos tras la letra y uno válido lleva ocho. Con un `@Pattern`, ese cliente no
+  se podría volver a guardar nunca desde el formulario de edición —el `PUT` devolvería `400`
+  para siempre—, y encima es uno de los dos que esta misma documentación recomienda para probar
+  el borrado, porque no tiene facturas. Habría que limpiar antes los datos semilla.
+
+  El segundo es que `ClienteRequest` no es nuestro: lo escribió quien hizo el alta, y una
+  validación nueva ahí afecta también a su `POST`. Es una conversación, no un *commit*.
+
+  Para que quede el trabajo hecho, el patrón sería
+  `[0-9]{8}[A-HJ-NP-TV-Z]` para el NIF y `[A-HJ-NP-SUVW][0-9]{7}[0-9A-J]` para el CIF; y para
+  hacerlo bien de verdad haría falta comprobar además la **letra de control**, que es un
+  cálculo y no un patrón, así que su sitio sería un validador propio y no una anotación.
 
 - **El modal de "Añadir Cliente" no funciona, y su botón está inhabilitado.** El alta de
   clientes en frontend no es parte de esta feature: la función `guardarCliente()` que llamaba

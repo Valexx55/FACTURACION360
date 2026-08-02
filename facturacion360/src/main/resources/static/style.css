@@ -710,26 +710,69 @@ footer {
     padding: 0.75rem 1rem;
 }
 
-/* Las cabeceras del panel, más discretas que las de la tabla principal: son de un detalle,
-   no de la lista. */
-.tabla-panel {
-    background-color: transparent;
-    margin-bottom: 0;
+/* --- Contenido de los paneles: rejillas, no tablas ---
+
+   El detalle es una lista de descripción y la edición un formulario, y los dos se colocan
+   con la MISMA rejilla para que se lean igual al pasar de un modo al otro. auto-fit con
+   minmax deja que las columnas se repartan solas: en un escritorio salen las cuatro o cinco
+   en fila (que es como se veían cuando esto eran tablas) y en móvil se apilan sin necesidad
+   de una media query aparte. */
+.datos-cliente,
+.grupo-edicion {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.75rem 1rem;
+    margin: 0 0 0.75rem;
 }
 
-.tabla-panel th {
+/* El <fieldset> trae de serie borde, margen y relleno del navegador: sin quitarlos, cada
+   grupo saldría con un recuadro gris alrededor que compite con el borde de color del panel.
+   Y sin min-width:0 un fieldset se niega a encogerse por debajo de su contenido, que es una
+   rareza suya y rompe la rejilla en pantallas estrechas. */
+.grupo-edicion {
+    border: 0;
+    padding: 0;
+    min-width: 0;
+}
+
+.grupo-edicion:last-of-type {
+    margin-bottom: 0.5rem;
+}
+
+/* Los rótulos, más discretos que las cabeceras de la tabla principal: son de un detalle, no
+   de la lista. Mismo aspecto para el <dt> del detalle y el <label> de la edición. */
+.datos-cliente dt,
+.campo-edicion label {
+    display: block;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: #64748b;
     font-weight: 600;
-    background-color: transparent;
-    border-bottom-color: #cbd5e1;
+    margin-bottom: 0.2rem;
 }
 
-.tabla-panel td {
-    background-color: transparent;
-    vertical-align: top;
+/* El <dd> trae sangría del navegador y aquí no la queremos: el valor va justo debajo de su
+   rótulo, alineado con él. */
+.datos-cliente dd {
+    margin: 0;
+    color: var(--text-main);
+    overflow-wrap: anywhere;   /* un correo largo no debe ensanchar la columna */
+}
+
+/* El lápiz de cada campo editable: en el mismo ámbar que el borde del bloque en edición,
+   para que se lea como parte de ese estado y no como un icono suelto. Solo existe en el
+   panel de edición, así que la diferencia con el detalle está garantizada por el marcado y
+   no por una clase que alguien pueda olvidarse de quitar. */
+.icono-editable {
+    color: var(--estado-edicion);
+    font-size: 0.7em;
+    margin-right: 0.15rem;
+}
+
+/* El campo ocupa el ancho de su columna; si no, los input cortos dejan la rejilla desigual. */
+.campo-edicion .form-control {
+    width: 100%;
 }
 
 .panel-aviso {

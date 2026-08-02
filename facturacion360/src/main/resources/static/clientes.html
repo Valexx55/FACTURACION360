@@ -258,128 +258,190 @@
             </tr>
         </template>
 
-        <!-- Panel de DETALLE (solo lectura): los campos que no caben en la tabla, con sus
-             propias cabeceras <th> para que se lean igual que el resto de la pantalla. -->
+        <!-- Panel de DETALLE (solo lectura): los campos que no caben en la tabla.
+
+             role="group" + aria-labelledby: el panel se anuncia con el nombre del cliente al
+             que pertenece ("Viendo detalles de García S.L."). Con varios paneles abiertos a la
+             vez, y estando la fila del cliente ya por encima, sin esto no hay forma de saber
+             de quién son los datos que se están leyendo. El nombre sale del texto que YA se
+             ve, así que no hay dos cadenas que puedan acabar diciendo cosas distintas.
+             El id lo pone clientes.js con el del cliente: puede haber varios paneles en la
+             página y dos elementos no pueden compartir id. -->
         <template id="panel-detalle-template">
-          <div class="panel-cliente">
+          <div class="panel-cliente" role="group">
             <!-- El estado no se fía solo del color del borde (criterio 1.4.1 de WCAG: la
                  información no puede depender únicamente del color): aquí se dice con letras. -->
             <p class="etiqueta-estado etiqueta-detalle">
-                <i class="fa-solid fa-eye" aria-hidden="true"></i> Viendo detalles
+                <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                <span class="texto-estado">Viendo detalles</span>
             </p>
-            <table class="table table-sm tabla-panel mb-0">
-                <caption class="visually-hidden">Datos completos del cliente</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Id</th>
-                        <th scope="col">Dirección</th>
-                        <th scope="col">Código postal</th>
-                        <th scope="col">Población</th>
-                        <th scope="col">Provincia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td class="detalle-id"></td>
-                        <td class="detalle-direccion"></td>
-                        <td class="detalle-cp"></td>
-                        <td class="detalle-poblacion"></td>
-                        <td class="detalle-provincia"></td>
-                    </tr>
-                </tbody>
-            </table>
+            <!-- Una LISTA DE DESCRIPCIÓN y no una tabla. Esto son los datos de UN cliente,
+                 pares rótulo/valor, no una rejilla de filas y columnas: <dl> es justo el
+                 elemento que existe para eso. Y sobre todo, este panel vive dentro de un <td>
+                 de la tabla de clientes: con una <table> aquí, un lector de pantalla anuncia
+                 "tabla de 5 columnas" DENTRO de "tabla de 6 columnas" y recorrer las celdas se
+                 vuelve un laberinto. Con la lista dice "Dirección: Calle Mayor 1" y se acabó.
+                 El <div> entre <dl> y <dt>/<dd> lo permite el estándar, y es lo que deja
+                 emparejar cada rótulo con su valor en la rejilla de la hoja de estilos. -->
+            <dl class="datos-cliente">
+                <div class="dato-cliente">
+                    <dt>Id</dt>
+                    <dd class="detalle-id"></dd>
+                </div>
+                <div class="dato-cliente">
+                    <dt>Dirección</dt>
+                    <dd class="detalle-direccion"></dd>
+                </div>
+                <div class="dato-cliente">
+                    <dt>Código postal</dt>
+                    <dd class="detalle-cp"></dd>
+                </div>
+                <div class="dato-cliente">
+                    <dt>Población</dt>
+                    <dd class="detalle-poblacion"></dd>
+                </div>
+                <div class="dato-cliente">
+                    <dt>Provincia</dt>
+                    <dd class="detalle-provincia"></dd>
+                </div>
+            </dl>
           </div>
         </template>
 
-        <!-- Panel de EDICIÓN: la misma tabla de cabeceras, pero con los campos editables.
-             Se parte en dos porque los ocho campos en una sola fila dejarían las columnas tan
-             estrechas que no se vería lo que se escribe.
+        <!-- Panel de EDICIÓN: los mismos ocho campos, repartidos en dos grupos porque en una
+             sola fila las columnas quedarían tan estrechas que no se vería lo que se escribe.
              Las restricciones (required, maxlength, type) son EXACTAMENTE las de
              ClienteRequest en el backend: así el navegador corta lo que el servidor rechazaría
-             y no se gasta una petición para recibir un 400. -->
+             y no se gasta una petición para recibir un 400.
+
+             NO es una tabla, y esa es la diferencia importante con la versión anterior. Aquí
+             no hay datos tabulares: hay ocho campos de un formulario. Antes iban dentro de una
+             <table> cuyos <th> hacían de rótulos, lo que traía tres problemas:
+
+             1. Una tabla dentro del <td> de otra tabla: el lector de pantalla anunciaba
+                "tabla dentro de tabla" y navegar por celdas se volvía confuso.
+             2. El rótulo solo se asociaba al campo A TRAVÉS de la tabla, no directamente.
+             3. Para nombrar el campo había un aria-label, y en dos casos NO contenía el texto
+                visible ("NIF o CIF" frente a "NIF/CIF", "Correo electrónico" frente a
+                "Email"): quien maneja el ordenador por voz dice lo que lee y no pasaba nada
+                (criterio 2.5.3 de WCAG, el mismo que ya se arregló en el botón "Limpiar").
+
+             Con <label for> los tres desaparecen de una vez: lo visible ES el nombre
+             accesible, así que no pueden divergir nunca. Los <fieldset> con <legend> oculto
+             ocupan el sitio que tenían los <caption> y agrupan los campos igual que antes. -->
         <template id="panel-edicion-template">
             <!-- autocomplete="off": son datos de OTRA persona, no de quien rellena el
                  formulario; sin esto el navegador ofrece el nombre y el correo del usuario. -->
             <form class="formulario-edicion panel-cliente" novalidate autocomplete="off">
                 <p class="etiqueta-estado etiqueta-edicion">
-                    <i class="fa-solid fa-pencil" aria-hidden="true"></i> Editando
+                    <i class="fa-solid fa-pencil" aria-hidden="true"></i>
+                    <span class="texto-estado">Editando</span>
                 </p>
-                <!-- Los asteriscos son aria-hidden: se leerían como "asterisco", que no dice
-                     nada, y los campos ya llevan required, que sí se anuncia como "obligatorio". -->
-                <table class="table table-sm tabla-panel mb-2">
-                    <caption class="visually-hidden">Datos fiscales del cliente</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Nombre <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
-                            <th scope="col">NIF/CIF <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
-                            <th scope="col">Email</th>
-                            <th scope="col">Teléfono</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>
-                                <input type="text" name="nombre" class="form-control form-control-sm"
-                                       maxlength="60" required aria-label="Nombre o empresa">
-                                <div class="invalid-feedback">El nombre es obligatorio.</div>
-                            </td>
-                            <td>
-                                <input type="text" name="nifCif" class="form-control form-control-sm"
-                                       maxlength="10" required aria-label="NIF o CIF">
-                                <div class="invalid-feedback">El NIF/CIF es obligatorio.</div>
-                            </td>
-                            <td>
-                                <input type="email" name="email" class="form-control form-control-sm"
-                                       maxlength="30" aria-label="Correo electrónico">
-                                <div class="invalid-feedback">El email no tiene un formato válido.</div>
-                            </td>
-                            <td>
-                                <input type="tel" name="telefono" class="form-control form-control-sm"
-                                       maxlength="15" inputmode="tel" aria-label="Teléfono">
-                                <div class="invalid-feedback">El teléfono no puede superar 15 caracteres.</div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
 
-                <table class="table table-sm tabla-panel mb-2">
-                    <caption class="visually-hidden">Dirección del cliente</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Dirección <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
-                            <th scope="col">Código postal</th>
-                            <th scope="col">Población <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
-                            <th scope="col">Provincia <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>
-                                <input type="text" name="direccion" class="form-control form-control-sm"
-                                       maxlength="90" required aria-label="Dirección">
-                                <div class="invalid-feedback">La dirección es obligatoria.</div>
-                            </td>
-                            <td>
-                                <!-- inputmode="numeric" saca el teclado numérico en móvil; no es
-                                     type="number" porque un CP es una cadena, no una cantidad
-                                     (admite ceros a la izquierda y no debe tener flechitas). -->
-                                <input type="text" name="codigoPostal" class="form-control form-control-sm"
-                                       maxlength="6" inputmode="numeric" aria-label="Código postal">
-                                <div class="invalid-feedback">El código postal no puede superar 6 caracteres.</div>
-                            </td>
-                            <td>
-                                <input type="text" name="poblacion" class="form-control form-control-sm"
-                                       maxlength="30" required aria-label="Población">
-                                <div class="invalid-feedback">La población es obligatoria.</div>
-                            </td>
-                            <td>
-                                <input type="text" name="provincia" class="form-control form-control-sm"
-                                       maxlength="15" required aria-label="Provincia">
-                                <div class="invalid-feedback">La provincia es obligatoria.</div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <!-- Los id llevan el sufijo PLANTILLA a propósito: clientes.js los sustituye
+                     por el id del cliente al pintar, porque puede haber varios formularios
+                     abiertos a la vez y dos elementos no pueden compartir id. Si alguno se
+                     quedara sin sustituir, el sufijo canta a la vista en el inspector.
+                     El lápiz de cada rótulo es la señal de que ese dato se puede escribir, y
+                     por eso solo existe en este panel y no en el de detalle. Va aria-hidden
+                     porque es decorativo: que el campo sea editable ya lo dice el <input>.
+                     Los asteriscos, igual: se leerían como "asterisco", que no aporta nada, y
+                     lo que anuncia "obligatorio" es el atributo required. -->
+                <fieldset class="grupo-edicion">
+                    <legend class="visually-hidden">Datos fiscales del cliente</legend>
+
+                    <div class="campo-edicion">
+                        <label for="campo-nombre-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Nombre</span>
+                            <span class="marca-obligatorio" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" name="nombre" id="campo-nombre-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="60" required>
+                        <div class="invalid-feedback">El nombre es obligatorio.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-nifCif-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">NIF/CIF</span>
+                            <span class="marca-obligatorio" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" name="nifCif" id="campo-nifCif-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="10" required>
+                        <div class="invalid-feedback">El NIF/CIF es obligatorio.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-email-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Email</span>
+                        </label>
+                        <input type="email" name="email" id="campo-email-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="30">
+                        <div class="invalid-feedback">El email no tiene un formato válido.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-telefono-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Teléfono</span>
+                        </label>
+                        <input type="tel" name="telefono" id="campo-telefono-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="15" inputmode="tel">
+                        <div class="invalid-feedback">El teléfono no puede superar 15 caracteres.</div>
+                    </div>
+                </fieldset>
+
+                <fieldset class="grupo-edicion">
+                    <legend class="visually-hidden">Dirección del cliente</legend>
+
+                    <div class="campo-edicion">
+                        <label for="campo-direccion-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Dirección</span>
+                            <span class="marca-obligatorio" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" name="direccion" id="campo-direccion-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="90" required>
+                        <div class="invalid-feedback">La dirección es obligatoria.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-codigoPostal-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Código postal</span>
+                        </label>
+                        <!-- inputmode="numeric" saca el teclado numérico en móvil; no es
+                             type="number" porque un CP es una cadena, no una cantidad
+                             (admite ceros a la izquierda y no debe tener flechitas). -->
+                        <input type="text" name="codigoPostal" id="campo-codigoPostal-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="6" inputmode="numeric">
+                        <div class="invalid-feedback">El código postal no puede superar 6 caracteres.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-poblacion-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Población</span>
+                            <span class="marca-obligatorio" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" name="poblacion" id="campo-poblacion-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="30" required>
+                        <div class="invalid-feedback">La población es obligatoria.</div>
+                    </div>
+
+                    <div class="campo-edicion">
+                        <label for="campo-provincia-PLANTILLA">
+                            <i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
+                            <span class="texto-etiqueta">Provincia</span>
+                            <span class="marca-obligatorio" aria-hidden="true">*</span>
+                        </label>
+                        <input type="text" name="provincia" id="campo-provincia-PLANTILLA"
+                               class="form-control form-control-sm" maxlength="15" required>
+                        <div class="invalid-feedback">La provincia es obligatoria.</div>
+                    </div>
+                </fieldset>
 
                 <div class="pie-edicion">
                     <!-- role="alert" hace que un lector de pantalla lea el error del servidor en

@@ -1104,13 +1104,24 @@ function mismosDatos(uno, otro) {
 }
 
 /**
- * El nombre visible de un campo del formulario.
+ * El nombre visible de un campo del formulario, para poder nombrarlo en un aviso.
  *
- * Se lee del aria-label del propio control en vez de tener aquí una lista de nombres: son los
- * mismos textos y una copia acabaría diciendo algo distinto del formulario que describe.
+ * Se lee de la etiqueta asociada al propio control (la propiedad `labels` da las que le
+ * apuntan con `for`) en vez de tener aquí una lista de nombres: son los mismos textos y una
+ * copia acabaría diciendo algo distinto del formulario que describe.
+ *
+ * Solo el texto, no la etiqueta entera: dentro lleva también el lápiz y el asterisco de
+ * obligatorio, que son decorativos y no forman parte del nombre del campo. El `name` queda
+ * de red de seguridad por si algún campo se quedara sin etiqueta.
+ *
+ * @param {HTMLInputElement} control el campo del formulario
+ * @return {string} su nombre visible ("Código postal"), o su atributo name si no tiene
  */
 function etiquetaDe(control) {
-    return control.getAttribute("aria-label") ?? control.name;
+    const nombreVisible = control.labels?.[0]
+        ?.querySelector(".texto-etiqueta")?.textContent.trim();
+
+    return nombreVisible || control.name;
 }
 
 /**
@@ -1336,7 +1347,34 @@ function pintarPanelDetalle(contenido, cliente) {
     panel.querySelector(".detalle-poblacion").textContent = textoOGuion(cliente.poblacion);
     panel.querySelector(".detalle-provincia").textContent = textoOGuion(cliente.provincia);
 
+    nombrarPanel(panel.querySelector(".panel-cliente"), "Viendo detalles de", cliente);
+
     contenido.replaceChildren(panel);
+}
+
+/**
+ * Hace que el panel se anuncie con el nombre del cliente al que pertenece.
+ *
+ * Con varios paneles abiertos a la vez, y con la fila del cliente ya por encima, quien no ve
+ * la pantalla oía "Editando" sin saber de quién. Ahora oye "Editando García S.L.".
+ *
+ * El nombre se escribe en la etiqueta de estado, que es texto que YA se ve, y el panel la
+ * apunta con aria-labelledby en vez de repetir la cadena en un aria-label: dos textos que
+ * dicen lo mismo acaban diciendo cosas distintas en cuanto alguien cambia uno.
+ *
+ * @param {Element} panel el contenedor del panel (el div del detalle o el form de edición)
+ * @param {string} accion con qué empieza la frase ("Viendo detalles de", "Editando")
+ * @param {Object} cliente el cliente que se está mostrando
+ */
+function nombrarPanel(panel, accion, cliente) {
+    const etiquetaEstado = panel.querySelector(".etiqueta-estado");
+
+    etiquetaEstado.querySelector(".texto-estado").textContent = `${accion} ${cliente.nombre}`;
+
+    // El id lleva dentro el del cliente porque puede haber varios paneles en la página y dos
+    // elementos no pueden compartir id.
+    etiquetaEstado.id = `estado-panel-${cliente.idCliente}`;
+    panel.setAttribute("aria-labelledby", etiquetaEstado.id);
 }
 
 /**
@@ -1353,9 +1391,22 @@ function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
 
     // Se rellena con el borrador si lo hay, para no perder lo tecleado.
     const valores = borrador ?? valoresBd;
+
     for (const campo of CAMPOS_EDITABLES) {
-        formulario.elements[campo].value = valores[campo];
+        const control = formulario.elements[campo];
+
+        // Cada campo necesita su propio id para que el <label for> lo apunte, y con varios
+        // formularios abiertos a la vez no pueden repetirse: se le pega el id del cliente. El
+        // template los trae con el sufijo PLANTILLA, que además hace que cante a la vista en
+        // el inspector si alguno se quedara sin sustituir.
+        const idControl = `campo-${campo}-${cliente.idCliente}`;
+        formulario.querySelector(`label[for="campo-${campo}-PLANTILLA"]`).htmlFor = idControl;
+        control.id = idControl;
+
+        control.value = valores[campo];
     }
+
+    nombrarPanel(formulario, "Editando", cliente);
 
     formulario.dataset.clienteId = cliente.idCliente;
     // Cómo está el cliente en la BD, para saber al cerrar si hay algo sin guardar. Se compara

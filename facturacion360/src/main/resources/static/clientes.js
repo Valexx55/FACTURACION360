@@ -323,9 +323,17 @@ function pintarFilas(clientes) {
         // encuentra nada" son cosas distintas y el usuario reacciona distinto a cada una.
         // En el segundo caso, la salida se ofrece ahí mismo.
         const filtrando = hayCriteriosActivos();
-        mostrarMensaje(filtrando
+        const mensaje = filtrando
             ? "No hay clientes que coincidan con la búsqueda."
-            : "No hay clientes que mostrar.", { conLimpiar: filtrando });
+            : "No hay clientes que mostrar.";
+
+        mostrarMensaje(mensaje, { conLimpiar: filtrando });
+
+        // Y se anuncia, por el mismo motivo que el error de carga: escrito dentro del <tbody>
+        // no lo lee nadie, porque no es una región viva. Quien no ve la pantalla solo oía el
+        // "Sin resultados" del pie, que no distingue una tabla vacía de una búsqueda sin
+        // coincidencias ni deja pista de que hay un botón para quitar los filtros.
+        anunciar(filtrando ? `${mensaje} Puedes quitar los filtros.` : mensaje);
 
         // Aunque no haya a quién devolvérselo, hay que descartar la marca: si no, el foco
         // daría un salto inesperado en el siguiente repintado, que no tiene nada que ver.
@@ -819,6 +827,39 @@ document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActua
  * otra vez sería preguntar por lo que ya se sabe, y multiplicado por cada panel abierto y cada
  * tecla del buscador.
  */
+
+/*
+ * REGLA: después de un `await`, nada de lo que se capturó antes se da por vivo.
+ *
+ * La tabla se repinta entera al buscar, al paginar y al recibir `clientes:cambiaron`, así que
+ * cualquier referencia a un <tr> o a un <form> puede haber quedado apuntando a un nodo que ya
+ * no está en el documento. Escribir en él no da error: simplemente no lo ve nadie, que es peor,
+ * porque el usuario se queda pensando que ha pasado algo que no ha pasado.
+ *
+ * Por eso, tras esperar al servidor se vuelve a buscar por id con estas dos funciones en vez de
+ * reutilizar la variable de antes.
+ */
+
+/**
+ * La fila de un cliente tal y como está AHORA en el documento.
+ *
+ * @param {number} idCliente el cliente que se busca
+ * @return {HTMLTableRowElement|null} su fila, o null si ya no está en la página (se ha ido a
+ *         otra por la ordenación, ya no cumple el filtro, o lo han borrado)
+ */
+function filaViva(idCliente) {
+    return cuerpoTabla.querySelector(`tr.fila-cliente[data-cliente-id="${idCliente}"]`);
+}
+
+/**
+ * El formulario de edición de un cliente tal y como está AHORA en el documento.
+ *
+ * @param {number} idCliente el cliente que se busca
+ * @return {HTMLFormElement|null} su formulario, o null si su panel ya no está abierto
+ */
+function formularioVivo(idCliente) {
+    return cuerpoTabla.querySelector(`.formulario-edicion[data-cliente-id="${idCliente}"]`);
+}
 
 /** ¿Qué panel tiene abierto esta fila? "detalle", "edicion" o null si está cerrada. */
 function modoDe(fila) {
@@ -1611,15 +1652,14 @@ cuerpoTabla.addEventListener("submit", (evento) => {
 /**
  * Manda los cambios al backend y actúa según lo que responda.
  *
- * No se llama guardarCliente a propósito: ese nombre lo usa el onclick del modal de "Añadir
- * Cliente" (de otra feature, y hoy sin definir), y si lo ocupáramos su botón acabaría
- * llamando a esta función con los argumentos vacíos.
+ * No se llama guardarCliente a propósito: ese es el nombre que le corresponde al alta de
+ * clientes, que es otra feature. Ocupándolo, el día que alguien la implemente se encontraría
+ * el nombre cogido por una función que espera un formulario de edición.
  *
  * @param {HTMLFormElement} formulario el formulario de la fila que se está editando
  */
 async function guardarEdicion(formulario) {
     const idCliente = Number(formulario.dataset.clienteId);
-    const fila = cuerpoTabla.querySelector(`tr.fila-cliente[data-cliente-id="${idCliente}"]`);
 
     limpiarErrores(formulario);
 
@@ -1641,12 +1681,14 @@ async function guardarEdicion(formulario) {
             `${API_CLIENTE}/${idCliente}`, cuerpoPeticion(formulario));
 
         if (estado === 200) {
-            // Se cierra por el id y no por la fila: si la tabla se ha repintado mientras
-            // viajaba la petición, "fila" apunta a un <tr> que ya no está en el documento y
+            // Se olvida el panel por el id y no por la fila: si la tabla se ha repintado
+            // mientras viajaba la petición, el <tr> que teníamos ya no está en el documento y
             // cerrarDespliegue no llegaría a borrar la entrada del Map. Quedaría un panel
             // abierto de un cliente que el usuario ya había terminado de editar.
             filasDesplegadas.delete(idCliente);
-            if (fila?.isConnected) cerrarDespliegue(fila);
+
+            const fila = filaViva(idCliente);
+            if (fila) cerrarDespliegue(fila);
 
             // Y que la tabla, al repintarse, devuelva el foco al botón de editar de esta fila:
             // el que estaba pulsado deja de existir y el foco se iría al principio de la página.
@@ -1662,14 +1704,44 @@ async function guardarEdicion(formulario) {
             return;
         }
 
-        mostrarErrorGuardado(formulario, estado);
+        contarErrorGuardado(idCliente, estado);
     } catch (error) {
         if (esCancelacion(error)) return;
         console.error("No se pudo guardar el cliente:", error);
-        mostrarErrorGuardado(formulario, 0);
+        contarErrorGuardado(idCliente, 0);
     } finally {
-        boton.disabled = false;
+        // El botón, el vivo: si la tabla se repintó, el que teníamos ya no está y el nuevo nace
+        // habilitado de todos modos, así que sin esta búsqueda no pasaría nada malo. Se hace
+        // igual para que no parezca un olvido y para que la regla de arriba no tenga excepciones.
+        const botonVivo = formularioVivo(idCliente)?.querySelector(".btn-guardar");
+        if (botonVivo) botonVivo.disabled = false;
     }
+}
+
+/**
+ * Cuenta un guardado que no ha salido bien, en el formulario que esté en pantalla AHORA.
+ *
+ * Es la parte que faltaba de la regla del `await`: el formulario desde el que se pulsó Guardar
+ * puede haber desaparecido mientras viajaba la petición (basta con teclear en el buscador, o
+ * con que otra parte de la aplicación dispare `clientes:cambiaron`). Escribir el error en él no
+ * falla, simplemente no lo lee nadie, y el usuario se queda creyendo que ha guardado.
+ *
+ * Si el panel ya no está abierto no hay dónde poner el detalle del error, así que el aviso va a
+ * la franja de fuera, que es lo único que sobrevive a un repintado.
+ *
+ * @param {number} idCliente el cliente que se intentaba guardar
+ * @param {number} estado el código HTTP (0 si ni siquiera hubo respuesta)
+ */
+function contarErrorGuardado(idCliente, estado) {
+    const formulario = formularioVivo(idCliente);
+
+    if (formulario) {
+        mostrarErrorGuardado(formulario, estado);
+        return;
+    }
+
+    anunciar("No se pudo guardar el cliente. Vuelve a abrirlo e inténtalo de nuevo.",
+        { visible: true, esError: true });
 }
 
 /** El cuerpo JSON del PUT, con la forma que espera ClienteRequest. */

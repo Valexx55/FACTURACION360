@@ -435,7 +435,20 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary-custom" onclick="guardarCliente()">Guardar Cambios</button>
+                    <!-- Inhabilitado a propósito: el alta de clientes todavía no tiene lógica de
+                         frontend. La función guardarCliente() que llamaba este botón no existe en
+                         ningún sitio, así que pulsarlo solo dejaba un ReferenceError en la consola,
+                         y además el formulario recoge 4 de los 7 campos que ClienteRequest exige
+                         (faltan dirección, población y provincia, las tres @NotBlank), con lo que
+                         el POST devolvería 400 igualmente.
+                         PARA QUIEN IMPLEMENTE EL ALTA: quita el disabled, añade esos tres campos
+                         con las mismas restricciones que el formulario de edición de la fila, y
+                         dispara document.dispatchEvent(new CustomEvent('clientes:cambiaron')) al
+                         recibir el 201 para que la tabla se refresque sola. -->
+                    <button type="button" class="btn btn-primary-custom" disabled
+                            data-bs-title="El alta de clientes todavía no está disponible">
+                        Guardar Cambios
+                    </button>
                 </div>
             </div>
         </div>

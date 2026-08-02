@@ -1,12 +1,21 @@
 /* style.css */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
 
-/* NOTA para quien revise el rendimiento: este @import está duplicado con la etiqueta <link>
-   que las tres páginas ya llevan en su <head>, y además retrasa el primer pintado, porque
-   obliga al navegador a descargar y analizar esta hoja ANTES de poder pedir la fuente. Se
-   deja a propósito: quitarlo obliga a añadir el peso 500 al <link> de index.html y
-   facturas.html, que son páginas de otras features, y no compensa meter mano ahí por esto.
-   Cuando alguien toque esas dos páginas, es un descarte de tres líneas. */
+/* OJO ANTES DE BORRAR ESTA LÍNEA: la fuente se pide desde dos sitios, pero NO son la misma
+   petición. Este @import trae los pesos 400, 500 y 700; el <link> que las tres páginas llevan
+   en su <head> trae 400, 600 y 700. La hoja usa 500, 600 y 700, así que hoy hace falta que
+   estén los dos: quitando el @import a secas se pierde el 500 (lo usan .navbar-nav .nav-link,
+   .buscador-etiqueta y .aviso-clientes) y el navegador lo falsea engordando el 400, que se
+   nota poco y por eso es un fallo fácil de colar.
+
+   Lo suyo sería quedarse solo con el <link>: un @import obliga al navegador a descargar y
+   analizar esta hoja ANTES de poder pedir la fuente, así que retrasa el primer pintado,
+   mientras que un <link> del <head> se descarga en paralelo. Se deja porque hacerlo bien
+   pasa por añadir el 500 al <link> de index.html y de facturas.html, que son páginas de
+   otras features, y no compensa tocarlas por esto.
+
+   Cuando alguien esté ya editando esas dos páginas: añadir 500 a los tres <link> y borrar
+   este @import. Cuatro líneas y queda una sola petición, más rápida. */
 
 :root {
     --primary-color: #4776f7;

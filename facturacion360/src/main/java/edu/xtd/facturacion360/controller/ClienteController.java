@@ -86,7 +86,7 @@ public class ClienteController {
 	 * @return {@code 200 OK} con la lista de {@link ClienteResponse}; o {@code 500}
 	 *         si falla la BD.
 	 * @autor AngelDanielC0des
-	 * @see #listarPagina(CriteriosCliente)
+	 * @see #listarPagina(CriteriosCliente, BindingResult)
 	 */
 	@Operation(summary = "Lista los últimos clientes", description = "Devuelve los clientes más recientes. El límite se ajusta automáticamente al intervalo entre 1 y 100.")
 	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
@@ -109,7 +109,10 @@ public class ClienteController {
 
 			List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
 
-			log.info("listar-ultimos devuelve {} clientes", respuesta.size());
+			// El código HTTP y no el hecho de negocio: el service ya registra cuántos
+			// clientes ha encontrado, y repetirlo aquí llenaba el log de líneas gemelas.
+			// Cada capa cuenta lo suyo, y lo del controller es con qué responde.
+			log.info("GET /cliente/listar-ultimos -> 200 ({} clientes)", respuesta.size());
 			respuestaHttp = ResponseEntity.ok(respuesta);
 		} catch (DataAccessException e) {
 
@@ -130,11 +133,18 @@ public class ClienteController {
 	 * listado: así la búsqueda hereda la paginación y los metadatos, y el frontend usa
 	 * un único camino de código tanto si hay término de búsqueda como si no.
 	 *
-	 * @param criterios los parámetros de la URL (?pagina=, ?tamano=, ?busqueda=,
-	 *                  ?provincia=, ?poblacion=, ?ordenarPor=, ?direccion=) que Spring
-	 *                  agrupa en un {@link CriteriosCliente}. El propio record se
-	 *                  encarga de acotarlos y limpiarlos, así que aquí llegan ya
-	 *                  normalizados.
+	 * <p>El {@code BindingResult} detrás del {@code @ModelAttribute} cumple aquí el mismo
+	 * papel que en {@link #actualizar(int, ClienteRequest, BindingResult)}: sin él, pasar
+	 * una búsqueda más larga de la cuenta hace que Spring lance la excepción por su cuenta
+	 * y el 400 salga con la página de error por defecto en vez del cuerpo vacío que
+	 * devuelven los demás endpoints.</p>
+	 *
+	 * @param criterios     los parámetros de la URL (?pagina=, ?tamano=, ?busqueda=,
+	 *                      ?provincia=, ?poblacion=, ?ordenarPor=, ?direccion=) que Spring
+	 *                      agrupa en un {@link CriteriosCliente}. El propio record se
+	 *                      encarga de acotarlos y limpiarlos, así que aquí llegan ya
+	 *                      normalizados.
+	 * @param bindingResult resultado de validar las longitudes de esos criterios
 	 * @return {@code 200 OK} con un {@link PaginaClienteResponse} (los clientes de
 	 *         la página + metadatos de paginación); {@code 400} si algún criterio
 	 *         supera la longitud permitida; o {@code 500} si falla la BD.
@@ -147,7 +157,8 @@ public class ClienteController {
 			@ApiResponse(responseCode = "400", description = "Algún criterio supera la longitud permitida"),
 			@ApiResponse(responseCode = "500", description = "Error interno al consultar los clientes") })
 	@GetMapping("/listar-pagina")
-	public ResponseEntity<PaginaClienteResponse> listarPagina(@Valid @ModelAttribute CriteriosCliente criterios) {
+	public ResponseEntity<PaginaClienteResponse> listarPagina(@Valid @ModelAttribute CriteriosCliente criterios,
+			BindingResult bindingResult) {
 
 		ResponseEntity<PaginaClienteResponse> respuestaHttp = null;
 
@@ -156,20 +167,29 @@ public class ClienteController {
 		// los valores YA normalizados, que son los que de verdad se van a consultar.
 		log.info("GET /cliente/listar-pagina -> {}", criterios);
 
-		try {
-			// El service trae la página y ya calcula los metadatos (total, hayAnterior,
-			// etc.).
-			PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
-			respuestaHttp = ResponseEntity.ok(pagina);
-		} catch (DataAccessException | TransactionException e) {
-			// TransactionException aparte de DataAccessException porque NO son la misma
-			// familia: al ser listarPagina transaccional, si la BD no responde el fallo
-			// salta al ABRIR la transacción (CannotCreateTransactionException), antes de
-			// lanzar ninguna consulta. Sin este segundo tipo, esa excepción se escaparía y
-			// el cliente recibiría la página de error de Spring con la traza dentro, en vez
-			// del 500 limpio que devuelven los demás endpoints.
-			log.error("Error al listar la pagina de clientes", e);
-			respuestaHttp = ResponseEntity.internalServerError().build();
+		if (bindingResult.hasErrors()) {
+			// warn y solo el campo con su mensaje, igual que en actualizar: una búsqueda
+			// demasiado larga es cosa de quien llama, no algo que haya que ir a mirar.
+			log.warn("GET /cliente/listar-pagina -> 400, criterios no válidos: {}",
+					bindingResult.getFieldErrors().stream()
+							.map(error -> error.getField() + ": " + error.getDefaultMessage()).toList());
+			respuestaHttp = ResponseEntity.badRequest().build();
+		} else {
+			try {
+				// El service trae la página y ya calcula los metadatos (total, hayAnterior,
+				// etc.).
+				PaginaClienteResponse pagina = clienteService.listarPagina(criterios);
+				respuestaHttp = ResponseEntity.ok(pagina);
+			} catch (DataAccessException | TransactionException e) {
+				// TransactionException aparte de DataAccessException porque NO son la misma
+				// familia: al ser listarPagina transaccional, si la BD no responde el fallo
+				// salta al ABRIR la transacción (CannotCreateTransactionException), antes de
+				// lanzar ninguna consulta. Sin este segundo tipo, esa excepción se escaparía y
+				// el cliente recibiría la página de error de Spring con la traza dentro, en vez
+				// del 500 limpio que devuelven los demás endpoints.
+				log.error("Error al listar la pagina de clientes", e);
+				respuestaHttp = ResponseEntity.internalServerError().build();
+			}
 		}
 
 		return respuestaHttp;
@@ -248,7 +268,7 @@ public class ClienteController {
 	 * @return {@code 200 OK} con el {@link ClienteResponse}; {@code 404} si no existe ningún
 	 *         cliente con ese id; o {@code 500} si falla la BD.
 	 * @autor AngelDanielC0des
-	 * @see #listarPagina(CriteriosCliente)
+	 * @see #listarPagina(CriteriosCliente, BindingResult)
 	 */
 	@Operation(summary = "Obtiene un cliente por su id", description = "Devuelve el detalle completo del cliente, incluidos los campos que el listado no muestra")
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Cliente encontrado"),
@@ -268,10 +288,10 @@ public class ClienteController {
 
 			if (cliente.isPresent()) {
 				ClienteResponse respuesta = clienteMapper.toResponse(cliente.get());
-				log.info("GET /cliente/{} -> cliente encontrado", id);
+				log.info("GET /cliente/{} -> 200", id);
 				respuestaHttp = ResponseEntity.ok(respuesta);
 			} else {
-				log.warn("GET /cliente/{} -> no existe", id);
+				log.warn("GET /cliente/{} -> 404, no existe", id);
 				respuestaHttp = ResponseEntity.notFound().build();
 			}
 		} catch (DataAccessException e) {
@@ -370,7 +390,7 @@ public class ClienteController {
 			// servidor, y en el log conviene que 'error' sea siempre algo que hay que mirar.
 			// Solo el campo y su mensaje: getAllErrors() vuelca el objeto de error entero y deja
 			// veinte líneas de códigos de Spring en el log por cada campo que falle.
-			log.warn("PUT /cliente/{} -> datos no válidos: {}", id, bindingResult.getFieldErrors().stream()
+			log.warn("PUT /cliente/{} -> 400, datos no válidos: {}", id, bindingResult.getFieldErrors().stream()
 					.map(error -> error.getField() + ": " + error.getDefaultMessage()).toList());
 			respuestaHttp = ResponseEntity.badRequest().build();
 		} else {
@@ -383,17 +403,20 @@ public class ClienteController {
 
 				if (actualizado.isPresent()) {
 					ClienteResponse respuesta = clienteMapper.toResponse(actualizado.get());
-					log.info("PUT /cliente/{} -> cliente actualizado", id);
+					log.info("PUT /cliente/{} -> 200", id);
 					respuestaHttp = ResponseEntity.ok(respuesta);
 				} else {
-					log.warn("PUT /cliente/{} -> no existe", id);
+					log.warn("PUT /cliente/{} -> 404, no existe", id);
 					respuestaHttp = ResponseEntity.notFound().build();
 				}
 			} catch (DuplicateKeyException e) {
 				// nif_cif tiene índice UNIQUE: cambiarlo por el de otro cliente lo viola. Sin este
 				// catch, la excepción se escapaba y el navegador recibía la página de error de
 				// Spring con la traza dentro, en vez del 409 que ya devuelve crear().
-				log.error("PUT /cliente/{} -> NIF/CIF duplicado", id, e);
+				//
+				// warn y sin la traza, por lo mismo que el 400 de arriba: el NIF repetido lo
+				// arregla quien edita cambiándolo, no hay nada roto en el servidor que mirar.
+				log.warn("PUT /cliente/{} -> 409, NIF/CIF duplicado", id);
 				respuestaHttp = ResponseEntity.status(HttpStatus.CONFLICT).build();
 			} catch (DataAccessException | TransactionException e) {
 				// TransactionException aparte: al ser actualizar() transaccional, si la BD no

@@ -138,7 +138,10 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		anadirFiltros(sql, args, criterios);
 
 		Long total = jdbcTemplate.queryForObject(sql.toString(), Long.class, args.toArray());
-		return total != null ? total : 0L;
+		long totalSeguro = total != null ? total : 0L;
+
+		log.debug("contarTotal({}) -> {} clientes", criterios, totalSeguro);
+		return totalSeguro;
 	}
 
 	/**

@@ -86,9 +86,14 @@ public record CriteriosCliente(
 		provincia = normalizar(provincia);
 		poblacion = normalizar(poblacion);
 
-		// Estos dos nunca quedan a null: siempre se ordena de alguna manera.
-		ordenarPor = (normalizar(ordenarPor) == null) ? ORDEN_DEFECTO : ordenarPor.trim();
-		direccion = (normalizar(direccion) == null) ? DIRECCION_DEFECTO : direccion.trim();
+		// Estos dos nunca quedan a null: siempre se ordena de alguna manera. Se guarda lo
+		// que devuelve normalizar en vez de llamarlo y volver a hacer trim() sobre el
+		// original, que era recorrer dos veces la misma cadena para obtener lo mismo.
+		String ordenNormalizado = normalizar(ordenarPor);
+		String direccionNormalizada = normalizar(direccion);
+
+		ordenarPor = (ordenNormalizado == null) ? ORDEN_DEFECTO : ordenNormalizado;
+		direccion = (direccionNormalizada == null) ? DIRECCION_DEFECTO : direccionNormalizada;
 	}
 
 	/**

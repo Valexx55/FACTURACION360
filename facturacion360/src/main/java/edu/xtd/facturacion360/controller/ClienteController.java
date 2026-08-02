@@ -2,6 +2,7 @@ package edu.xtd.facturacion360.controller;
 
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +43,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.Hidden;
 
 /**
  * 
@@ -235,13 +235,52 @@ public class ClienteController {
 		return respuestaHttp;
 	}
 
-	@Hidden
+	/**
+	 * Devuelve el detalle completo de un cliente: los mismos datos que el listado más los que
+	 * la tabla no muestra (dirección, código postal, población y provincia). Lo pide el
+	 * frontend al desplegar una fila y antes de editarla. Ejemplo de uso:
+	 * {@code GET /cliente/7}
+	 *
+	 * <p>No choca con {@code /cliente/listar-pagina} ni con {@code /cliente/provincias}: Spring
+	 * da prioridad a las rutas literales sobre las que llevan variable.</p>
+	 *
+	 * @param id identificador del cliente; llega en la propia ruta. Si no es un número, Spring
+	 *           responde {@code 400} antes de entrar en el método.
+	 * @return {@code 200 OK} con el {@link ClienteResponse}; {@code 404} si no existe ningún
+	 *         cliente con ese id; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 * @see #listarPagina(CriteriosCliente)
+	 */
+	@Operation(summary = "Obtiene un cliente por su id", description = "Devuelve el detalle completo del cliente, incluidos los campos que el listado no muestra")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Cliente encontrado"),
+			@ApiResponse(responseCode = "404", description = "No existe ningún cliente con ese id"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar el cliente") })
 	@GetMapping("/{id}")
-	public ResponseEntity<ClienteResponse> obtenerPorId(@PathVariable int id) {
+	public ResponseEntity<ClienteResponse> obtenerPorId(
+			@Parameter(description = "Identificador del cliente", example = "1") @PathVariable int id) {
 
-		ResponseEntity<ClienteResponse> respuesta = null;
+		ResponseEntity<ClienteResponse> respuestaHttp = null;
+		log.info("GET /cliente/{}", id);
 
-		return respuesta;
+		try {
+			// El service devuelve un Optional: aquí es donde "no existe" se convierte en el
+			// código HTTP que le corresponde, un 404 con cuerpo vacío.
+			Optional<Cliente> cliente = clienteService.obtenerPorId(id);
+
+			if (cliente.isPresent()) {
+				ClienteResponse respuesta = clienteMapper.toResponse(cliente.get());
+				log.info("GET /cliente/{} -> cliente encontrado", id);
+				respuestaHttp = ResponseEntity.ok(respuesta);
+			} else {
+				log.warn("GET /cliente/{} -> no existe", id);
+				respuestaHttp = ResponseEntity.notFound().build();
+			}
+		} catch (DataAccessException e) {
+			log.error("Error al obtener el cliente {}", id, e);
+			respuestaHttp = ResponseEntity.internalServerError().build();
+		}
+
+		return respuestaHttp;
 	}
 
 	/**
@@ -294,30 +333,70 @@ public class ClienteController {
 		return respuesta;
 	}
 
+	/**
+	 * Modifica un cliente existente con los datos recibidos. Lo usa el formulario que se abre
+	 * en la propia fila de la tabla. Ejemplo de uso: {@code PUT /cliente/7}
+	 *
+	 * <p>El {@code BindingResult} justo detrás del {@code @RequestBody} no es decorativo: con él,
+	 * Spring deja los errores de validación en el objeto en vez de lanzar una excepción, y así
+	 * el 400 se devuelve desde aquí igual que en {@link #crear(ClienteRequest, BindingResult)}.</p>
+	 *
+	 * @param id            identificador del cliente que se modifica, en la ruta
+	 * @param clienteRequest datos nuevos del cliente, validados con las restricciones de
+	 *                       {@link ClienteRequest}
+	 * @param bindingResult  resultado de esa validación
+	 * @return {@code 200 OK} con el cliente ya actualizado; {@code 400} si los datos no son
+	 *         válidos; {@code 404} si no existe ese cliente; {@code 409} si el NIF/CIF ya es de
+	 *         otro cliente; o {@code 500} si falla la BD.
+	 * @autor AngelDanielC0des
+	 */
+	@Operation(summary = "Actualiza un cliente", description = "Modifica los datos del cliente indicado; la fecha de alta se conserva")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Cliente actualizado correctamente"),
+			@ApiResponse(responseCode = "400", description = "Datos de entrada no válidos"),
+			@ApiResponse(responseCode = "404", description = "No existe ningún cliente con ese id"),
+			@ApiResponse(responseCode = "409", description = "Ya existe otro cliente con ese NIF/CIF"),
+			@ApiResponse(responseCode = "500", description = "Error interno al actualizar el cliente") })
 	@PutMapping("/{id}")
-	public ResponseEntity<ClienteResponse> actualizar(@PathVariable int id,
+	public ResponseEntity<ClienteResponse> actualizar(
+			@Parameter(description = "Identificador del cliente", example = "1") @PathVariable int id,
 			@Valid @RequestBody ClienteRequest clienteRequest, BindingResult bindingResult) {
 
-		ResponseEntity<ClienteResponse> respuesta = null;
+		ResponseEntity<ClienteResponse> respuestaHttp = null;
+		log.info("PUT /cliente/{}", id);
 
 		if (bindingResult.hasErrors()) {
-			respuesta = ResponseEntity.badRequest().build();
+			// Solo el campo y su mensaje: getAllErrors() vuelca el objeto de error entero y deja
+			// veinte líneas de códigos de Spring en el log por cada campo que falle.
+			log.error("PUT /cliente/{} -> datos no válidos: {}", id, bindingResult.getFieldErrors().stream()
+					.map(error -> error.getField() + ": " + error.getDefaultMessage()).toList());
+			respuestaHttp = ResponseEntity.badRequest().build();
 		} else {
-			Cliente cliente = clienteMapper.toDomain(clienteRequest);
+			try {
+				Cliente cliente = clienteMapper.toDomain(clienteRequest);
+				Cliente actualizado = clienteService.actualizar(id, cliente);
 
-			Cliente actualizado = clienteService.actualizar(id, cliente);
-
-			if (actualizado == null) {
-				respuesta = ResponseEntity.notFound().build();
-			} else {
-				ClienteResponse response = clienteMapper.toResponse(actualizado);
-
-				respuesta = ResponseEntity.ok(response);
+				if (actualizado == null) {
+					log.warn("PUT /cliente/{} -> no existe", id);
+					respuestaHttp = ResponseEntity.notFound().build();
+				} else {
+					respuestaHttp = ResponseEntity.ok(clienteMapper.toResponse(actualizado));
+				}
+			} catch (DuplicateKeyException e) {
+				// nif_cif tiene índice UNIQUE: cambiarlo por el de otro cliente lo viola. Sin este
+				// catch, la excepción se escapaba y el navegador recibía la página de error de
+				// Spring con la traza dentro, en vez del 409 que ya devuelve crear().
+				log.error("PUT /cliente/{} -> NIF/CIF duplicado", id, e);
+				respuestaHttp = ResponseEntity.status(HttpStatus.CONFLICT).build();
+			} catch (DataAccessException | TransactionException e) {
+				// TransactionException aparte: al ser actualizar() transaccional, si la BD no
+				// responde el fallo salta al ABRIR la transacción, antes de lanzar ninguna
+				// consulta, y no sería una DataAccessException.
+				log.error("Error al actualizar el cliente {}", id, e);
+				respuestaHttp = ResponseEntity.internalServerError().build();
 			}
-
 		}
 
-		return respuesta;
+		return respuestaHttp;
 	}
 
 	@Operation(summary = "Elimina un cliente", description = "Elimina el cliente identificado por su ID")

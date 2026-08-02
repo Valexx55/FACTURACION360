@@ -286,10 +286,25 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		return " ORDER BY " + columna + " IS NULL, " + columna + " " + sentido + ", idcliente " + sentido;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
 	public Optional<Cliente> findById(int id) {
-		// TODO Auto-generated method stub
-		return Optional.empty();
+		// Mismas columnas que el resto de consultas (COLUMNAS_CLIENTE) para que el detalle
+		// y el listado no puedan acabar devolviendo campos distintos.
+		String sql = "SELECT " + COLUMNAS_CLIENTE + " FROM clientes WHERE idcliente = ?";
+
+		// query(...).findFirst() en vez de queryForObject(): este último lanza
+		// EmptyResultDataAccessException cuando no hay fila, y "ese cliente no existe" es una
+		// respuesta prevista (un 404), no un fallo de acceso a datos. Devolviendo un Optional,
+		// quien llama lo resuelve con un if en vez de con un try/catch.
+		Optional<Cliente> cliente = jdbcTemplate.query(sql, clienteRowMapper, id).stream().findFirst();
+
+		log.debug("findById({}) -> {}", id, cliente.isPresent() ? "encontrado" : "no existe");
+		return cliente;
 	}
 
 	/**

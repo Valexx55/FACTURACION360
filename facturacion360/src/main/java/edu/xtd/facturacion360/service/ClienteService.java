@@ -1,6 +1,7 @@
 package edu.xtd.facturacion360.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
 
@@ -79,7 +80,22 @@ public interface ClienteService {
 	 */
 	public List<String> listarPoblaciones(String provincia);
 
-	public Cliente obtenerPorId(int id);
+	/**
+	 * El detalle completo de un cliente. Lo usa la tabla del frontend al desplegar una fila,
+	 * para mostrar los campos que no caben en el listado, y la edición, para partir de lo que
+	 * hay ahora mismo en la base de datos y no de una copia vieja de la pantalla.
+	 *
+	 * <p>Devuelve un {@link Optional} y no {@code null} porque "ese cliente no existe" es un
+	 * resultado normal (acaba en un 404), no un error: así el controller lo resuelve con un
+	 * {@code if} y no hay forma de olvidarse de comprobarlo.</p>
+	 *
+	 * @param id identificador del cliente que se busca
+	 * @return el cliente (dominio), o un {@code Optional} vacío si no existe
+	 * @throws DataAccessException si falla el acceso a la base de datos
+	 * @autor AngelDanielC0des
+	 * @see ClienteRepository#findById(int)
+	 */
+	public Optional<Cliente> obtenerPorId(int id);
 
 	/**
 	 * Crea un cliente nuevo en el sistema.
@@ -89,6 +105,25 @@ public interface ClienteService {
 	 */
 	public Cliente crear(Cliente cliente);
 
+	/**
+	 * Modifica los datos de un cliente que ya existe.
+	 *
+	 * <p>La fecha de alta no forma parte de lo editable: se conserva la que hay en la base de
+	 * datos, porque es un dato histórico y el {@code ClienteRequest} ni siquiera la trae.</p>
+	 *
+	 * <p>La comprobación de existencia y la escritura van en la misma transacción, para que
+	 * entre las dos no pueda colarse un borrado de otro usuario.</p>
+	 *
+	 * @param id      identificador del cliente que se modifica
+	 * @param cliente los datos nuevos; su id y su fecha de alta se ignoran
+	 * @return el cliente ya actualizado (con su fecha de alta original), o {@code null} si no
+	 *         existe ningún cliente con ese id
+	 * @throws DataAccessException si falla el acceso a la base de datos, incluida la violación
+	 *                             del índice único de {@code nif_cif}
+	 *                             ({@code DuplicateKeyException})
+	 * @autor AngelDanielC0des
+	 * @see ClienteRepository#update(Cliente)
+	 */
 	public Cliente actualizar(int id, Cliente cliente);
 
 	public void eliminar(int id);

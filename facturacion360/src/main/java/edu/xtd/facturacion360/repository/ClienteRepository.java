@@ -80,6 +80,17 @@ public interface ClienteRepository {
 	 */
 	public List<String> findPoblaciones (String provincia);
 
+	/**
+	 * Un cliente concreto por su identificador. Es el detalle completo: trae también los
+	 * campos que el listado no muestra (dirección, código postal, población y provincia).
+	 *
+	 * @param id identificador del cliente que se busca
+	 * @return el cliente envuelto en un {@link Optional}, o un {@code Optional} vacío si no
+	 *         existe ninguno con ese id
+	 * @throws DataAccessException si falla el acceso a la base de datos
+	 * @autor AngelDanielC0des
+	 * @see #findPagina(CriteriosCliente)
+	 */
 	public Optional<Cliente> findById (int id);
 	
 	/**

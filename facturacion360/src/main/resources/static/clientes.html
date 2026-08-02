@@ -102,6 +102,14 @@
                 <span id="contador-filtros" class="badge rounded-pill text-bg-primary" hidden aria-hidden="true"></span>
             </button>
         </search>
+
+        <!-- Avisos de lo que acaba de pasar ("Cliente guardado"). Vive FUERA de la tabla a
+             propósito: si estuviera dentro del panel de la fila, el refresco que sigue a un
+             guardado lo borraría junto con la fila y no daría tiempo a leerlo. role="status"
+             hace que un lector de pantalla lo anuncie solo, sin robar el foco: guardar cambia
+             la pantalla sin cambiar de contexto y hay que poder enterarse (criterio 4.1.3). -->
+        <p id="aviso-clientes" class="aviso-clientes" role="status" hidden></p>
+
         <!--
             CORRECCION: el div.table-responsive envuelve UNICAMENTE la tabla y
             se cierra justo despues de cerrarla (uso correcto de Bootstrap: solo
@@ -112,7 +120,9 @@
         -->
         <!-- role="region" + tabindex="0": table-responsive desplaza en horizontal, y una zona
              que se desplaza tiene que poder recorrerse con el teclado (criterio 2.1.1 de WCAG).
-             Sin el tabindex, quien no usa ratón no puede llegar a las columnas de la derecha. -->
+             Sin el tabindex, quien no usa ratón no puede llegar a las columnas de la derecha.
+             Viene puesto de serie y clientes.js lo quita cuando la tabla cabe entera y no hay
+             nada que desplazar; así, si el JS fallara, se queda la versión accesible. -->
         <div class="table-responsive" role="region" tabindex="0"
              aria-labelledby="titulo-tabla-clientes">
             <!-- Sin table-striped: Bootstrap raya por nth-of-type y, al insertar las filas de
@@ -211,7 +221,9 @@
              nunca puede tener los dos a la vez contándose cosas distintas. -->
         <template id="fila-despliegue-template">
             <tr class="fila-despliegue">
-                <td colspan="6">
+                <!-- El colspan lo pone clientes.js contando las cabeceras de la tabla: escrito
+                     aquí a mano, añadir una columna obligaría a acordarse de cambiarlo. -->
+                <td>
                     <div class="despliegue-envoltorio">
                         <div class="despliegue-contenido"></div>
                     </div>
@@ -265,12 +277,14 @@
                 <p class="etiqueta-estado etiqueta-edicion">
                     <i class="fa-solid fa-pencil" aria-hidden="true"></i> Editando
                 </p>
+                <!-- Los asteriscos son aria-hidden: se leerían como "asterisco", que no dice
+                     nada, y los campos ya llevan required, que sí se anuncia como "obligatorio". -->
                 <table class="table table-sm tabla-panel mb-2">
                     <caption class="visually-hidden">Datos fiscales del cliente</caption>
                     <thead>
                         <tr>
-                            <th scope="col">Nombre <span class="marca-obligatorio" title="Obligatorio">*</span></th>
-                            <th scope="col">NIF/CIF <span class="marca-obligatorio" title="Obligatorio">*</span></th>
+                            <th scope="col">Nombre <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
+                            <th scope="col">NIF/CIF <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
                             <th scope="col">Email</th>
                             <th scope="col">Teléfono</th>
                         </tr>
@@ -305,10 +319,10 @@
                     <caption class="visually-hidden">Dirección del cliente</caption>
                     <thead>
                         <tr>
-                            <th scope="col">Dirección <span class="marca-obligatorio" title="Obligatorio">*</span></th>
+                            <th scope="col">Dirección <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
                             <th scope="col">Código postal</th>
-                            <th scope="col">Población <span class="marca-obligatorio" title="Obligatorio">*</span></th>
-                            <th scope="col">Provincia <span class="marca-obligatorio" title="Obligatorio">*</span></th>
+                            <th scope="col">Población <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
+                            <th scope="col">Provincia <span class="marca-obligatorio" title="Obligatorio" aria-hidden="true">*</span></th>
                         </tr>
                     </thead>
                     <tbody>

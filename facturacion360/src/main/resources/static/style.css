@@ -248,11 +248,22 @@ footer {
     gap: 0.5rem;
 }
 
-/* El buscador convive con el resto de controles: al abrirse crece hasta un ancho
-   cómodo pero acotado. Si se dejara el 100% original, empujaría los desplegables
-   fuera de la fila cada vez que el usuario pincha en la lupa. */
+/* Dentro de la barra el ancho lo negocia el flex, así que aquí manda flex-basis y no width;
+   por eso la transición se pone sobre él, o abrirse sería un salto en vez de un crecimiento.
+   El shrink a 1 es lo que evita que la barra se parta en dos líneas: sumando los tres
+   desplegables y los botones, el buscador abierto no cabe en un escritorio de 1140px, y sin
+   poder encogerse mandaría el botón de limpiar a la línea de abajo. El suelo de
+   --ancho-cerrado impide que ese encogimiento llegue a dejarlo más pequeño que cerrado. */
+.barra-filtros .buscador-clientes {
+    flex: 0 1 var(--ancho-cerrado);
+    min-width: var(--ancho-cerrado);
+    transition: flex-basis 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Al abrirse crece hasta un ancho cómodo pero acotado. Si se dejara el 100% original,
+   empujaría los desplegables fuera de la fila cada vez que el usuario pincha en la lupa. */
 .barra-filtros .buscador-clientes.expandido {
-    width: 320px;
+    flex-basis: 20rem;
     max-width: 100%;
 }
 
@@ -477,6 +488,30 @@ footer {
 }
 
 /* ==========================================
+   AVISOS DE LA PANTALLA
+   ========================================== */
+
+/* Franja entre los filtros y la tabla que cuenta lo que acaba de pasar ("Cliente guardado").
+   Está fuera de la tabla porque el refresco que sigue a un guardado la repinta entera. */
+.aviso-clientes {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.85rem;
+    border-left: 4px solid var(--estado-detalle);
+    border-radius: 0.35rem;
+    background-color: #eaf6ef;
+    color: #14532d;
+    font-weight: 500;
+}
+
+/* Que algo haya ido mal no se dice solo con el color (criterio 1.4.1): cambian el texto y la
+   franja de la izquierda, que es lo que sigue viéndose en escala de grises. */
+.aviso-clientes.aviso-error {
+    border-left-color: #b02a37;
+    background-color: #fdecee;
+    color: #842029;
+}
+
+/* ==========================================
    TABLA DE CLIENTES
    ========================================== */
 
@@ -497,8 +532,12 @@ footer {
 }
 
 /* La última fila no lleva su raya: se juntaría con el borde del contenedor y se vería
-   una línea doble justo en el redondeo. */
-.tabla-clientes > tbody > tr:last-child > * {
+   una línea doble justo en el redondeo.
+
+   Se excluye el panel desplegado porque su raya de abajo no es una separación entre filas:
+   es el cuarto lado del recuadro de color que envuelve al cliente abierto. Sin la excepción,
+   abrir el último cliente de la página dejaba el recuadro sin cerrar por abajo. */
+.tabla-clientes > tbody > tr:last-child:not(.fila-despliegue) > * {
     border-bottom: 0;
 }
 
@@ -562,8 +601,12 @@ footer {
 
    El 'box-shadow: none' no es decorativo: Bootstrap pinta el resaltado de table-hover con
    una sombra interior que cubre la celda entera (inset 0 0 0 9999px). Sin quitarla,
-   taparía este fondo y el bloque se vería partido en dos tonos distintos. */
-.tabla-clientes .fila-cliente.desplegada > *,
+   taparía este fondo y el bloque se vería partido en dos tonos distintos.
+
+   El 'tr' del selector no sobra: sin él esto pesa lo mismo que el rayado alterno de
+   .fila-par y el fondo dependería de cuál de las dos reglas esté escrita más abajo, que es
+   una forma muy silenciosa de romperse el día que alguien reordene el archivo. */
+.tabla-clientes tr.fila-cliente.desplegada > *,
 .tabla-clientes .fila-despliegue > td {
     background-color: #e7efff;
     box-shadow: none;
@@ -571,7 +614,7 @@ footer {
 
 /* Sin esto la fila abierta pierde toda respuesta al ratón, porque le hemos quitado la
    sombra con la que Bootstrap pinta el hover. */
-.tabla-clientes .fila-cliente.desplegada:hover > * {
+.tabla-clientes tr.fila-cliente.desplegada:hover > * {
     background-color: #dbe7ff;
 }
 
@@ -723,6 +766,7 @@ footer {
 @media (prefers-reduced-motion: reduce) {
     .despliegue-envoltorio,
     .buscador-clientes,
+    .barra-filtros .buscador-clientes,
     .buscador-clientes .buscador-input,
     .buscador-clientes .buscador-etiqueta,
     #tabla-clientes {
@@ -756,6 +800,12 @@ footer {
     .barra-filtros .buscador-clientes.expandido {
         width: 100%;
         min-width: 0;
+    }
+
+    /* El buscador se dimensiona con flex-basis (ver la barra de filtros), así que el 100%
+       de arriba no le bastaría: en una línea flexible el basis es quien decide. */
+    .barra-filtros .buscador-clientes.expandido {
+        flex-basis: 100%;
     }
 
     /* Sin espacio de sobra a la izquierda, el "Limpiar" se alinea con el resto. */

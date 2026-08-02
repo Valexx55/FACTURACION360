@@ -30,16 +30,15 @@ const TAMANO_PAGINA = 10;
 // escribir "garcia" lanzaría 6 peticiones a la base de datos en vez de 1.
 const ESPERA_TECLEO_MS = 300;
 
-// Columnas de la tabla. Lo usan la fila de mensajes y la del despliegue, que tienen que
-// ocuparlas todas; si un día se añade una columna, se cambia aquí y no en tres sitios.
-const COLUMNAS_TABLA = 6;
-
 // Cuánto tarda en aparecer el aviso de "Ver detalles" al dejar el ratón encima.
 const RETARDO_PISTA_MS = 1000;
 
 // Lo que dura el plegado del panel. Tiene que coincidir con la transición de
 // .despliegue-envoltorio en style.css: es el tiempo que esperamos para quitarlo del DOM.
 const DURACION_PLEGADO_MS = 250;
+
+// Cuánto se queda en pantalla un aviso ("Cliente guardado") antes de borrarse solo.
+const DURACION_AVISO_MS = 5000;
 
 // Referencias del DOM que usamos.
 const cuerpoTabla = document.getElementById("tabla-clientes");
@@ -62,6 +61,21 @@ const iconoDireccion = document.getElementById("icono-direccion");
 const etiquetaDireccion = document.getElementById("etiqueta-direccion");
 const btnLimpiar = document.getElementById("btn-limpiar");
 const cabecerasOrdenables = document.querySelectorAll(".th-ordenable");
+const avisoClientes = document.getElementById("aviso-clientes");
+const contenedorTabla = cuerpoTabla.closest(".table-responsive");
+
+// Columnas de la tabla, contadas de sus propias cabeceras. Lo usan la fila de mensajes y la
+// del despliegue, que tienen que ocuparlas todas. Se cuentan en vez de escribir un 6 porque
+// añadir una columna obligaría, si no, a acordarse de cambiar el número aquí y en el HTML.
+// El ":scope >" deja fuera las cabeceras de las tablas de los paneles, que se insertan dentro.
+const COLUMNAS_TABLA = cuerpoTabla.closest("table")
+    .querySelectorAll(":scope > thead > tr > th").length;
+
+// El texto por defecto del error del NIF/CIF, sacado del propio <template> donde está escrito.
+// Se guarda al arrancar porque al mostrar el error del servidor se pisa, y al cerrar hay que
+// devolverlo: copiarlo aquí a mano serían dos textos que acabarían diciendo cosas distintas.
+const MENSAJE_NIF_BASE = plantillaPanelEdicion.content
+    .querySelector('[name="nifCif"] ~ .invalid-feedback').textContent;
 
 /*
  * ÚNICO estado de la pantalla. Que todo viva en un solo objeto es lo que impide que
@@ -82,6 +96,14 @@ let paginaActual = 0;
 // porque una petición cancelada termina DESPUÉS de que arranque la que la sustituye: con un
 // booleano, la que muere apagaría el "cargando" de la que sigue viva.
 let listadosEnVuelo = 0;
+
+// Temporizador que borra el aviso de la zona de estado pasado un rato.
+let temporizadorAviso = null;
+
+// Id del cliente al que hay que devolver el foco en cuanto se repinte la tabla, o null.
+// Guardar destruye la fila que contenía el botón pulsado y, sin esto, el foco se iría al
+// <body> y quien navegue con teclado volvería al principio de la página.
+let focoPendiente = null;
 
 /*
  * Filas con el panel desplegado: id del cliente -> { modo, borrador }.
@@ -153,13 +175,17 @@ async function pedirJson(canal, url) {
     const controlador = new AbortController();
     peticionesEnVuelo[canal] = controlador;
 
-    const respuesta = await fetch(url, { signal: controlador.signal });
+    try {
+        const respuesta = await fetch(url, { signal: controlador.signal });
 
-    // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
-    if (!respuesta.ok) {
-        throw new Error(`El servidor respondió ${respuesta.status}`);
+        // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
+        if (!respuesta.ok) {
+            throw new Error(`El servidor respondió ${respuesta.status}`);
+        }
+        return await respuesta.json();
+    } finally {
+        cerrarCanal(canal, controlador);
     }
-    return respuesta.json();
 }
 
 /**
@@ -200,6 +226,21 @@ async function cargarClientes(pagina) {
         if (criterios.poblacion) parametros.set("poblacion", criterios.poblacion);
 
         const datos = await pedirJson("listado", `${API_LISTAR_PAGINA}?${parametros}`);
+
+        // Página que ya no existe: se pedía la 4 y entre medias han borrado clientes hasta
+        // dejar 3. El backend responde con la página vacía y el total real (no reencamina
+        // solo, porque el paginado no puede adivinar si eso es un error o no), así que la
+        // corrección la hacemos aquí: se pide la última que sí existe. Sin esto, la tabla se
+        // queda vacía diciendo "Página 4 de 3" y sin manera obvia de salir de ahí.
+        const hayQueRetroceder = !datos.contenido?.length
+            && datos.totalPaginas > 0
+            && pagina > datos.totalPaginas - 1;
+
+        if (hayQueRetroceder) {
+            await cargarClientes(datos.totalPaginas - 1);
+            return;
+        }
+
         paginaActual = datos.paginaActual;
         pintarFilas(datos.contenido);
         pintarPaginacion(datos);
@@ -238,6 +279,10 @@ function pintarFilas(clientes) {
         mostrarMensaje(filtrando
             ? "No hay clientes que coincidan con la búsqueda."
             : "No hay clientes que mostrar.", { conLimpiar: filtrando });
+
+        // Aunque no haya a quién devolvérselo, hay que descartar la marca: si no, el foco
+        // daría un salto inesperado en el siguiente repintado, que no tiene nada que ver.
+        devolverFoco();
         return;
     }
 
@@ -263,15 +308,60 @@ function pintarFilas(clientes) {
         // que viene detrás, y la tabla acaba con dos filas blancas seguidas.
         filaCliente.classList.toggle("fila-par", indice % 2 === 1);
 
-        nombrarAcciones(filaCliente, cliente.nombre);
-
-        // Deja la fila en estado "cerrada": aria-expanded a false y el texto del aviso.
+        // Deja la fila en estado "cerrada": aria-expanded a false, y el nombre y el aviso de
+        // cada botón con el cliente dentro ("Editar cliente García S.L.").
         marcarFila(filaCliente, null);
 
         cuerpoTabla.appendChild(fila);
     }
 
     reabrirDespliegues();
+    devolverFoco();
+}
+
+/**
+ * Devuelve el foco al botón de editar del cliente que se acaba de guardar.
+ *
+ * Al repintar, la fila que tenía el foco deja de existir y el navegador lo manda al <body>:
+ * quien navegue con teclado se encontraría de vuelta al principio de la página después de
+ * cada guardado. Se llama tras repintar porque hasta ese momento el botón nuevo no existe.
+ */
+function devolverFoco() {
+    if (focoPendiente === null) return;
+
+    const fila = cuerpoTabla.querySelector(`tr[data-cliente-id="${focoPendiente}"]`);
+    focoPendiente = null;
+
+    // Puede no estar: el cliente se ha quedado en otra página, o ya no cumple el filtro. En
+    // ese caso no forzamos el foco a ningún sitio raro; el aviso de "Cliente guardado" ya se
+    // ha anunciado por su cuenta.
+    fila?.querySelector(".btn-editar")?.focus();
+}
+
+/**
+ * Cuenta en la zona de avisos lo que acaba de pasar.
+ *
+ * Vive fuera de la tabla porque el guardado la repinta entera: dentro del panel, el mensaje
+ * desaparecería en el mismo instante en que se escribe. El orden de las dos líneas importa:
+ * primero se muestra y luego se escribe, porque una región oculta no está en el árbol de
+ * accesibilidad y el lector de pantalla no llegaría a anunciar el texto.
+ *
+ * @param {string} texto lo que se cuenta
+ * @param {boolean} [esError=false] si es un problema y no una confirmación
+ */
+function anunciar(texto, esError = false) {
+    clearTimeout(temporizadorAviso);
+
+    avisoClientes.hidden = false;
+    avisoClientes.classList.toggle("aviso-error", esError);
+    avisoClientes.textContent = texto;
+
+    // Se borra solo: es información de "ha pasado esto ahora", y dejarla fija acaba
+    // confundiendo (un "Cliente guardado" de hace diez minutos parece de la última acción).
+    temporizadorAviso = setTimeout(() => {
+        avisoClientes.textContent = "";
+        avisoClientes.hidden = true;
+    }, DURACION_AVISO_MS);
 }
 
 /**
@@ -301,22 +391,6 @@ function pintarEnlace(celda, valor, construirHref, pista) {
     enlace.textContent = texto;
     enlace.dataset.bsTitle = pista;
     celda.replaceChildren(enlace);
-}
-
-/**
- * Mete el nombre del cliente en el nombre accesible de cada botón de la fila.
- *
- * Sin esto, quien navega con lector de pantalla y pide la lista de botones de la página oye
- * diez veces "Editar cliente" sin saber a cuál pertenece cada uno. El texto visible no
- * cambia: son botones de icono y el nombre solo existe para la tecnología asistiva.
- *
- * @param {HTMLTableRowElement} fila la fila del cliente
- * @param {string} nombre el nombre del cliente
- */
-function nombrarAcciones(fila, nombre) {
-    fila.querySelector(".btn-ver").setAttribute("aria-label", `Ver detalles de ${nombre}`);
-    fila.querySelector(".btn-editar").setAttribute("aria-label", `Editar ${nombre}`);
-    fila.querySelector(".btn-eliminar").setAttribute("aria-label", `Eliminar ${nombre}`);
 }
 
 /**
@@ -758,6 +832,10 @@ function obtenerPanel(fila, animar) {
     const panel = plantillaDespliegue.content.firstElementChild.cloneNode(true);
     panel.id = `despliegue-${fila.dataset.clienteId}`;
     panel.dataset.clienteId = fila.dataset.clienteId;
+
+    // La celda del panel ocupa el ancho entero de la tabla, sean las columnas que sean.
+    panel.querySelector("td").colSpan = COLUMNAS_TABLA;
+
     fila.after(panel);
 
     // La clase que lo abre se pone en el frame siguiente: puesta a la vez que se inserta, el
@@ -772,8 +850,14 @@ function obtenerPanel(fila, animar) {
 }
 
 /**
- * Deja la fila coherente con su estado: resaltado, aria-expanded de cada botón y el texto de
- * los avisos emergentes.
+ * Deja la fila coherente con su estado: resaltado, aria-expanded de cada botón, y el nombre y
+ * el aviso emergente de cada acción.
+ *
+ * El nombre accesible y el aviso se escriben en el mismo sitio a propósito. Son dos textos que
+ * tienen que decir lo mismo (criterio 2.5.3: quien dicta "editar cliente" a un control por voz
+ * necesita que ese sea de verdad el nombre del botón), y repartidos en dos funciones acabarían
+ * desincronizados en cuanto uno de los dos cambiase.
+ *
  * @param {HTMLTableRowElement} fila la fila del cliente
  * @param {string|null} modo el modo abierto, o null si está cerrada
  */
@@ -808,14 +892,36 @@ function marcarFila(fila, modo) {
 
     // Pulsar la fila o el ojo lleva SIEMPRE al detalle, así que en modo edición el aviso no
     // puede decir "Ocultar": lo que va a pasar es que se cambie al detalle.
-    const pistaDetalle = modo === "detalle" ? "Ocultar detalles" : "Ver detalles";
-    escribirPista(fila.querySelectorAll("th, td:not(.celda-acciones)"), pistaDetalle);
-    escribirPista([botonVer], pistaDetalle);
-    escribirPista([botonEditar], modo === "edicion" ? "Cancelar la edición" : "Editar cliente");
+    const accionDetalle = modo === "detalle" ? "Ocultar detalles" : "Ver detalles";
+    const accionEditar = modo === "edicion" ? "Cancelar la edición" : "Editar cliente";
+
+    escribirPista(fila.querySelectorAll("th, td:not(.celda-acciones)"), accionDetalle);
+    nombrarAccion(botonVer, accionDetalle, `${accionDetalle} de`);
+    nombrarAccion(botonEditar, accionEditar,
+        modo === "edicion" ? "Cancelar la edición de" : "Editar cliente");
 
     // El de eliminar no cambia nunca, pero pasa por aquí para que use el mismo aviso que los
     // demás: con el title del navegador salía con otro aspecto y con otro retardo.
-    escribirPista([fila.querySelector(".btn-eliminar")], "Eliminar cliente");
+    nombrarAccion(fila.querySelector(".btn-eliminar"), "Eliminar cliente", "Eliminar cliente");
+}
+
+/**
+ * Pone a un botón de icono su aviso emergente y su nombre accesible, con el cliente dentro.
+ *
+ * Sin el nombre del cliente, quien navega con lector de pantalla y pide la lista de botones de
+ * la página oye diez veces "Editar cliente" sin saber a cuál pertenece cada uno. El nombre
+ * empieza por el mismo texto que se ve en el aviso porque es lo que dicta quien usa control
+ * por voz, y así lo que dice y lo que el navegador busca coinciden.
+ *
+ * @param {HTMLElement} boton el botón de la acción
+ * @param {string} accion el texto del aviso emergente ("Editar cliente")
+ * @param {string} comienzoNombre con qué empieza el nombre accesible, antes del cliente
+ */
+function nombrarAccion(boton, accion, comienzoNombre) {
+    const nombreCliente = boton.closest("tr").querySelector(".cliente-nombre").textContent;
+
+    escribirPista([boton], accion);
+    boton.setAttribute("aria-label", `${comienzoNombre} ${nombreCliente}`);
 }
 
 /** Vuelve a abrir los paneles que siguieran desplegados antes de repintar la tabla. */
@@ -869,6 +975,11 @@ function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
     // que descartar y no tiene sentido preguntarle.
     formulario.dataset.valoresOriginales = JSON.stringify(valoresBd);
 
+    // El hueco del error del NIF/CIF necesita id propio para que el campo pueda apuntarle con
+    // aria-describedby cuando el servidor rechace el guardado. Lleva el id del cliente porque
+    // puede haber varios formularios abiertos y dos elementos no pueden compartir id.
+    mensajeDe(formulario, "nifCif").id = `error-nifcif-${cliente.idCliente}`;
+
     contenido.replaceChildren(panel);
 
     if (enfocar) {
@@ -876,10 +987,16 @@ function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
     }
 }
 
-/** Aviso de "cargando" mientras llega la respuesta del backend. */
+/**
+ * Aviso de "cargando" mientras llega la respuesta del backend.
+ *
+ * role="status" para que el lector de pantalla lo anuncie: el panel se acaba de abrir y, si no,
+ * quien no ve la pantalla se encuentra con una zona vacía sin saber que hay algo en camino.
+ */
 function pintarCargando(contenido) {
     const aviso = document.createElement("p");
     aviso.className = "panel-aviso";
+    aviso.setAttribute("role", "status");
     aviso.textContent = "Cargando los datos del cliente…";
     contenido.replaceChildren(aviso);
 }
@@ -890,6 +1007,7 @@ function pintarErrorPanel(contenido, error) {
 
     const aviso = document.createElement("p");
     aviso.className = "panel-aviso panel-aviso-error";
+    aviso.setAttribute("role", "status");
     aviso.textContent = "No se pudieron cargar los datos del cliente. ";
 
     const boton = document.createElement("button");
@@ -922,6 +1040,20 @@ function leerFormulario(formulario) {
         valores[campo] = formulario.elements[campo].value.trim();
     }
     return valores;
+}
+
+/**
+ * El hueco donde va el mensaje de error de un campo del formulario.
+ *
+ * Se busca por el nombre del campo y no con nextElementSibling: así el mensaje se puede mover
+ * dentro de la celda sin que esto deje de encontrarlo.
+ *
+ * @param {HTMLFormElement} formulario el formulario de edición
+ * @param {string} campo el atributo name del campo
+ * @return {Element} el div del mensaje
+ */
+function mensajeDe(formulario, campo) {
+    return formulario.querySelector(`[name="${campo}"] ~ .invalid-feedback`);
 }
 
 /** ¿Se ha tocado algo respecto a lo que hay en la base de datos? */
@@ -1049,6 +1181,8 @@ function manejarClicPanel(evento, panel) {
 cuerpoTabla.addEventListener("input", (evento) => {
     if (evento.target.name === "nifCif") {
         evento.target.classList.remove("is-invalid");
+        evento.target.removeAttribute("aria-invalid");
+        evento.target.removeAttribute("aria-describedby");
     }
 });
 
@@ -1093,18 +1227,29 @@ async function guardarEdicion(formulario) {
     boton.disabled = true;   // sin esto, dos clics seguidos mandan dos PUT
 
     try {
-        const respuesta = await enviarJson(`guardar-${idCliente}`, "PUT",
+        const estado = await enviarJson(`guardar-${idCliente}`, "PUT",
             `${API_CLIENTE}/${idCliente}`, cuerpoPeticion(formulario));
 
-        if (respuesta.estado === 200) {
-            if (fila) cerrarDespliegue(fila);
+        if (estado === 200) {
+            // Se cierra por el id y no por la fila: si la tabla se ha repintado mientras
+            // viajaba la petición, "fila" apunta a un <tr> que ya no está en el documento y
+            // cerrarDespliegue no llegaría a borrar la entrada del Map. Quedaría un panel
+            // abierto de un cliente que el usuario ya había terminado de editar.
+            filasDesplegadas.delete(idCliente);
+            if (fila?.isConnected) cerrarDespliegue(fila);
+
+            // Y que la tabla, al repintarse, devuelva el foco al botón de editar de esta fila:
+            // el que estaba pulsado deja de existir y el foco se iría al principio de la página.
+            focoPendiente = idCliente;
+            anunciar("Cliente guardado.");
+
             // El contrato del proyecto para avisar de un cambio. La tabla se recarga sola, así
             // que la fila enseña lo guardado y se recoloca si el orden la ha movido de sitio.
             document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
             return;
         }
 
-        mostrarErrorGuardado(formulario, respuesta.estado);
+        mostrarErrorGuardado(formulario, estado);
     } catch (error) {
         if (esCancelacion(error)) return;
         console.error("No se pudo guardar el cliente:", error);
@@ -1139,8 +1284,17 @@ function mostrarErrorGuardado(formulario, estado) {
     // usuario a adivinar cuál de los ocho campos es el del problema.
     if (estado === 409) {
         const campo = formulario.elements.nifCif;
+        const mensaje = mensajeDe(formulario, "nifCif");
+
+        mensaje.textContent = "Ya existe otro cliente con este NIF/CIF.";
         campo.classList.add("is-invalid");
-        campo.nextElementSibling.textContent = "Ya existe otro cliente con este NIF/CIF.";
+
+        // El rojo de Bootstrap es solo color. aria-invalid es lo que hace que un lector de
+        // pantalla diga "no válido" al llegar al campo, y describedby es lo que le hace leer
+        // el motivo: sin ellos, quien no ve la pantalla se queda con el foco en un campo que
+        // aparentemente no tiene nada.
+        campo.setAttribute("aria-invalid", "true");
+        campo.setAttribute("aria-describedby", mensaje.id);
         campo.focus();
         return;
     }
@@ -1149,8 +1303,12 @@ function mostrarErrorGuardado(formulario, estado) {
 
     if (estado === 404) {
         // Alguien lo ha borrado mientras se editaba: no hay nada que guardar y la tabla que se
-        // está viendo ya no es la que hay en la base de datos.
+        // está viendo ya no es la que hay en la base de datos. El aviso va también a la zona
+        // de estado, fuera de la tabla, porque el refresco que viene a continuación se lleva
+        // por delante esta fila y con ella la alerta del formulario.
         alerta.textContent = "Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.";
+        anunciar("Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.", true);
+        filasDesplegadas.delete(Number(formulario.dataset.clienteId));
         document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
     } else if (estado === 400) {
         alerta.textContent = "El servidor ha rechazado los datos. Revisa los campos marcados.";
@@ -1169,45 +1327,91 @@ function limpiarErrores(formulario) {
 
     const campo = formulario.elements.nifCif;
     campo.classList.remove("is-invalid");
-    campo.nextElementSibling.textContent = "El NIF/CIF es obligatorio.";
+    campo.removeAttribute("aria-invalid");
+    campo.removeAttribute("aria-describedby");
+
+    // Se devuelve el mensaje que el <template> trae de fábrica (el de "es obligatorio"), que es
+    // el que le toca enseñar al navegador si el campo se queda vacío.
+    mensajeDe(formulario, "nifCif").textContent = MENSAJE_NIF_BASE;
 }
 
 /**
- * Manda un JSON al backend y devuelve el código y el cuerpo de la respuesta.
+ * Manda un JSON al backend y devuelve el código de la respuesta.
  *
- * Es la hermana de pedirJson para las peticiones que escriben. La diferencia importante es
- * que aquí un 4xx NO se trata como excepción: el 404 y el 409 son respuestas útiles que la
- * pantalla tiene que saber contar, cada una con su mensaje.
+ * Es la hermana de pedirJson para las peticiones que escriben, con dos diferencias. Aquí un
+ * 4xx NO se trata como excepción: el 404 y el 409 son respuestas útiles que la pantalla tiene
+ * que saber contar, cada una con su mensaje. Y del 200 solo interesa que haya ido bien, porque
+ * los datos guardados se vuelven a leer al refrescar la tabla; el cuerpo ni se lee.
  *
  * @param {string} canal nombre del flujo de peticiones (una por fila que se guarda)
  * @param {string} metodo el método HTTP ("PUT")
  * @param {string} url la URL a la que se manda
  * @param {Object} cuerpo el objeto que viaja como JSON
- * @return {Promise<{estado: number, datos: Object|null}>}
+ * @return {Promise<number>} el código HTTP de la respuesta
  */
 async function enviarJson(canal, metodo, url, cuerpo) {
     peticionesEnVuelo[canal]?.abort();
     const controlador = new AbortController();
     peticionesEnVuelo[canal] = controlador;
 
-    const respuesta = await fetch(url, {
-        method: metodo,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cuerpo),
-        signal: controlador.signal,
-    });
-
-    return { estado: respuesta.status, datos: await leerJsonSiLoHay(respuesta) };
-}
-
-/** El JSON de la respuesta, o null: los errores del backend llegan con el cuerpo vacío. */
-async function leerJsonSiLoHay(respuesta) {
     try {
-        return await respuesta.json();
-    } catch {
-        return null;
+        const respuesta = await fetch(url, {
+            method: metodo,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cuerpo),
+            signal: controlador.signal,
+        });
+
+        return respuesta.status;
+    } finally {
+        cerrarCanal(canal, controlador);
     }
 }
+
+/**
+ * Da por terminado un canal de peticiones.
+ *
+ * Los canales de guardado y de detalle llevan el id del cliente dentro del nombre, así que se
+ * crea uno nuevo por cada fila que se abre o se guarda y se quedarían ahí para siempre. Se
+ * comprueba que el controlador siga siendo el mismo antes de borrarlo: si mientras tanto ha
+ * arrancado otra petición del canal, la entrada es SUYA y borrarla dejaría sin cancelar a la
+ * que viene después.
+ *
+ * @param {string} canal nombre del flujo de peticiones
+ * @param {AbortController} controlador el de la petición que acaba de terminar
+ */
+function cerrarCanal(canal, controlador) {
+    if (peticionesEnVuelo[canal] === controlador) {
+        delete peticionesEnVuelo[canal];
+    }
+}
+
+/**
+ * Deja el contenedor de la tabla en el recorrido del tabulador solo si de verdad hay algo que
+ * desplazar.
+ *
+ * Una zona con scroll tiene que poder recorrerse con el teclado, pero una parada del tabulador
+ * en un sitio donde no hay nada que hacer es una molestia para quien navega así, y en un
+ * escritorio normal la tabla cabe entera y nunca se desplaza.
+ */
+function ajustarFocoTabla() {
+    // 1px de margen: los anchos son decimales y un redondeo hace que scrollWidth salga un
+    // pelín mayor que clientWidth en tablas que en realidad caben.
+    const desborda = contenedorTabla.scrollWidth - contenedorTabla.clientWidth > 1;
+
+    if (desborda) {
+        contenedorTabla.setAttribute("tabindex", "0");
+    } else {
+        contenedorTabla.removeAttribute("tabindex");
+    }
+}
+
+// Se vigilan los dos: la ventana al cambiar de tamaño encoge el contenedor, y un nombre muy
+// largo o un panel abierto ensanchan la tabla. Cualquiera de las dos cosas hace aparecer o
+// desaparecer el desplazamiento.
+const observadorTabla = new ResizeObserver(ajustarFocoTabla);
+observadorTabla.observe(contenedorTabla);
+observadorTabla.observe(cuerpoTabla.closest("table"));
 
 // --- Carga inicial ---
 pintarControlesOrden();
@@ -1217,20 +1421,11 @@ cargarPoblaciones("");
 cargarClientes(0);
 
 
-// Los botones de VER y EDITAR se atienden con delegación en el <tbody>, arriba, en la
-// sección del despliegue de la fila.
-
-// 3. Botón ELIMINAR
-document.querySelectorAll('.btn-eliminar').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id;
-
-    if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
-      console.log('Eliminar cliente:', idCliente);
-      // Aquí ejecutas tu llamada API o función: eliminarCliente(idCliente);
-    }
-  });
-});
+// Los botones de la fila se atienden con delegación en el <tbody>, arriba, en la sección del
+// despliegue: las filas se clonan de un <template> y no existen todavía cuando este archivo se
+// ejecuta, así que un querySelectorAll de '.btn-eliminar' aquí no encuentra ningún botón y no
+// engancha nada (había uno y por eso no hacía nada). El borrado es de otra feature: cuando se
+// implemente, su sitio es un caso más en ese manejador, junto a los de ver y editar.
 
 // Buscamos el botón "Añadir Cliente"
 const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');

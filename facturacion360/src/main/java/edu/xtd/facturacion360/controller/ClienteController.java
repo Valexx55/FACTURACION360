@@ -1,6 +1,5 @@
 package edu.xtd.facturacion360.controller;
 
-import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.List;
 import java.util.Optional;
 
@@ -349,6 +348,8 @@ public class ClienteController {
 	 *         válidos; {@code 404} si no existe ese cliente; {@code 409} si el NIF/CIF ya es de
 	 *         otro cliente; o {@code 500} si falla la BD.
 	 * @autor AngelDanielC0des
+	 * @see #obtenerPorId(int)
+	 * @see #crear(ClienteRequest, BindingResult)
 	 */
 	@Operation(summary = "Actualiza un cliente", description = "Modifica los datos del cliente indicado; la fecha de alta se conserva")
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Cliente actualizado correctamente"),
@@ -365,21 +366,28 @@ public class ClienteController {
 		log.info("PUT /cliente/{}", id);
 
 		if (bindingResult.hasErrors()) {
+			// warn y no error: los datos mal formados son cosa de quien llama, no un fallo del
+			// servidor, y en el log conviene que 'error' sea siempre algo que hay que mirar.
 			// Solo el campo y su mensaje: getAllErrors() vuelca el objeto de error entero y deja
 			// veinte líneas de códigos de Spring en el log por cada campo que falle.
-			log.error("PUT /cliente/{} -> datos no válidos: {}", id, bindingResult.getFieldErrors().stream()
+			log.warn("PUT /cliente/{} -> datos no válidos: {}", id, bindingResult.getFieldErrors().stream()
 					.map(error -> error.getField() + ": " + error.getDefaultMessage()).toList());
 			respuestaHttp = ResponseEntity.badRequest().build();
 		} else {
 			try {
 				Cliente cliente = clienteMapper.toDomain(clienteRequest);
-				Cliente actualizado = clienteService.actualizar(id, cliente);
 
-				if (actualizado == null) {
+				// Optional igual que en obtenerPorId: aquí es donde "no existe" se convierte en
+				// el 404 que le corresponde.
+				Optional<Cliente> actualizado = clienteService.actualizar(id, cliente);
+
+				if (actualizado.isPresent()) {
+					ClienteResponse respuesta = clienteMapper.toResponse(actualizado.get());
+					log.info("PUT /cliente/{} -> cliente actualizado", id);
+					respuestaHttp = ResponseEntity.ok(respuesta);
+				} else {
 					log.warn("PUT /cliente/{} -> no existe", id);
 					respuestaHttp = ResponseEntity.notFound().build();
-				} else {
-					respuestaHttp = ResponseEntity.ok(clienteMapper.toResponse(actualizado));
 				}
 			} catch (DuplicateKeyException e) {
 				// nif_cif tiene índice UNIQUE: cambiarlo por el de otro cliente lo viola. Sin este

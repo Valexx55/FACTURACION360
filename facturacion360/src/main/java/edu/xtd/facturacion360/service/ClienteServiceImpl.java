@@ -162,31 +162,38 @@ public class ClienteServiceImpl implements ClienteService {
 	// cliente que ya no está en la tabla.
 	@Transactional
 	@Override
-	public Cliente actualizar(int id, Cliente cliente) {
+	public Optional<Cliente> actualizar(int id, Cliente cliente) {
 
 		// Se comprueba ANTES si existe, en vez de deducirlo del número de filas que devuelve el
 		// UPDATE. Ese número no distingue "el cliente no existe" de "existe pero se ha guardado
 		// sin cambiar nada", y con la segunda lectura el usuario recibiría un 404 al pulsar
 		// Guardar sin haber tocado ningún campo.
 		Optional<Cliente> existente = clienteRepository.findById(id);
+		Optional<Cliente> resultado;
 
 		if (existente.isEmpty()) {
 			log.warn("actualizar({}) -> el cliente no existe", id);
-			return null;
+			resultado = Optional.empty();
+		} else {
+			// La fecha de alta no se edita: el UPDATE no toca esa columna, así que aquí
+			// conservamos la que ya está en la BD. Si se copiara la del cliente recibido,
+			// viajaría a null (el mapper la deja así al no venir en el ClienteRequest) y la
+			// respuesta borraría la columna "Alta" de la fila en cuanto el frontend la
+			// repintara.
+			Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
+					cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(),
+					cliente.email(), existente.get().fechaAlta());
+
+			// El boolean de update() se ignora a propósito: MySQL devuelve 0 filas afectadas
+			// cuando la sentencia no cambia ningún valor, así que un false NO significa "no
+			// existe". Eso ya lo ha resuelto el findById de arriba, en esta misma transacción.
+			clienteRepository.update(clienteActualizado);
+
+			log.info("actualizar({}) -> cliente actualizado", id);
+			resultado = Optional.of(clienteActualizado);
 		}
 
-		// La fecha de alta no se edita: el UPDATE no toca esa columna, así que aquí conservamos
-		// la que ya está en la BD. Si se copiara la del cliente recibido, viajaría a null (el
-		// mapper la deja así al no venir en el ClienteRequest) y la respuesta borraría la
-		// columna "Alta" de la fila en cuanto el frontend la repintara.
-		Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
-				cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(), cliente.email(),
-				existente.get().fechaAlta());
-
-		clienteRepository.update(clienteActualizado);
-
-		log.info("actualizar({}) -> cliente actualizado", id);
-		return clienteActualizado;
+		return resultado;
 	}
 	
 	

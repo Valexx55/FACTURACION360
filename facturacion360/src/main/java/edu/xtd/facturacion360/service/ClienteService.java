@@ -114,17 +114,22 @@ public interface ClienteService {
 	 * <p>La comprobación de existencia y la escritura van en la misma transacción, para que
 	 * entre las dos no pueda colarse un borrado de otro usuario.</p>
 	 *
+	 * <p>Devuelve un {@link Optional} por el mismo motivo que
+	 * {@link #obtenerPorId(int)}: "ese cliente no existe" es un resultado normal que acaba
+	 * en un 404, no un error, y así el controller no puede olvidarse de comprobarlo.</p>
+	 *
 	 * @param id      identificador del cliente que se modifica
 	 * @param cliente los datos nuevos; su id y su fecha de alta se ignoran
-	 * @return el cliente ya actualizado (con su fecha de alta original), o {@code null} si no
-	 *         existe ningún cliente con ese id
+	 * @return el cliente ya actualizado (con su fecha de alta original), o un {@code Optional}
+	 *         vacío si no existe ningún cliente con ese id
 	 * @throws DataAccessException si falla el acceso a la base de datos, incluida la violación
 	 *                             del índice único de {@code nif_cif}
 	 *                             ({@code DuplicateKeyException})
 	 * @autor AngelDanielC0des
+	 * @see #obtenerPorId(int)
 	 * @see ClienteRepository#update(Cliente)
 	 */
-	public Cliente actualizar(int id, Cliente cliente);
+	public Optional<Cliente> actualizar(int id, Cliente cliente);
 
 	public void eliminar(int id);
 

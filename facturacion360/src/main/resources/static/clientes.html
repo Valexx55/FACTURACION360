@@ -58,8 +58,11 @@
             <div class="buscador-clientes">
                 <i class="fa-solid fa-magnifying-glass buscador-icono" aria-hidden="true"></i>
                 <span class="buscador-etiqueta" aria-hidden="true">Buscar</span>
+                <!-- maxlength es el @Size(max = 60) de CriteriosCliente, que a su vez es lo
+                     que mide la columna nombre: pasarse solo sirve para que el servidor
+                     conteste 400. Mismo criterio que en el formulario de edición. -->
                 <input type="search" id="buscador-clientes" class="buscador-input"
-                       placeholder="Buscar por nombre o CIF..."
+                       placeholder="Buscar por nombre o CIF..." maxlength="60"
                        aria-label="Buscar cliente por nombre o CIF">
             </div>
 
@@ -103,12 +106,20 @@
             </button>
         </search>
 
-        <!-- Avisos de lo que acaba de pasar ("Cliente guardado"). Vive FUERA de la tabla a
-             propósito: si estuviera dentro del panel de la fila, el refresco que sigue a un
-             guardado lo borraría junto con la fila y no daría tiempo a leerlo. role="status"
-             hace que un lector de pantalla lo anuncie solo, sin robar el foco: guardar cambia
-             la pantalla sin cambiar de contexto y hay que poder enterarse (criterio 4.1.3). -->
-        <p id="aviso-clientes" class="aviso-clientes" role="status" hidden></p>
+        <!-- La zona por la que se entera de las cosas quien no ve la pantalla. Está SIEMPRE en
+             el documento y vacía, y clientes.js solo le cambia el texto: una región que se crea
+             (o que se destapa) con el mensaje ya dentro no se anuncia, porque el lector de
+             pantalla vigila los cambios de una región que ya estaba ahí (criterio 4.1.3).
+             Es la única del listado, así que nada se anuncia dos veces, y al ser invisible
+             puede repetir lo que ya se ve en su sitio (el mensaje de la tabla, el del panel)
+             sin duplicarlo en pantalla. -->
+        <p id="anuncios" class="visually-hidden" role="status"></p>
+
+        <!-- Y esta es la franja VISIBLE de lo que acaba de pasar ("Cliente guardado"). Vive
+             fuera de la tabla a propósito: dentro del panel de la fila, el refresco que sigue a
+             un guardado la borraría junto con la fila y no daría tiempo a leerla. Sin role
+             propio: de anunciarla se encarga la región de arriba. Vacía no ocupa (:empty). -->
+        <p id="aviso-clientes" class="aviso-clientes"></p>
 
         <!--
             CORRECCION: el div.table-responsive envuelve UNICAMENTE la tabla y
@@ -356,8 +367,11 @@
 
                 <div class="pie-edicion">
                     <!-- role="alert" hace que un lector de pantalla lea el error del servidor en
-                         cuanto aparece, sin tener que ir a buscarlo. -->
-                    <p class="alerta-edicion" role="alert" hidden></p>
+                         cuanto aparece, sin tener que ir a buscarlo. Sin hidden y sin quitarlo
+                         luego: una región que se destapa con el texto ya escrito no se anuncia,
+                         porque lo que se vigila es el cambio de contenido. Vacía no ocupa
+                         (:empty en la hoja de estilos). -->
+                    <p class="alerta-edicion" role="alert"></p>
                     <div class="acciones-edicion">
                         <button type="button" class="btn btn-sm btn-outline-secondary btn-cancelar">Cancelar</button>
                         <button type="submit" class="btn btn-sm btn-primary btn-guardar">

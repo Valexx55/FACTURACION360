@@ -61,6 +61,7 @@ const iconoDireccion = document.getElementById("icono-direccion");
 const etiquetaDireccion = document.getElementById("etiqueta-direccion");
 const btnLimpiar = document.getElementById("btn-limpiar");
 const cabecerasOrdenables = document.querySelectorAll(".th-ordenable");
+const regionAnuncios = document.getElementById("anuncios");
 const avisoClientes = document.getElementById("aviso-clientes");
 const contenedorTabla = cuerpoTabla.closest(".table-responsive");
 
@@ -118,6 +119,19 @@ let focoPendiente = null;
  *               tecleado sin avisar.
  */
 const filasDesplegadas = new Map();
+
+/*
+ * Los clientes de la página que se está viendo: id -> ClienteResponse, tal cual llegó.
+ *
+ * El listado ya trae TODOS los campos del cliente, los mismos que devuelve GET /cliente/{id},
+ * así que al volver a abrir un panel tras repintar la tabla los datos ya están aquí. Sin esto,
+ * cada tecla del buscador con tres paneles abiertos lanzaba cuatro peticiones: la del listado
+ * y una por panel, todas para pintar lo que la primera acababa de traer.
+ *
+ * No es una caché: se tira y se rehace en cada repintado, así que nunca contiene nada más
+ * viejo que la tabla que se está viendo. Abrir un panel a mano sigue preguntando al servidor.
+ */
+const clientesEnPagina = new Map();
 
 // Los campos que se pueden editar, en un orden fijo. Se usa para leer el formulario, para
 // rellenarlo y para comparar si algo ha cambiado: al recorrer siempre esta misma lista, los
@@ -271,6 +285,11 @@ function pintarFilas(clientes) {
 
     cuerpoTabla.replaceChildren(); // limpia la tabla sin usar innerHTML
 
+    // Los datos de esta página, para que los paneles que se reabran no vuelvan a pedirlos.
+    // Se vacía aquí, antes de rellenarlo: si no, iría acumulando los clientes de todas las
+    // páginas que se hayan visitado y acabaría sirviendo datos de hace diez búsquedas.
+    clientesEnPagina.clear();
+
     if (!Array.isArray(clientes) || clientes.length === 0) {
         // El mensaje cambia según el motivo: "no hay clientes" y "tu búsqueda no
         // encuentra nada" son cosas distintas y el usuario reacciona distinto a cada una.
@@ -287,6 +306,8 @@ function pintarFilas(clientes) {
     }
 
     for (const [indice, cliente] of clientes.entries()) {
+        clientesEnPagina.set(cliente.idCliente, cliente);
+
         // Clonamos el contenido del template (un <tr> completo con sus celdas).
         const fila = plantillaFila.content.cloneNode(true);
 
@@ -339,28 +360,36 @@ function devolverFoco() {
 }
 
 /**
- * Cuenta en la zona de avisos lo que acaba de pasar.
+ * Cuenta lo que acaba de pasar: siempre a quien no ve la pantalla, y además en la franja de
+ * avisos cuando no haya otro sitio donde se vea.
  *
- * Vive fuera de la tabla porque el guardado la repinta entera: dentro del panel, el mensaje
- * desaparecería en el mismo instante en que se escribe. El orden de las dos líneas importa:
- * primero se muestra y luego se escribe, porque una región oculta no está en el árbol de
- * accesibilidad y el lector de pantalla no llegaría a anunciar el texto.
+ * Son dos elementos y no uno porque resuelven cosas distintas. #anuncios está siempre en el
+ * documento, vacío e invisible, y es lo único que lee el lector de pantalla: una región que
+ * aparece con el mensaje ya dentro no se anuncia, porque lo que se vigila es el cambio de
+ * contenido de algo que ya estaba. Y al ser invisible puede repetir un texto que ya se ve en
+ * su sitio (el mensaje de la tabla vacía, el del panel) sin que salga escrito dos veces.
  *
  * @param {string} texto lo que se cuenta
- * @param {boolean} [esError=false] si es un problema y no una confirmación
+ * @param {Object} [opciones]
+ * @param {boolean} [opciones.visible=false] si además se escribe en la franja de avisos.
+ *        Para lo que no tiene otro sitio donde verse, como el "Cliente guardado" de una fila
+ *        que el refresco se lleva por delante
+ * @param {boolean} [opciones.esError=false] si es un problema y no una confirmación
  */
-function anunciar(texto, esError = false) {
-    clearTimeout(temporizadorAviso);
+function anunciar(texto, { visible = false, esError = false } = {}) {
+    regionAnuncios.textContent = texto;
 
-    avisoClientes.hidden = false;
+    if (!visible) return;
+
+    clearTimeout(temporizadorAviso);
     avisoClientes.classList.toggle("aviso-error", esError);
     avisoClientes.textContent = texto;
 
     // Se borra solo: es información de "ha pasado esto ahora", y dejarla fija acaba
     // confundiendo (un "Cliente guardado" de hace diez minutos parece de la última acción).
+    // Se vacía en vez de esconderse: la hoja de estilos ya oculta la franja vacía.
     temporizadorAviso = setTimeout(() => {
         avisoClientes.textContent = "";
-        avisoClientes.hidden = true;
     }, DURACION_AVISO_MS);
 }
 
@@ -535,7 +564,15 @@ function mostrarMensaje(texto, { conLimpiar = false } = {}) {
 /** Muestra el error al usuario y lo deja en consola para depurar. */
 function mostrarError(error) {
     console.error("No se pudieron cargar los clientes:", error);
-    mostrarMensaje("No se pudieron cargar los clientes. Inténtalo de nuevo.");
+
+    const mensaje = "No se pudieron cargar los clientes. Inténtalo de nuevo.";
+
+    // El texto va donde se estaría mirando, dentro de la tabla, y se anuncia por la región
+    // invisible: escrito ahí dentro no lo lee nadie, porque el <tbody> no es una región viva
+    // y quien no ve la pantalla se quedaría esperando unos datos que no van a llegar.
+    mostrarMensaje(mensaje);
+    anunciar(mensaje);
+
     btnAnterior.disabled = true;
     btnSiguiente.disabled = true;
 }
@@ -598,11 +635,24 @@ async function cargarPoblaciones(provincia) {
 let temporizadorBusqueda = null;
 inputBuscador.addEventListener("input", () => {
     clearTimeout(temporizadorBusqueda);
-    temporizadorBusqueda = setTimeout(() => {
-        criterios.busqueda = inputBuscador.value.trim();
-        aplicarCriterios();
-    }, ESPERA_TECLEO_MS);
+    temporizadorBusqueda = setTimeout(buscar, ESPERA_TECLEO_MS);
 });
+
+// Enter es "ya he terminado de escribir": esperar los 300 ms de rigor después de eso se siente
+// como que la tecla no ha hecho nada. No hay submit que evitar, el buscador no está en un
+// <form>, pero sí hay que cancelar la espera o la búsqueda se lanzaría dos veces.
+inputBuscador.addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") {
+        clearTimeout(temporizadorBusqueda);
+        buscar();
+    }
+});
+
+/** Lleva al estado lo que hay escrito en el buscador y recarga la tabla. */
+function buscar() {
+    criterios.busqueda = inputBuscador.value.trim();
+    aplicarCriterios();
+}
 
 selectProvincia.addEventListener("change", async () => {
     criterios.provincia = selectProvincia.value;
@@ -695,10 +745,15 @@ document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActua
  * imposible tener a la vez el detalle y el formulario del mismo cliente enseñando cosas
  * distintas, y pasar de uno a otro es cambiar el contenido, no cerrar y abrir.
  *
- * Los datos se piden SIEMPRE al backend (GET /cliente/{id}), también al cambiar de modo. Es
- * la misma decisión que ya tomó el listado —recargar en vez de guardar copias—: un detalle
- * guardado de antes puede enseñar algo que otro usuario ya cambió, y en el formulario sería
- * peor todavía, porque se guardaría encima sin haberlo visto.
+ * Abrir un panel a mano pide los datos al backend (GET /cliente/{id}), también al cambiar de
+ * modo. Es la misma decisión que ya tomó el listado —recargar en vez de guardar copias—: un
+ * detalle guardado de antes puede enseñar algo que otro usuario ya cambió, y en el formulario
+ * sería peor todavía, porque se guardaría encima sin haberlo visto.
+ *
+ * Reabrir un panel tras repintar la tabla es el caso contrario: los datos acaban de llegar en
+ * la respuesta del listado, que trae los mismos campos, así que se pintan desde ahí. Pedirlos
+ * otra vez sería preguntar por lo que ya se sabe, y multiplicado por cada panel abierto y cada
+ * tecla del buscador.
  */
 
 /** ¿Qué panel tiene abierto esta fila? "detalle", "edicion" o null si está cerrada. */
@@ -723,8 +778,10 @@ function panelDe(fila) {
  *        estaba desplegado y volver a animarlo se vería como un parpadeo
  * @param {boolean} opciones.enfocar false al reabrir por lo mismo: llevarse el foco mientras
  *        el usuario escribe en el buscador le sacaría el cursor de donde está
+ * @param {Object|null} opciones.cliente los datos ya conocidos. Si vienen, se pinta con ellos
+ *        y no se pide nada; si no, se piden al backend
  */
-async function abrirDespliegue(fila, modo, { animar = true, enfocar = true } = {}) {
+async function abrirDespliegue(fila, modo, { animar = true, enfocar = true, cliente = null } = {}) {
     const idCliente = Number(fila.dataset.clienteId);
 
     // El borrador se conserva al cambiar de modo: si vuelves de detalle a edición, sigue lo
@@ -736,6 +793,15 @@ async function abrirDespliegue(fila, modo, { animar = true, enfocar = true } = {
     const contenido = panel.querySelector(".despliegue-contenido");
     marcarFila(fila, modo);
 
+    if (cliente) {
+        // Con los datos en la mano no hay espera que anunciar ni petición que esperar: se
+        // pinta y se acabó. Si quedaba una en el aire de una apertura anterior, se cancela;
+        // su respuesta ya no aporta nada y llegaría a pintar por encima de esto.
+        peticionesEnVuelo[`detalle-${idCliente}`]?.abort();
+        pintarContenidoPanel(contenido, modo, cliente, borrador, enfocar);
+        return;
+    }
+
     // Al abrir no hay nada que enseñar todavía; al cambiar de modo sí, y sustituirlo por un
     // "cargando" encogería el panel para volver a estirarlo un instante después. En ese caso
     // se deja lo que hay puesto, atenuado, hasta que llega el contenido nuevo.
@@ -746,23 +812,37 @@ async function abrirDespliegue(fila, modo, { animar = true, enfocar = true } = {
     }
 
     try {
-        const cliente = await pedirJson(`detalle-${idCliente}`, `${API_CLIENTE}/${idCliente}`);
+        const recibido = await pedirJson(`detalle-${idCliente}`, `${API_CLIENTE}/${idCliente}`);
 
         // Mientras llegaba la respuesta la fila ha podido cerrarse, o la tabla repintarse.
         const estado = filasDesplegadas.get(idCliente);
         if (!estado || !panel.isConnected) return;
 
-        if (estado.modo === "edicion") {
-            pintarPanelEdicion(contenido, cliente, estado.borrador, enfocar);
-        } else {
-            pintarPanelDetalle(contenido, cliente);
-        }
+        pintarContenidoPanel(contenido, estado.modo, recibido, estado.borrador, enfocar);
     } catch (error) {
         // Cancelada por nosotros (se cerró o se cambió de modo deprisa): ya viene otra.
         if (esCancelacion(error)) return;
         pintarErrorPanel(contenido, error);
     } finally {
         contenido.classList.remove("cargando");
+    }
+}
+
+/**
+ * Mete en el panel lo que toca según el modo. Está aparte porque los dos caminos de
+ * abrirDespliegue (con los datos ya en la mano y esperando al backend) terminan aquí.
+ *
+ * @param {Element} contenido el hueco del panel
+ * @param {string} modo "detalle" o "edicion"
+ * @param {Object} cliente los datos del cliente
+ * @param {Object|null} borrador lo que hubiera escrito sin guardar
+ * @param {boolean} enfocar si se lleva el cursor al primer campo del formulario
+ */
+function pintarContenidoPanel(contenido, modo, cliente, borrador, enfocar) {
+    if (modo === "edicion") {
+        pintarPanelEdicion(contenido, cliente, borrador, enfocar);
+    } else {
+        pintarPanelDetalle(contenido, cliente);
     }
 }
 
@@ -924,12 +1004,25 @@ function nombrarAccion(boton, accion, comienzoNombre) {
     boton.setAttribute("aria-label", `${comienzoNombre} ${nombreCliente}`);
 }
 
-/** Vuelve a abrir los paneles que siguieran desplegados antes de repintar la tabla. */
+/**
+ * Vuelve a abrir los paneles que siguieran desplegados antes de repintar la tabla.
+ *
+ * Se pintan con el cliente que acaba de traer el listado, no pidiéndolo otra vez: son los
+ * mismos datos y la respuesta está recién llegada. El cliente estará siempre en el mapa
+ * (la fila existe porque venía en esa respuesta), pero si faltara se pasa null y
+ * abrirDespliegue lo pide, que es lo que hacía antes.
+ */
 function reabrirDespliegues() {
     for (const fila of cuerpoTabla.querySelectorAll("tr.fila-cliente")) {
-        const estado = filasDesplegadas.get(Number(fila.dataset.clienteId));
+        const idCliente = Number(fila.dataset.clienteId);
+        const estado = filasDesplegadas.get(idCliente);
+
         if (estado) {
-            abrirDespliegue(fila, estado.modo, { animar: false, enfocar: false });
+            abrirDespliegue(fila, estado.modo, {
+                animar: false,
+                enfocar: false,
+                cliente: clientesEnPagina.get(idCliente) ?? null,
+            });
         }
     }
 }
@@ -990,13 +1083,14 @@ function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
 /**
  * Aviso de "cargando" mientras llega la respuesta del backend.
  *
- * role="status" para que el lector de pantalla lo anuncie: el panel se acaba de abrir y, si no,
- * quien no ve la pantalla se encuentra con una zona vacía sin saber que hay algo en camino.
+ * No lleva role: un elemento que nace con el texto dentro no se anuncia, y tampoco se manda a
+ * la región de anuncios a propósito. Es un mensaje de paso, que se sustituye en cuanto llega
+ * la respuesta, y anunciarlo dejaría al lector de pantalla leyendo algo que ya no está. Que el
+ * panel se ha abierto ya lo dice el aria-expanded del botón que se acaba de pulsar.
  */
 function pintarCargando(contenido) {
     const aviso = document.createElement("p");
     aviso.className = "panel-aviso";
-    aviso.setAttribute("role", "status");
     aviso.textContent = "Cargando los datos del cliente…";
     contenido.replaceChildren(aviso);
 }
@@ -1007,8 +1101,12 @@ function pintarErrorPanel(contenido, error) {
 
     const aviso = document.createElement("p");
     aviso.className = "panel-aviso panel-aviso-error";
-    aviso.setAttribute("role", "status");
     aviso.textContent = "No se pudieron cargar los datos del cliente. ";
+
+    // Este sí se anuncia: es el final del camino, y sin avisar el panel se queda en silencio
+    // como si siguiera cargando. El texto se ve aquí dentro, así que va solo a la región
+    // invisible y no a la franja de avisos.
+    anunciar("No se pudieron cargar los datos del cliente.");
 
     const boton = document.createElement("button");
     boton.type = "button";
@@ -1241,7 +1339,10 @@ async function guardarEdicion(formulario) {
             // Y que la tabla, al repintarse, devuelva el foco al botón de editar de esta fila:
             // el que estaba pulsado deja de existir y el foco se iría al principio de la página.
             focoPendiente = idCliente;
-            anunciar("Cliente guardado.");
+
+            // Visible: la fila que se estaba editando desaparece con el refresco y no quedaría
+            // ninguna señal de que el guardado ha ido bien.
+            anunciar("Cliente guardado.", { visible: true });
 
             // El contrato del proyecto para avisar de un cambio. La tabla se recarga sola, así
             // que la fila enseña lo guardado y se recoloca si el orden la ha movido de sitio.
@@ -1303,27 +1404,32 @@ function mostrarErrorGuardado(formulario, estado) {
 
     if (estado === 404) {
         // Alguien lo ha borrado mientras se editaba: no hay nada que guardar y la tabla que se
-        // está viendo ya no es la que hay en la base de datos. El aviso va también a la zona
-        // de estado, fuera de la tabla, porque el refresco que viene a continuación se lleva
-        // por delante esta fila y con ella la alerta del formulario.
-        alerta.textContent = "Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.";
-        anunciar("Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.", true);
+        // está viendo ya no es la que hay en la base de datos. Este es el único error que NO
+        // se escribe en la alerta del formulario: el refresco que viene a continuación se
+        // lleva por delante la fila y con ella la alerta, así que el aviso va a la franja de
+        // fuera, que es la que sobrevive.
+        anunciar("Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.",
+            { visible: true, esError: true });
         filasDesplegadas.delete(Number(formulario.dataset.clienteId));
         document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
-    } else if (estado === 400) {
+        return;
+    }
+
+    // Los demás dejan el panel abierto para poder corregir, así que se cuentan ahí mismo. La
+    // alerta es role="alert" y estaba en el documento desde que se pintó el formulario: basta
+    // con escribirle el texto para que se anuncie.
+    if (estado === 400) {
         alerta.textContent = "El servidor ha rechazado los datos. Revisa los campos marcados.";
     } else {
         alerta.textContent = "No se pudo guardar. Inténtalo de nuevo en unos segundos.";
     }
-
-    alerta.hidden = false;
 }
 
 /** Borra las marcas del intento anterior para no mezclar errores viejos con nuevos. */
 function limpiarErrores(formulario) {
-    const alerta = formulario.querySelector(".alerta-edicion");
-    alerta.hidden = true;
-    alerta.textContent = "";
+    // Vaciarla es esconderla: la hoja de estilos oculta la alerta sin texto, y así el elemento
+    // no se va nunca del documento, que es lo que necesita su role="alert" para anunciar.
+    formulario.querySelector(".alerta-edicion").textContent = "";
 
     const campo = formulario.elements.nifCif;
     campo.classList.remove("is-invalid");

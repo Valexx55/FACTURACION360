@@ -511,6 +511,13 @@ footer {
     color: #842029;
 }
 
+/* Se esconde vacía en vez de con el atributo hidden: el elemento tiene que estar siempre en
+   el documento para que su gemela invisible (#anuncios) tenga sentido, y con hidden habría
+   que acordarse de quitarlo y ponerlo en cada mensaje. */
+.aviso-clientes:empty {
+    display: none;
+}
+
 /* ==========================================
    TABLA DE CLIENTES
    ========================================== */
@@ -754,6 +761,12 @@ footer {
     margin: 0;
     color: #b91c1c;
     font-size: 0.9rem;
+}
+
+/* Vacía no ocupa. Va con :empty y no con hidden por lo mismo que la franja de avisos: el
+   role="alert" solo funciona si el elemento lleva ahí desde antes del mensaje. */
+.alerta-edicion:empty {
+    display: none;
 }
 
 .acciones-edicion {

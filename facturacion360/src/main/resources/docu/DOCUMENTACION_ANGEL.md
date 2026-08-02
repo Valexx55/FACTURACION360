@@ -794,6 +794,29 @@ abiertos, y con la fila del cliente ya por encima, antes no había forma de sabe
 los datos que se estaban leyendo. El nombre sale del texto **que ya se ve**, así que no hay
 dos cadenas que puedan acabar diciendo cosas distintas.
 
+### Contraste: los grises se han medido, no elegido a ojo
+
+Un gris "que se ve bien" en un monitor bueno puede estar por debajo de lo que exige el criterio
+**1.4.3** de WCAG (4.5:1 para texto normal, 3:1 para texto grande o para un elemento gráfico
+que transmite información). Se han medido todos los textos de esta pantalla contra el fondo
+sobre el que se pintan de verdad, y **cuatro no llegaban**:
+
+| Texto | Antes | Ahora | Mínimo |
+|---|---|---|---|
+| Rótulos de los paneles (`dt` y `label`, 12 px en negrita) | `#64748b` → 4.12:1 | `#475569` → **6.56:1** | 4.5:1 |
+| Aviso de "Cargando…" del panel | `#64748b` → 4.12:1 | `#475569` → **6.56:1** | 4.5:1 |
+| Placeholder del buscador | `#9ca3af` → **2.54:1** | `#6b7280` → **4.83:1** | 4.5:1 |
+| Cartel "Editando" | `#b45309` → 4.35:1 | `#92400e` → **6.14:1** | 4.5:1 |
+
+Dos detalles que explican por qué se escaparon:
+
+- **12 px en negrita NO es "texto grande".** El umbral está en 18 pt (24 px), o en 14 pt
+  (18,66 px) si va en negrita. Un rótulo pequeño y en negrita parece que debería contar como
+  grande y no cuenta, así que se le aplica el 4.5:1 completo.
+- **Al placeholder le aplica el criterio igual que a cualquier otro texto.** Es fácil pensar que
+  por ser una pista pasajera no cuenta. El gris nuevo es además el mismo que el de la palabra
+  "Buscar" que hay al lado, así que los dos textos del mismo control se ven ya iguales.
+
 ### Estilo: lo que se ve y por qué
 
 - **Rayado alterno azul/blanco, pintado por cliente y no por fila del DOM.** El
@@ -806,11 +829,17 @@ dos cadenas que puedan acabar diciendo cosas distintas.
   editando. Envuelve el bloque entero —la fila del cliente **más** las filas del panel, que en
   edición son dos de rótulos y dos de campos— de modo que los dos `<tr>` se leen como una sola
   tarjeta. La fila pone el borde de arriba y los laterales, el panel los laterales y el de
-  abajo, y el color viaja en una variable (`--color-modo`) declarada en las dos filas. Son las
-  versiones **oscuras** del verde y el ámbar: el `#ffc107` de Bootstrap da 1.6:1 sobre blanco y
-  un borde que transmite información necesita 3:1 (criterio **1.4.11**). Y como el color por sí
-  solo no vale (criterio **1.4.1**), el panel lo dice además con letras: "Viendo detalles de
-  García S.L." / "Editando García S.L.".
+  abajo, y el color viaja en una variable (`--color-modo`) declarada en las dos filas. Y como
+  el color por sí solo no vale (criterio **1.4.1**), el panel lo dice además con letras:
+  "Viendo detalles de García S.L." / "Editando García S.L.".
+
+  > **Los dos tonos son los oscuros, y el motivo es de contraste medido.** Como borde bastaría
+  > con 3:1 (criterio **1.4.11**), que es donde el `#ffc107` de Bootstrap ya se caía: da 1.6:1
+  > sobre blanco. Pero estos colores se usan **también para el texto del cartel**, y el texto
+  > necesita 4.5:1 (criterio **1.4.3**). Sobre el fondo del panel abierto (`#e7efff`), el verde
+  > `#157347` da 5.09:1 y el ámbar `#92400e` da 6.14:1. El ámbar que había antes (`#b45309`) se
+  > quedaba en **4.35:1**: valía como borde y no como texto, que es el tipo de fallo que no se
+  > ve mirando la pantalla.
 
   > **El borde del panel va condicionado al modo, no puesto siempre**, y esto costó un fallo
   > entender por qué. Al cerrar, `marcarFila()` quita las clases `modo-detalle` y

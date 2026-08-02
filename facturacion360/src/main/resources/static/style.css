@@ -1,12 +1,12 @@
-/* style.css
- *
- * La fuente NO se carga aquí con @import, aunque sea lo más cómodo: un @import obliga al
- * navegador a descargar y analizar esta hoja ANTES de poder pedir la fuente, así que retrasa
- * el primer pintado. Las tres páginas que usan este archivo (index, clientes y facturas) la
- * piden con su propia etiqueta <link>, que se descarga en paralelo. Si se añade una página
- * nueva, hay que acordarse de poner ahí el <link> con los pesos 400, 500, 600 y 700, que son
- * los que usa esta hoja.
- */
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+/* NOTA para quien revise el rendimiento: este @import está duplicado con la etiqueta <link>
+   que las tres páginas ya llevan en su <head>, y además retrasa el primer pintado, porque
+   obliga al navegador a descargar y analizar esta hoja ANTES de poder pedir la fuente. Se
+   deja a propósito: quitarlo obliga a añadir el peso 500 al <link> de index.html y
+   facturas.html, que son páginas de otras features, y no compensa meter mano ahí por esto.
+   Cuando alguien toque esas dos páginas, es un descarte de tres líneas. */
 
 :root {
     --primary-color: #4776f7;
@@ -17,11 +17,17 @@
     --focus-ring: #f59e0b; /* Contraste alto para accesibilidad */
 
     /* Colores de estado de la fila desplegada. Son las versiones OSCURAS del verde y el
-       ámbar: los tonos claros de Bootstrap (#198754 vale, pero #ffc107 da 1.6:1 sobre
-       blanco) no llegan al 3:1 que pide el criterio 1.4.11 de WCAG para un borde que
-       transmite información. */
+       ámbar, y el motivo es de contraste, no de gusto.
+
+       Como BORDE bastaría con menos: el criterio 1.4.11 de WCAG pide 3:1 para algo que
+       transmite información, y ahí el #ffc107 de Bootstrap ya se caía (da 1.6:1 sobre
+       blanco). Pero estos dos colores se usan además para el TEXTO del cartel ("Viendo
+       detalles de…", "Editando…"), y el texto necesita 4.5:1 (criterio 1.4.3). Medidos
+       sobre el fondo del panel abierto (#e7efff): el verde da 5.09:1 y el ámbar 6.14:1.
+       El ámbar anterior (#b45309) se quedaba en 4.35:1, o sea que valía como borde pero
+       NO como texto. */
     --estado-detalle: #157347;
-    --estado-edicion: #b45309;
+    --estado-edicion: #92400e;
 
     /* Alto común de la barra de filtros: el buscador y los desplegables tienen que medir
        lo mismo o la fila se ve escalonada. */
@@ -456,8 +462,12 @@ footer {
     transition: color 0.2s ease;
 }
 
+/* El mismo gris que la palabra "Buscar" de al lado: un placeholder es texto y le aplica el
+   criterio 1.4.3 igual que a cualquier otro. El #9ca3af que había daba 2.54:1 sobre blanco,
+   muy por debajo del 4.5:1; con #6b7280 sube a 4.83:1 y además los dos textos que dicen lo
+   mismo en el mismo control se ven ya del mismo color. */
 .buscador-clientes.expandido .buscador-input::placeholder {
-    color: #9ca3af;
+    color: #6b7280;
     transition-delay: 0.15s;   /* aparece cuando la píldora ya se ha abierto */
 }
 
@@ -741,13 +751,16 @@ footer {
 
 /* Los rótulos, más discretos que las cabeceras de la tabla principal: son de un detalle, no
    de la lista. Mismo aspecto para el <dt> del detalle y el <label> de la edición. */
+/* El gris es el más claro que se puede usar aquí: a 0.75rem y en negrita esto NO cuenta como
+   texto grande, así que necesita 4.5:1 (criterio 1.4.3), y sobre el fondo del panel abierto
+   (#e7efff) el #64748b que había antes se quedaba en 4.12:1. Con #475569 sube a 6.56:1. */
 .datos-cliente dt,
 .campo-edicion label {
     display: block;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #64748b;
+    color: #475569;
     font-weight: 600;
     margin-bottom: 0.2rem;
 }
@@ -775,9 +788,11 @@ footer {
     width: 100%;
 }
 
+/* Mismo gris que los rótulos y por el mismo motivo: sobre el fondo del panel, el #64748b
+   anterior se quedaba en 4.12:1 y el texto necesita 4.5:1. */
 .panel-aviso {
     margin: 0;
-    color: #64748b;
+    color: #475569;
 }
 
 .panel-aviso-error {

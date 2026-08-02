@@ -29,23 +29,124 @@ más". Si `/cliente/buscar` fuera aparte, habría que darle su propia paginació
 metadatos y su propio manejo de errores —y el frontend tendría dos caminos distintos según
 hubiera texto escrito o no—. Compartiendo endpoint, la búsqueda hereda todo eso gratis.
 
+---
+
+## Qué entrega la rama `feature/verDetallesYEditar_Angel`
+
+Resumen de todo lo implementado, para no tener que reconstruirlo leyendo 29 commits. Cada punto
+tiene su explicación completa más abajo; aquí está el **qué** y el enlace al **porqué**.
+
+### Backend
+
+| Endpoint | Estado | Códigos que devuelve |
+|---|---|---|
+| `GET /cliente/{id}` | **nuevo** — antes era un esbozo que devolvía `null` | 200 · 404 · 500 |
+| `PUT /cliente/{id}` | **arreglado** — tres fallos, ver abajo | 200 · 400 · 404 · 409 · 500 |
+| `GET /cliente/listar-pagina` | el `400` sale ya con cuerpo vacío, como el resto | 200 · 400 · 500 |
+| `GET /cliente/listar-ultimos` | marcado `@Deprecated`; sigue funcionando | 200 · 500 |
+| `GET /cliente/provincias` · `/poblaciones` | registran su `200`, que era lo único que faltaba | 200 · 500 |
+
+**Los tres fallos del `UPDATE`**, cada uno con su prueba de regresión:
+
+1. **Guardar sin cambiar nada respondía `404`.** MySQL informa de 0 filas afectadas cuando la
+   sentencia no altera ningún valor, y ese `false` se traducía a "no existe": pulsar Guardar sin
+   tocar un campo decía que el cliente no estaba. Ahora la existencia se comprueba con
+   `findById` **en la misma transacción** y el booleano del `update` se ignora a propósito.
+   → `guardarSinCambiosNoEsUnFallo`
+2. **La fecha de alta se borraba.** `ClienteRequest` no la trae, así que el mapper la dejaba a
+   `null` y la respuesta vaciaba la columna "Alta" en cuanto la fila se repintaba. Ahora se
+   conserva la que hay en la base de datos. → `laFechaDeAltaSeConserva`
+3. **El NIF repetido soltaba la traza de Spring al navegador.** `nif_cif` tiene índice `UNIQUE`
+   y la `DuplicateKeyException` no se capturaba. Ahora responde **409**. →
+   `guardarConNifDuplicado`
+
+Además: `actualizar` pasa a devolver `Optional<Cliente>` en vez de `null`, como `obtenerPorId`
+([por qué](#actualizar-también-devuelve-optional)); el escape de comodines del `LIKE` cambia a
+`!` para no depender del `sql_mode` del servidor
+([por qué](#por-qué-el-carácter-de-escape-es--y-no-la-barra-invertida)); y los criterios sanean
+los saltos de línea antes de llegar al log ([por qué](#qué-registra-cada-endpoint)).
+
+### Frontend
+
+**El despliegue de la fila** ([detalle](#ver-el-detalle-y-editar-en-la-propia-fila)):
+
+- Un único panel por cliente con **dos modos**, detalle o edición, en vez de dos filas que
+  pudieran contradecirse. Varios abiertos a la vez.
+- **El estado vive fuera del DOM**, así que los paneles abiertos y lo que estés escribiendo
+  sobreviven a buscar, paginar y refrescar.
+- **Se pinta al instante** con los datos que ya trajo el listado y se revalida contra el
+  servidor en paralelo; si algo cambió, se concilia **campo a campo sin pisar lo escrito**
+  ([detalle](#cuando-los-datos-frescos-no-coinciden-conciliar)).
+- Descartar cambios pregunta con un **diálogo de Bootstrap**, no con el `confirm()` del
+  navegador ([por qué](#descartar-cambios-un-diálogo-de-bootstrap-no-confirm)).
+- Tras guardar: **el foco vuelve** al lápiz de esa fila, se anuncia el resultado y la tabla se
+  refresca sola ([detalle](#qué-pasa-exactamente-al-pulsar-guardar)).
+- **Recuperación de página fuera de rango**: si la página en la que estabas deja de existir, se
+  aterriza en la última que sí ([detalle](#coordinación-con-listarpagina-la-página-que-ya-no-existe)).
+
+**Semántica y accesibilidad**
+([detalle](#accesibilidad-y-semántica-de-la-tabla-y-la-barra-de-filtros)):
+
+- **Se acabaron las tablas anidadas**: el detalle es una lista de descripción y la edición un
+  formulario con `<label for>` y `<fieldset>`. De paso se corrigen **dos incumplimientos del
+  criterio 2.5.3** ([por qué](#por-qué-los-paneles-no-son-tablas)).
+- Cada panel **dice de qué cliente es**, y en edición cada campo estrena su **lápiz**.
+- El nombre del cliente es `<th scope="row">`, la barra de filtros un `<search>`, la página
+  tiene `<h1>` y la tabla `<caption>`.
+- **Contrastes medidos, no elegidos a ojo**: cuatro textos no llegaban al mínimo
+  ([tabla](#contraste-los-grises-se-han-medido-no-elegido-a-ojo)).
+- Región de anuncios invisible + franja visible, para que nada se cuente dos veces en pantalla
+  ([por qué](#dos-sitios-para-los-avisos-uno-que-se-ve-y-otro-que-se-lee)).
+
+**Rendimiento y robustez**:
+
+- `AbortController` **por canal** y espera de 300 ms en el buscador, para que dos respuestas no
+  se crucen.
+- Reabrir los paneles tras repintar **no cuesta ninguna petición**: los datos acaban de llegar
+  con el listado.
+- **Regla del `await`**: después de esperar al servidor, nada de lo que se capturó antes se da
+  por vivo. Sin ella, un error de guardado se escribía en un formulario que ya no estaba y el
+  usuario creía que había guardado.
+- `integrity` + `crossorigin` en los tres CDN, fecha formateada en UTC y `colspan` calculado
+  según las columnas visibles.
+
+### Calidad
+
+- **36 pruebas** en cuatro clases, **ninguna necesita MySQL**
+  ([qué cubre cada una](#tests-automáticos)).
+- Nomenclatura en español y descriptiva en todo, y la regla de "variable antes del `return`"
+  **sin excepciones** ([por qué](#a-decisiones-de-estilo-inyección-de-dependencias-y-forma-del-return)).
+- Un `.mailmap` en la raíz que agrupa las tres firmas de git con las que se había ido firmando
+  (`angel`, `Angel` y una con emojis, las tres con el mismo correo), para que el recuento de
+  commits no salga partido en tres. No reescribe ningún commit: es una tabla de traducción que
+  git aplica al mostrar.
+
+> **Sobre cómo se ha construido.** Buena parte de esta rama se ha desarrollado con asistencia
+> de IA, y los commits lo reflejan con su firma `Co-authored-by`. Lo que **no** ha sido
+> automático es la revisión: cada decisión de las que se explican aquí se ha contrastado contra
+> el código y contra los datos reales de la base de datos, y varias recomendaciones que parecían
+> razonables se han descartado precisamente por hacerlo —el `@Pattern` del NIF/CIF es el ejemplo
+> más claro y está contado en [Limitaciones conocidas](#limitaciones-conocidas)—.
+
 ## Arquitectura por capas
 
 Cada capa tiene una única responsabilidad. El flujo de una petición es:
 
 ```
-Navegador ─GET /cliente/listar-ultimos→ Controller → Service → Repository(JDBC) → MySQL
-Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)─ Cliente ←(RowMapper)─ fila
+Navegador ─GET /cliente/listar-pagina→ Controller → Service → Repository(JDBC) → MySQL
+Navegador ←──── JSON ─── PaginaClienteResponse ←(Mapper)─ Cliente ←(RowMapper)─ fila
 ```
 
 | Capa | Fichero | Responsabilidad |
 |------|---------|-----------------|
-| **Controller** | `controller/ClienteController.java` | Recibe la petición HTTP, comprueba que los datos que llegan son válidos, orquesta la llamada y traduce el resultado a un código: `200`, `400` si los datos no valen, `404` si no existe, `409` si el NIF está repetido y `500` si falla la BD. |
-| **Service** | `service/ClienteService` (interfaz) + `ClienteServiceImpl` | La lógica de negocio ("los últimos N"). Separa el controller del acceso a datos. |
-| **Repository** | `repository/ClienteRepository` (interfaz) + `ClienteRepositoryJdbcImpl` | Habla con la BD: ejecuta el SQL con `JdbcTemplate`. |
+| **Controller** | `controller/ClienteController.java` | Recibe la petición HTTP, comprueba que los datos que llegan son válidos, orquesta la llamada y traduce el resultado a un código: `200`, `400` si los datos no valen, `404` si no existe, `409` si el NIF está repetido y `500` si falla la BD. No calcula nada. |
+| **Service** | `service/ClienteService` (interfaz) + `ClienteServiceImpl` | La lógica de negocio y las transacciones. Es donde se calculan los metadatos de paginación y donde vive lo delicado de `actualizar`: conservar la fecha de alta, distinguir "no existe" de "guardado sin cambios" e ignorar el booleano del `update`. |
+| **Repository** | `repository/ClienteRepository` (interfaz) + `ClienteRepositoryJdbcImpl` | La **única** capa que habla SQL: monta las consultas y las ejecuta con `JdbcTemplate`. Aquí viven las dos defensas del buscador (lista blanca del `ORDER BY` y escape de comodines). |
 | **RowMapper** | `repository/ClienteRowMapper.java` | Convierte cada fila del `ResultSet` en un objeto `Cliente`. |
-| **DTOs** | `dto/Cliente` (dominio) · `dto/ClienteResponse` (salida JSON) | Los datos: lo que se maneja dentro vs. lo que se envía al navegador. |
-| **Mapper** | `dto/ClienteMapper.java` | Traduce `Cliente` (dominio) → `ClienteResponse` (JSON). |
+| **DTOs de entrada** | `dto/ClienteRequest` (cuerpo del `POST`/`PUT`) · `dto/CriteriosCliente` (parámetros del listado) | Lo que llega del navegador, con sus validaciones. `CriteriosCliente` además se normaliza a sí mismo. |
+| **DTOs de salida** | `dto/ClienteResponse` (un cliente) · `dto/PaginaClienteResponse` (una página + metadatos) | Lo que viaja como JSON. Separarlos del dominio deja cambiar el modelo por dentro sin romper el contrato. |
+| **Dominio** | `dto/Cliente` | Lo que se maneja entre capas, ajeno a HTTP y a SQL. |
+| **Mapper** | `dto/ClienteMapper.java` | Traduce `ClienteRequest` → `Cliente` → `ClienteResponse`. |
 
 ## Cómo lo hemos hecho 
 

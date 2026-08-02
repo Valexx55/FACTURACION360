@@ -40,7 +40,7 @@ Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)
 
 | Capa | Fichero | Responsabilidad |
 |------|---------|-----------------|
-| **Controller** | `controller/ClienteController.java` | Recibe la petición HTTP, valida el `limite`, orquesta la llamada y devuelve `200 OK` (o `500` si algo falla). |
+| **Controller** | `controller/ClienteController.java` | Recibe la petición HTTP, comprueba que los datos que llegan son válidos, orquesta la llamada y traduce el resultado a un código: `200`, `400` si los datos no valen, `404` si no existe, `409` si el NIF está repetido y `500` si falla la BD. |
 | **Service** | `service/ClienteService` (interfaz) + `ClienteServiceImpl` | La lógica de negocio ("los últimos N"). Separa el controller del acceso a datos. |
 | **Repository** | `repository/ClienteRepository` (interfaz) + `ClienteRepositoryJdbcImpl` | Habla con la BD: ejecuta el SQL con `JdbcTemplate`. |
 | **RowMapper** | `repository/ClienteRowMapper.java` | Convierte cada fila del `ResultSet` en un objeto `Cliente`. |
@@ -85,9 +85,11 @@ Además de `listar-ultimos`, añadimos un **endpoint nuevo** `GET /cliente/lista
 páginas de 10: página 0 → `OFFSET 0`, página 1 → `OFFSET 10`… (`offset = pagina * tamano`); el
 troceado lo hace MySQL. Las piezas:
 
-- **Repositorio**: `findPagina(tamano, offset, busqueda, provincia, poblacion, ordenarPor, direccion)`
-  (`... WHERE ... ORDER BY ... LIMIT ? OFFSET ?`) y `contarTotal(busqueda, provincia, poblacion)`
-  (`SELECT COUNT(*)` con `queryForObject`, que devuelve un único valor).
+- **Repositorio**: `findPagina(criterios)` (`... WHERE ... ORDER BY ... LIMIT ? OFFSET ?`) y
+  `contarTotal(criterios)` (`SELECT COUNT(*)` con `queryForObject`, que devuelve un único
+  valor). Los dos reciben el mismo `CriteriosCliente`, que agrupa los siete datos de la
+  consulta; empezaron llevándolos sueltos y se agruparon después
+  ([por qué](#los-criterios-viajan-juntos-el-record-criterioscliente)).
 - **DTO `PaginaClienteResponse`**: la lista de la página + metadatos (`paginaActual`, `totalPaginas`,
   `totalElementos`, `hayAnterior`, `haySiguiente`) para que el frontend sepa dónde está.
 - **Service `listarPagina(...)`**: calcula `offset`, el total de páginas con
@@ -132,6 +134,12 @@ WHERE (nombre LIKE ? ESCAPE '\' OR nif_cif LIKE ? ESCAPE '\')
   valor sigue viajando como `?`), pero sí una forma de saltarse el filtro.
 - **El orden de escapado importa**: la barra invertida va **primero**. Si se escapara la última,
   volvería a escapar las barras que acabamos de introducir para `%` y `_`.
+- **En el SQL de verdad pone `ESCAPE '\\'`, con dos barras, y no es un error.** Dentro de una
+  cadena de MySQL la barra invertida escapa al carácter siguiente, así que `'\'` dejaría la
+  comilla de cierre escapada y la consulta no compilaría; `'\\'` es la forma de decir "una
+  barra". Y como además hay que escaparlas para el `String` de Java, en el código se leen
+  **cuatro**. Es el sitio donde más fácil es equivocarse al tocar esta consulta, y por eso el
+  test compara el fragmento entero en vez de solo comprobar que aparece la palabra `ESCAPE`.
 - **Sin `LOWER()`**: la tabla es `utf8mb4_0900_ai_ci`, y ese `ai_ci` significa *accent insensitive,
   case insensitive*: ya compara ignorando mayúsculas **y** acentos, así que `garcia` encuentra
   `García`. Envolver la columna en `LOWER()` no cambiaría el resultado y además la volvería
@@ -212,8 +220,13 @@ componente que se llama igual:
 ```java
 @GetMapping("/listar-pagina")
 public ResponseEntity<PaginaClienteResponse> listarPagina(
-        @Valid @ModelAttribute CriteriosCliente criterios) { ... }
+        @Valid @ModelAttribute CriteriosCliente criterios,
+        BindingResult bindingResult) { ... }
 ```
+
+El `BindingResult` que va detrás no es decorativo: es lo que hace que un criterio demasiado
+largo se responda con un `400` **de cuerpo vacío**, como el resto de endpoints, en vez de con la
+página de error de Spring ([el porqué](#logs-y-manejo-de-errores)).
 
 **Toda la normalización vive en su constructor compacto**, y eso es lo importante: antes estaba
 repartida —el acotado de la página en el controller, la limpieza del término en el service—, así que
@@ -369,8 +382,10 @@ modo es cambiar lo de dentro.
 - **El controller** traduce ese `Optional` a `200` o `404`, y captura `DataAccessException`
   para el `500`, igual que el resto de endpoints.
 - **No choca con `/cliente/listar-pagina`**: Spring da prioridad a las rutas literales sobre
-  las que llevan variable. Y `/cliente/abc` devuelve `400` solo, porque no puede convertir el
-  `{id}` a `int`.
+  las que llevan variable. Y `/cliente/abc` devuelve `400` él solo, sin que nosotros hagamos
+  nada, porque no puede convertir el `{id}` a `int` — con el matiz de que ese `400` concreto no
+  sale con el cuerpo vacío de los demás
+  ([explicado en "Logs y manejo de errores"](#logs-y-manejo-de-errores)).
 
 #### El frontend: estado fuera del DOM
 
@@ -766,9 +781,30 @@ a ser la página de error por defecto —con la traza dentro mientras `devtools`
 el `400` se devuelve desde aquí, con cuerpo vacío, igual que el del `PUT`.
 
 > Queda un `400` que no pasa por nosotros: `/cliente/abc`, cuando el `{id}` no es un número.
-> Ese lo rechaza Spring al convertir el parámetro, antes de llegar al método, y su cuerpo sigue
-> siendo la página de error. Unificarlo es cosa del `@RestControllerAdvice` del TODO B, porque
-> afecta a los endpoints de todo el equipo. El frontend no genera nunca esa URL.
+> Como el parámetro se declara `int`, Spring tiene que convertirlo **antes** de invocar el
+> método; falla, lanza `MethodArgumentTypeMismatchException` y la resuelve el
+> `DefaultHandlerExceptionResolver`. Nuestro código no llega a ejecutarse, así que en el log no
+> aparece la línea del controller, sino la de ese resolutor.
+>
+> El **código** es correcto (`400`); lo que no encaja con el resto es el **cuerpo**, que lo
+> genera el `/error` por defecto. En desarrollo sale con la traza entera, porque `devtools`
+> activa por su cuenta `server.error.include-stacktrace=always` (es la línea *"Devtools property
+> defaults active!"* del arranque). Empaquetado sin `devtools`, el valor por defecto es `never`
+> y solo salen cuatro campos: `timestamp`, `status`, `error` y `path`. O sea: la parte fea se
+> queda en desarrollo, y lo que llegaría a producción es una incoherencia de formato.
+>
+> **No se arregla aquí** porque ninguna de las tres formas se queda dentro de lo nuestro. La
+> buena es el `@ExceptionHandler(MethodArgumentTypeMismatchException.class)` del
+> `@RestControllerAdvice` del TODO B, y por definición se aplica a los endpoints de todo el
+> equipo. Meterlo dentro de `ClienteController` no acota nada: `crear` y `eliminar` también
+> reciben `@PathVariable int id` y cambiarían igual. Y restringir la ruta con `{id:\\d+}`, que
+> parece lo más inocente, es lo peor: al no casar el patrón la respuesta pasa a ser un `404`, y
+> decir "no existe" cuando lo que pasa es "eso no es un identificador" informa peor que ahora.
+>
+> Es la misma familia que `?limite=abc` o `?pagina=abc`: cualquier conversión de tipo que falle
+> antes de entrar al método. Se arreglan todas de una vez o ninguna; parchear una sola dejaría
+> las demás igual y encima parecería resuelto. El frontend no genera nunca esas URL: los
+> identificadores salen de `dataset.clienteId`, que se rellenó con lo que devolvió el backend.
 
 ## Tests automáticos
 
@@ -800,6 +836,12 @@ Por qué esas tres y no otras:
   `@WebMvcTest` se levanta **solo la capa web** y el service se sustituye por un doble
   (`@MockitoBean`), así que casos casi imposibles de provocar a mano —como el `409`— se piden y
   ya está.
+
+> **Dos cosas de Spring Boot 4 que despistan al copiar ejemplos de internet.** `@WebMvcTest` ha
+> cambiado de paquete (ahora es `org.springframework.boot.webmvc.test.autoconfigure`), y
+> `@MockBean` ya no existe: su sustituta es `@MockitoBean`, en
+> `org.springframework.test.context.bean.override.mockito`. Los tutoriales todavía usan los
+> nombres antiguos y el error que sale es un "no se encuentra el símbolo" que no explica nada.
 
 > Al ejecutar los tests, Mockito avisa de que se está *auto-adjuntando* como agente. Es un aviso
 > suyo de cara a futuras versiones de la JDK, no un fallo; se quita configurando el `argLine` de
@@ -883,7 +925,7 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
     un guion. En Swagger, la respuesta del `PUT` trae `fechaAlta` informada.
 21. **Errores del formulario**: dejar el nombre vacío → lo corta el navegador y no sale
     petición; poner el NIF de otro cliente → `409` señalado en ese campo; borrar el cliente
-    desde otra pestaña y guardar → `409`/`404` con su aviso y la tabla se refresca.
+    desde otra pestaña y guardar → `404` con su aviso y la tabla se refresca.
 22. **Cambios sin guardar**: escribir en un campo y pulsar la fila para cerrarla → pregunta
     antes de descartar. Escribir y **teclear en el buscador** (que repinta la tabla) → al
     volver, lo escrito sigue ahí.
@@ -921,7 +963,10 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
     mensaje visible. Teclear en el campo → los dos atributos desaparecen.
 35. **Cliente borrado mientras se edita**: abrir el lápiz, borrarlo desde otra pestaña (o con
     un `DELETE` en Swagger) y guardar → mensaje de "ya no existe" en la franja de avisos, que
-    **sigue ahí** después de que la tabla se refresque.
+    **sigue ahí** después de que la tabla se refresque. *Elige un cliente **sin facturas** (con
+    los datos del backup, el 6 o el 16, o uno que crees tú): `facturas` tiene una clave ajena a
+    `clientes`, así que borrar a los demás falla por integridad referencial y no llegarías a
+    probar lo que quieres.*
 36. **Página que se queda sin clientes**: dejar 31 clientes (4 páginas), ir a la página 4,
     borrar los que sobran hasta dejar 30 desde otra pestaña y refrescar con
     `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → tiene que aterrizar en la
@@ -1011,6 +1056,11 @@ public ClienteController(ClienteService s) { this.clienteService = s; }
 > **Decisión**: mantenemos **inyección por campo** para seguir el patrón del profe. Migrar a
 > constructor sería trivial si se acuerda con él.
 
+Al escribir los tests se ha visto en la práctica lo que dice la columna de contras:
+`ClienteRepositoryJdbcImplTest` no puede pasarle el `JdbcTemplate` simulado al repositorio, así
+que se lo mete Mockito por **reflexión** con `@InjectMocks`. Funciona, pero es la herramienta la
+que rellena un campo privado desde fuera; con un constructor sería un `new` normal y corriente.
+
 
 **2) Forma del `return`: guardar en variable vs. `return` directo.**
 
@@ -1040,15 +1090,19 @@ global para todos los controllers.
   @RestControllerAdvice
   public class ManejadorErrores {
       @ExceptionHandler(DataAccessException.class)   // errores de BD
-      public ResponseEntity<String> bd(DataAccessException e) {
-          return ResponseEntity.status(500).body("Error de base de datos");
+      public ResponseEntity<Void> bd(DataAccessException e) {
+          log.error("Error de base de datos", e);     // el detalle, al log
+          return ResponseEntity.internalServerError().build();   // al navegador, un 500 pelado
       }
   }
   ```
-- **Por qué es relevante**: hoy, si MySQL falla, el navegador recibe una **traza interna fea**
-  (con detalles que no deberían salir).
-  Con esto das respuestas **limpias y uniformes** y no
-  repites `try/catch` en cada endpoint.
+- **Por qué es relevante**: hoy cada endpoint repite su propio `try/catch` para no soltar una
+  traza al navegador. Funciona —nuestros `500`, `404`, `409` y `400` salen ya con el cuerpo
+  vacío—, pero es el mismo bloque copiado una y otra vez, y lo que **no** pasa por ningún
+  método nuestro se sigue escapando: las conversiones de tipo que fallan antes de entrar
+  (`/cliente/abc`, `?limite=abc`), explicadas en
+  ["Logs y manejo de errores"](#logs-y-manejo-de-errores). El manejador central arregla las dos
+  cosas: quita la repetición y cubre también lo que ocurre fuera del método.
 
 ### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`) — ✅ HECHA LA PARTE QUE NO NECESITA BD
 **Ya están escritos** los tests del `@WebMvcTest` y los que no tocan la base de datos; se
@@ -1065,8 +1119,10 @@ controller sin BD).
   - `@JdbcTest` para el **repositorio**: arranca solo lo justo para la BD y comprueba que
     `findUltimos` devuelve y ordena bien (con una BD de test o Testcontainers).
   - `@WebMvcTest(ClienteController.class)` + `MockMvc`: levanta **solo la capa web** y simula
-    peticiones HTTP; con `@MockBean ClienteService` sustituyes el service por un doble, así
-    pruebas que `GET /cliente/listar-ultimos` responde `200` y el JSON correcto **sin tocar la BD**.
+    peticiones HTTP; con `@MockitoBean ClienteService` sustituyes el service por un doble, así
+    pruebas que `GET /cliente/listar-ultimos` responde `200` y el JSON correcto **sin tocar la
+    BD**. *(Se escribía `@MockBean`; en Spring Boot 4 esa anotación ya no existe y su sustituta
+    es `@MockitoBean`, del paquete `org.springframework.test.context.bean.override.mockito`.)*
 - **Por qué es relevante**: detectan roturas al cambiar código, **documentan** el comportamiento
   esperado y aíslan cada capa. Dan confianza (y nota).
 
@@ -1087,19 +1143,24 @@ puede cambiar desde fuera. Con `@RequestParam` ese valor llega por la URL.
   la BD. *(Alternativa más "REST": `@Validated` + `@Min/@Max` devolviendo `400`, pero necesita el
   manejador de errores del TODO B; por eso de momento acotamos.)*
 
-### E. Renombrar la rama a `Angel_listar_ultimos` (pendiente, flujo git)
+### E. Nombres de rama descriptivos — ✅ RESUELTO
 
-Cambio de flujo (no afecta al código): renombrar la rama de trabajo a un nombre más descriptivo.
-Como la rama ya está en el remoto, son tres pasos (estando en la rama):
+Venía de que la primera rama se llamaba `Angel` a secas, que dice quién trabaja pero no en qué.
+Ya no queda ninguna así: la convención en uso es `feature/<loQueHace>_Angel`
+(`feature/verDetallesYEditar_Angel`), que se lee de un vistazo en la lista de ramas y en las PR.
+
+Se deja apuntado el procedimiento, porque renombrar una rama **que ya está subida** no es solo
+`git branch -m` y se olvida con facilidad:
+
 ```bash
 # 1. Renombrar la rama LOCAL
-git branch -m Angel_listar_ultimos
+git branch -m feature/nombreNuevo_Angel
 
 # 2. Subir la rama con el nombre nuevo y fijar su seguimiento (upstream)
-git push -u origin Angel_listar_ultimos
+git push -u origin feature/nombreNuevo_Angel
 
 # 3. Borrar la rama vieja del remoto (solo si no hay una PR abierta sobre ella)
-git push origin --delete Angel
+git push origin --delete nombreViejo
 ```
 
 ### F. Índices de base de datos para los filtros y la ordenación (pendiente)

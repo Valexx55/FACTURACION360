@@ -24,6 +24,12 @@ const API_CLIENTE = "/cliente";
 const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 const API_PROVINCIAS = "/cliente/provincias";
 const API_POBLACIONES = "/cliente/poblaciones";
+
+// Clientes por página. Tiene que valer lo mismo que CriteriosCliente.TAMANO_DEFECTO en el
+// backend; no hay forma de compartir la constante entre Java y este archivo, así que queda
+// anotado en los dos sitios. Si aquí se pusiera más de TAMANO_MAX (100), el backend lo
+// acotaría por su cuenta y la paginación seguiría cuadrando, pero la tabla enseñaría menos
+// filas de las pedidas sin decir por qué.
 const TAMANO_PAGINA = 10;
 
 // Cuánto esperamos tras la última tecla antes de consultar. Sin esta pausa,
@@ -248,8 +254,11 @@ function esCancelacion(error) {
 async function cargarClientes(pagina) {
     // Atenúa la tabla y avisa a los lectores de pantalla de que lo que hay no es definitivo:
     // sin esto se siguen viendo los datos de la página anterior como si fueran los nuevos.
+    // El aria-busy va en el contenedor y no en el <tbody> porque es el contenedor el que ya
+    // es una región anunciable (role="region" + aria-labelledby): en el cuerpo de la tabla,
+    // el atributo no describe ninguna zona que el lector de pantalla reconozca como tal.
     listadosEnVuelo++;
-    cuerpoTabla.setAttribute("aria-busy", "true");
+    contenedorTabla.setAttribute("aria-busy", "true");
 
     try {
         // URLSearchParams se encarga de codificar los valores: un término con '&',
@@ -294,7 +303,7 @@ async function cargarClientes(pagina) {
     } finally {
         listadosEnVuelo--;
         if (listadosEnVuelo === 0) {
-            cuerpoTabla.setAttribute("aria-busy", "false");
+            contenedorTabla.setAttribute("aria-busy", "false");
         }
     }
 }
@@ -384,9 +393,20 @@ function pintarCeldasFila(fila, cliente) {
     fila.querySelector(".cliente-nombre").textContent = cliente.nombre;
     fila.querySelector(".cliente-cif").textContent = cliente.nifCif;
     pintarEnlace(fila.querySelector(".cliente-email"), cliente.email,
-        (valor) => `mailto:${valor}`, "Escribir a este correo");
+        // Se codifican SOLO '?', '&' y '#', que son los tres caracteres que en un mailto
+        // dejan de formar parte de la dirección y pasan a añadir cabeceras: un correo
+        // guardado como "a@b.com?bcc=otro@c.com" mandaría una copia oculta que nadie ha
+        // escrito. La arroba y el punto se dejan tal cual a propósito: codificarlo todo
+        // funciona, pero deja una dirección ilegible en la barra de estado del navegador.
+        (valor) => `mailto:${valor.replace(/[?&#]/g, encodeURIComponent)}`,
+        "Escribir a este correo");
     pintarEnlace(fila.querySelector(".cliente-telefono"), cliente.telefono,
-        (valor) => `tel:${valor.replace(/\s+/g, "")}`, "Llamar a este número");
+        // Solo dígitos y el '+' del prefijo internacional: es lo único que se puede marcar.
+        // Antes se quitaban únicamente los espacios, así que cualquier otro carácter que
+        // hubiera en la columna acababa dentro del tel: sin que se supiera qué iba a hacer
+        // el marcador con él.
+        (valor) => `tel:${valor.replace(/[^\d+]/g, "")}`,
+        "Llamar a este número");
     fila.querySelector(".cliente-alta").textContent = formatearFecha(cliente.fechaAlta);
 }
 
@@ -427,7 +447,14 @@ function devolverFoco() {
  * @param {boolean} [opciones.esError=false] si es un problema y no una confirmación
  */
 function anunciar(texto, { visible = false, esError = false } = {}) {
-    regionAnuncios.textContent = texto;
+    // Se vacía y se reescribe en el fotograma siguiente, en vez de asignar el texto sin más.
+    // Lo que el lector de pantalla vigila es el CAMBIO de contenido, así que un mensaje
+    // idéntico al anterior no se leería: guardar dos clientes seguidos anunciaba el primero y
+    // callaba el segundo, que es justo cuando hace falta la confirmación.
+    regionAnuncios.textContent = "";
+    requestAnimationFrame(() => {
+        regionAnuncios.textContent = texto;
+    });
 
     if (!visible) return;
 
@@ -1142,21 +1169,21 @@ async function alternarDespliegue(fila, modo) {
         return;
     }
 
-    if (modoActual === "edicion") {
-        if (!await confirmarDescarte(fila)) return;
+    if (modoActual === "edicion" && !await confirmarDescarte(fila)) return;
 
-        // Preguntar lleva su tiempo, y en ese rato la tabla ha podido repintarse (un refresco
-        // de otra pestaña, o la búsqueda que quedara pendiente): esta fila ya no está en el
-        // documento y lo que se haga con ella no se vería. La que la sustituye se reabrió
-        // sola con el estado de siempre.
-        if (!fila.isConnected) return;
-    }
+    // Preguntar lleva su tiempo, y en ese rato la tabla ha podido repintarse (un refresco de
+    // otra pestaña, o la búsqueda que quedara pendiente). La fila que teníamos ya no está en
+    // el documento, pero la que la sustituye sí, con el mismo panel reabierto: se sigue con
+    // ella. Antes se salía sin hacer nada, y quien acababa de decir "descartar" veía que su
+    // decisión no surtía efecto.
+    const filaActual = filaViva(Number(fila.dataset.clienteId));
+    if (!filaActual) return;   // el cliente ya no está en esta página
 
     if (modoActual === modo) {
-        cerrarDespliegue(fila);
+        cerrarDespliegue(filaActual);
     } else {
         // Ya está desplegado: solo cambia lo de dentro, sin volver a animar la apertura.
-        abrirDespliegue(fila, modo, { animar: false });
+        abrirDespliegue(filaActual, modo, { animar: false });
     }
 }
 
@@ -1612,13 +1639,14 @@ async function manejarClicPanel(evento, panel) {
         if (!await confirmarDescarte(fila)) return;
 
         // Igual que al alternar: mientras se preguntaba, la tabla ha podido repintarse y esta
-        // fila ya no ser la que está en pantalla.
-        if (!fila.isConnected) return;
+        // fila ya no ser la que está en pantalla. Se cierra la que lo esté ahora.
+        const filaActual = filaViva(Number(fila.dataset.clienteId));
+        if (!filaActual) return;
 
-        cerrarDespliegue(fila);
+        cerrarDespliegue(filaActual);
         // El foco vuelve al lápiz que abrió el formulario: si no, se quedaría en un botón que
         // acaba de desaparecer y saltaría al principio de la página.
-        fila.querySelector(".btn-editar").focus();
+        filaActual.querySelector(".btn-editar").focus();
         return;
     }
 

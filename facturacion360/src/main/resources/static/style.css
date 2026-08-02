@@ -1,5 +1,12 @@
-/* style.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+/* style.css
+ *
+ * La fuente NO se carga aquí con @import, aunque sea lo más cómodo: un @import obliga al
+ * navegador a descargar y analizar esta hoja ANTES de poder pedir la fuente, así que retrasa
+ * el primer pintado. Las tres páginas que usan este archivo (index, clientes y facturas) la
+ * piden con su propia etiqueta <link>, que se descarga en paralelo. Si se añade una página
+ * nueva, hay que acordarse de poner ahí el <link> con los pesos 400, 500, 600 y 700, que son
+ * los que usa esta hoja.
+ */
 
 :root {
     --primary-color: #4776f7;
@@ -569,8 +576,9 @@ footer {
 }
 
 /* Mientras llega la página siguiente se atenúa lo que hay: sin esto la tabla enseña datos
-   viejos como si fueran los nuevos. El aria-busy lo pone clientes.js. */
-#tabla-clientes[aria-busy="true"] {
+   viejos como si fueran los nuevos. El aria-busy lo pone clientes.js, en el contenedor y no
+   en el <tbody>: es el contenedor el que ya es una región anunciable (role="region"). */
+.table-responsive[aria-busy="true"] {
     opacity: 0.5;
     transition: opacity 0.15s ease;
 }

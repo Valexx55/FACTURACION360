@@ -52,7 +52,12 @@ public record CriteriosCliente(
 
 		String direccion) {
 
-	/** Clientes por página si no se pide otra cosa. */
+	/**
+	 * Clientes por página si no se pide otra cosa. Es el mismo valor que la constante
+	 * {@code TAMANO_PAGINA} de {@code clientes.js}, que es quien lo manda de verdad desde la
+	 * pantalla; no hay forma de compartirlo entre Java y el JavaScript, así que está anotado
+	 * en los dos sitios.
+	 */
 	public static final int TAMANO_DEFECTO = 10;
 
 	/** Tope de clientes por página, para que nadie pida la tabla entera de una vez. */

@@ -387,9 +387,10 @@ serviría datos viejos (lo contrario de lo que queremos) y habría que invalidar
 
 La tabla enseña cinco columnas, pero un cliente tiene diez campos. Al pulsar una fila —o el
 botón del ojo— se inserta **debajo una fila hermana** que ocupa todas las columnas
-(`colspan`) y muestra el resto de datos con sus propias cabeceras `<th>`. Con el lápiz se
-abre esa misma fila, pero con los campos editables. Se pueden tener **varias abiertas a la
-vez** y cada una se cierra volviendo a pulsarla.
+(`colspan`) y muestra el resto de datos con su rótulo cada uno, en una lista de descripción
+(el porqué está en ["Por qué los paneles NO son tablas"](#por-qué-los-paneles-no-son-tablas)).
+Con el lápiz se abre esa misma fila, pero con los campos editables. Se pueden tener **varias
+abiertas a la vez** y cada una se cierra volviendo a pulsarla.
 
 **Un solo panel por cliente, con un modo** (`detalle` o `edicion`), en vez de dos filas
 independientes. Con dos filas se podría acabar viendo a la vez el detalle y el formulario del
@@ -725,6 +726,74 @@ Lo que se ha corregido, y por qué cada cosa:
   de filtros. Si se sustituyera por otra frase, quien maneja el ordenador por voz diría *"pulsa
   Limpiar"* y no pasaría nada (criterio **2.5.3**, *label in name*).
 
+### Por qué los paneles NO son tablas
+
+Es la decisión de semántica más importante de esta pantalla, y la que menos se ve mirándola.
+
+Los dos paneles empezaron siendo una `<table>` con sus `<th>` de cabecera. Encajaba
+visualmente —rótulos arriba, valores debajo— pero traía tres problemas, y el tercero era un
+incumplimiento de verdad.
+
+**1. Una tabla dentro de otra tabla.** El panel vive dentro de un `<td>` de la tabla de
+clientes. Con una `<table>` ahí, un lector de pantalla anuncia *"tabla de 5 columnas"* dentro
+de *"tabla de 6 columnas"*: quien navega por celdas con los atajos de tabla entra y sale de
+dos rejillas distintas sin saber en cuál está. Con tres paneles abiertos, cuatro tablas.
+
+**2. En edición, la tabla no era una tabla.** Una `<table>` describe datos con relación de
+filas y columnas. Ahí había **ocho campos de un formulario** en una única fila de datos: era
+maquetación disfrazada de tabla, que es el uso que las tablas dejaron de tener hace veinte
+años.
+
+**3. Dos campos incumplían el criterio 2.5.3** (*label in name*). Como el `<th>` solo se
+asocia al campo *a través* de la tabla, cada `<input>` llevaba además un `aria-label`, y en
+dos casos ese nombre **no contenía el texto visible**:
+
+| Rótulo visible | `aria-label` que había | Consecuencia |
+|---|---|---|
+| `NIF/CIF` | `NIF o CIF` | decir "NIF/CIF" por voz no hacía nada |
+| `Email` | `Correo electrónico` | decir "Email" por voz no hacía nada |
+
+Es el mismo criterio que ya se había arreglado en el botón "Limpiar", así que era además una
+incoherencia con el propio estándar de esta pantalla.
+
+**Qué hay ahora:**
+
+- El **detalle** es una **lista de descripción** (`<dl>` → `<div>` → `<dt>`+`<dd>`). Son los
+  datos de UN cliente, pares rótulo/valor, que es exactamente para lo que existe `<dl>`. El
+  lector dice *"Dirección: Calle Mayor 1"* y se acabó. El `<div>` intermedio lo permite el
+  estándar y es lo que deja emparejar cada par en la rejilla de CSS.
+- La **edición** es un formulario de verdad: `<label for>` + `<input id>` dentro de
+  `<fieldset>` con `<legend>` oculto (que ocupa el sitio que tenían los `<caption>`). El
+  rótulo pasa a estar asociado al campo **directamente**, que es lo que pide el criterio
+  **1.3.1**, y el `aria-label` desaparece: **lo visible ES el nombre accesible**, así que los
+  dos ya no pueden divergir nunca más.
+- Los dos se colocan con la **misma rejilla CSS**, así que el aspecto es el de antes y pasar
+  de un modo al otro no mueve nada de sitio.
+
+> **¿No estropea esto el sistema de `<template>`?** No, y la duda es razonable: dentro de una
+> `<table>` el analizador del navegador solo admite `<tr>`, `<td>`… y se come cualquier otra
+> cosa. Pero de los cuatro templates de la página, los dos que han cambiado
+> (`panel-detalle-template` y `panel-edicion-template`) **no empiezan por `<tr>`**: empiezan
+> por `<div>` y por `<form>`, así que su contenido se analiza como el de cualquier otra parte
+> del documento y un `<dl>` o un `<fieldset>` son perfectamente válidos ahí. Los dos que sí
+> empiezan por `<tr>` (la fila del cliente y la del despliegue) no se han tocado.
+>
+> Y en eficiencia se gana un poco: el panel de detalle pasa de unos 24 nodos a unos 16, porque
+> una tabla necesita `thead`, `tbody` y un `tr` por nivel que la lista no necesita. El clonado
+> es el mismo `cloneNode(true)` de siempre.
+
+**Los `id` de los campos se generan al pintar.** Un `<label for>` necesita que su campo tenga
+`id`, y puede haber varios formularios abiertos a la vez: dos elementos no pueden compartirlo.
+`pintarPanelEdicion` recorre `CAMPOS_EDITABLES` y le pega el id del cliente a cada uno. En el
+`<template>` los `id` llevan el sufijo `PLANTILLA` a propósito, para que canten a la vista en
+el inspector si alguno se quedara sin sustituir.
+
+**Cada panel dice de quién es.** La etiqueta de estado pasó de decir "Editando" a decir
+*"Editando García S.L."*, y el panel la apunta con `aria-labelledby`. Con varios paneles
+abiertos, y con la fila del cliente ya por encima, antes no había forma de saber de quién eran
+los datos que se estaban leyendo. El nombre sale del texto **que ya se ve**, así que no hay
+dos cadenas que puedan acabar diciendo cosas distintas.
+
 ### Estilo: lo que se ve y por qué
 
 - **Rayado alterno azul/blanco, pintado por cliente y no por fila del DOM.** El
@@ -734,11 +803,30 @@ Lo que se ha corregido, y por qué cada cosa:
   clase `fila-par` y los paneles ya no cuentan. El azul de la raya es muy tenue (`#f6f9ff`)
   para que el resaltado de la fila abierta (`#e7efff`) siga distinguiéndose de él.
 - **Recuadro de color en el bloque abierto**: verde si se está viendo, ámbar si se está
-  editando. La fila pone el borde de arriba y los laterales, el panel el de abajo, y el color
-  viaja en una variable (`--color-modo`) declarada en las dos filas. Son las versiones
-  **oscuras** del verde y el ámbar: el `#ffc107` de Bootstrap da 1.6:1 sobre blanco y un borde
-  que transmite información necesita 3:1 (criterio **1.4.11**). Y como el color por sí solo no
-  vale (criterio **1.4.1**), el panel lo dice además con letras: "Viendo detalles" / "Editando".
+  editando. Envuelve el bloque entero —la fila del cliente **más** las filas del panel, que en
+  edición son dos de rótulos y dos de campos— de modo que los dos `<tr>` se leen como una sola
+  tarjeta. La fila pone el borde de arriba y los laterales, el panel los laterales y el de
+  abajo, y el color viaja en una variable (`--color-modo`) declarada en las dos filas. Son las
+  versiones **oscuras** del verde y el ámbar: el `#ffc107` de Bootstrap da 1.6:1 sobre blanco y
+  un borde que transmite información necesita 3:1 (criterio **1.4.11**). Y como el color por sí
+  solo no vale (criterio **1.4.1**), el panel lo dice además con letras: "Viendo detalles de
+  García S.L." / "Editando García S.L.".
+
+  > **El borde del panel va condicionado al modo, no puesto siempre**, y esto costó un fallo
+  > entender por qué. Al cerrar, `marcarFila()` quita las clases `modo-detalle` y
+  > `modo-edicion`, pero el panel se queda **250 ms en el documento plegándose**. Durante esos
+  > 250 ms la variable `--color-modo` ya no existe, el `var()` no resuelve, la propiedad se
+  > vuelve inválida y `border-color` cae a su valor inicial, que es `currentColor`: se veía una
+  > **raya oscura parpadear en cada cierre**. Con el selector condicionado al modo, el borde
+  > desaparece junto con las clases en vez de quedarse con un color heredado.
+
+- **Un lápiz en cada campo editable**, y solo ahí. Es la señal de que ese dato se puede
+  escribir, y va dentro del `<label>` con `aria-hidden="true"`, porque es decorativo: que el
+  campo sea editable ya lo dice el propio `<input>`. La diferencia con el panel de detalle está
+  garantizada **por el marcado** —el detalle es una `<dl>` y no tiene ningún `<label>`— y no
+  por una clase que alguien pueda olvidarse de quitar al cambiar de modo. Va en el mismo ámbar
+  que el borde del bloque, para que se lea como parte del mismo estado y no como un icono
+  suelto.
 - **Esquinas redondeadas**: van en el contenedor, no en la `<table>`. Con
   `border-collapse: collapse` el radio de la tabla no recorta el fondo de las celdas y la
   cabecera azul seguiría saliendo en pico; el `.table-responsive` ya tiene `overflow-x: auto`,
@@ -1176,6 +1264,31 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 58. **Un salto de línea en el buscador no ensucia el log**: pegar en el buscador un texto con un
     salto de línea dentro → en la consola tiene que salir en **una sola línea**, con el salto
     convertido en espacio.
+59. **El lápiz solo en edición**: abrir el lápiz de una fila → los ocho rótulos llevan su lápiz
+    ámbar delante. Pulsar el ojo de esa misma fila → el panel cambia a detalle y **no queda ni
+    un lápiz**.
+60. **El recuadro no parpadea al cerrar**: abrir un detalle y cerrarlo mirando el borde mientras
+    se pliega → tiene que irse en verde, **sin ningún destello oscuro**. Repetirlo en edición
+    (ámbar). Antes se veía una raya negra durante el plegado.
+61. **El recuadro envuelve el bloque entero**: con el panel de edición abierto, el rectángulo
+    ámbar tiene que rodear la fila del cliente **y las cuatro filas del panel** (dos de rótulos
+    y dos de campos), sin cortarse por dentro. Probarlo también con el **último** cliente de la
+    página, que es donde antes faltaba el lado de abajo.
+62. **Control por voz** (o, si no lo tienes a mano, buscando el `id` en el inspector): decir
+    **"NIF/CIF"** y **"Email"** tiene que llevar el foco a esos campos. Antes no pasaba nada,
+    porque el nombre accesible decía "NIF o CIF" y "Correo electrónico".
+63. **Lector de pantalla en el panel** (NVDA o el Narrador de Windows): al abrir un detalle
+    debe oírse *"Viendo detalles de García S.L."* y luego *"Dirección: Calle Mayor 1"*, y
+    **no** debe anunciarse ninguna tabla dentro de la tabla. En edición, al llegar a un campo
+    debe decir el rótulo que se ve ("NIF/CIF") y "obligatorio" donde toque.
+64. **Dos paneles de edición a la vez**: abrir el lápiz de dos clientes distintos y comprobar
+    en el inspector que los `id` de sus campos **no se repiten** (llevan el id del cliente
+    dentro) y que no queda ninguno con el sufijo `PLANTILLA`. Pulsar el rótulo de un campo
+    tiene que llevar el foco a **su** campo y no al del otro panel.
+65. **La validación sigue avisando**: en el panel de edición, borrar el nombre y pulsar Guardar
+    → el mensaje rojo tiene que aparecer justo debajo de ese campo. (Depende de que el
+    `<input>` y su `.invalid-feedback` sigan siendo hermanos, que es lo que mira el selector de
+    Bootstrap.)
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 
@@ -1250,6 +1363,13 @@ return c;
 ```
 > **Decisión**: usamos el patrón variable sobre todo porque **facilita el log y el
 > depurado** (poder mirar el valor justo antes de devolverlo).
+>
+> Y se aplica **sin excepciones**, también en los métodos privados que no loguean. Los cuatro
+> que quedaban devolviendo la expresión directa (`sqlOrden` y `escaparComodines` del
+> repositorio, `offset()` y `normalizar()` del record de criterios) se han igualado al resto.
+> En `sqlOrden` es donde más se nota que no era un capricho: ese método **es** la defensa
+> contra la inyección SQL, así que es justo el sitio donde uno quiere poder poner un
+> *breakpoint* y ver qué fragmento se ha montado con lo que llegó por la URL.
 
 
 
@@ -1441,7 +1561,7 @@ evitad estos nombres o se pisarán en silencio:
 | Estado | `criterios`, `paginaActual`, `filasDesplegadas`, `clientesEnPagina`, `peticionesEnVuelo`, `focoPendiente`, `listadosEnVuelo` |
 | Peticiones | `pedirJson`, `enviarJson`, `cerrarCanal`, `cargarClientes`, `cargarProvincias`, `cargarPoblaciones` |
 | Pintado | `pintarFilas`, `pintarCeldasFila`, `pintarPaginacion`, `pintarEnlace`, `mostrarMensaje`, `mostrarError` |
-| Despliegue | `abrirDespliegue`, `cerrarDespliegue`, `alternarDespliegue`, `marcarFila`, `filaViva`, `formularioVivo` |
+| Despliegue | `abrirDespliegue`, `cerrarDespliegue`, `alternarDespliegue`, `marcarFila`, `nombrarPanel`, `filaViva`, `formularioVivo` |
 | Avisos | `anunciar`, `escribirPista`, `ocultarPistas`, `limpiarPistas` |
 
 El nombre **`guardarCliente` está libre a propósito**: es el que le corresponde al alta de

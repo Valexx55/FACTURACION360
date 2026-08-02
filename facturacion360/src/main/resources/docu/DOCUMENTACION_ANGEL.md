@@ -428,6 +428,68 @@ general, porque si no el usuario tendría que adivinar cuál de los ocho campos 
 > lleva **todos**. Y por eso la función de guardar se llama `guardarEdicion` y no
 > `guardarCliente`: ese nombre lo ocupa el `onclick` de ese modal.
 
+#### Qué pasa exactamente al pulsar "Guardar"
+
+Un guardado no termina cuando el `PUT` responde `200`: la fila que se estaba editando puede
+haber cambiado de sitio (si se ordena por nombre y se le cambia el nombre) o de página, y el
+botón que el usuario tenía pulsado deja de existir. Esta es la secuencia y por qué cada paso:
+
+1. **Se olvida el panel abierto por su `id`**, no por la referencia al `<tr>`. Si la tabla se
+   ha repintado mientras viajaba la petición, esa referencia apunta a una fila que ya no está
+   en el documento y el `Map` de paneles abiertos se quedaría con una entrada fantasma: al
+   refrescar volvería a abrirse el formulario de un cliente que el usuario ya había guardado.
+2. **Se anota a quién hay que devolverle el foco** (`focoPendiente`) y, cuando `pintarFilas()`
+   termina de repintar, `devolverFoco()` lo lleva al botón de editar de esa misma fila. Sin
+   eso, el foco se va al `<body>` y quien navega con teclado vuelve al principio de la página
+   después de cada guardado. Si el cliente ya no está en la página (se ha ido a otra, o ya no
+   cumple el filtro), no se fuerza el foco a ningún sitio raro.
+3. **Se anuncia "Cliente guardado"** en la franja `role="status"` que hay entre los filtros y
+   la tabla. Está **fuera** de la tabla a propósito: dentro del panel, el refresco del punto
+   siguiente la borraría en el mismo instante en que se escribe. Guardar cambia la pantalla sin
+   cambiar de contexto y hay que poder enterarse sin verla (criterio **4.1.3**). El mensaje se
+   borra solo a los cinco segundos, porque un "Cliente guardado" fijo acaba pareciendo el
+   resultado de la última acción aunque sea de hace diez minutos.
+4. **Se dispara `clientes:cambiaron`**, el mismo evento que usan los compañeros. La tabla se
+   recarga sola con `cargarClientes(paginaActual)` y así enseña lo que hay en la BD, incluido
+   lo que haya cambiado otro usuario mientras tanto.
+
+**El `404` de "alguien lo ha borrado mientras lo editabas"** va también a esa franja, además de
+a la alerta del formulario, y por lo mismo: ese caso dispara un refresco y el mensaje del panel
+duraría lo que tarda en llegar la respuesta del listado.
+
+**Y el `409` del NIF repetido no se marca solo en rojo.** El campo recibe `aria-invalid="true"`
+y un `aria-describedby` que apunta al mensaje —que lleva el id del cliente dentro, porque puede
+haber varios formularios abiertos y dos elementos no pueden compartir id—. El rojo de Bootstrap
+es solo color: sin esos dos atributos, quien no ve la pantalla se encuentra el foco en un campo
+que aparentemente no tiene nada. Al volver a teclear en el campo se limpian los tres.
+
+#### Coordinación con `listarPagina`: la página que ya no existe
+
+`listarPagina` **no reencamina** cuando le piden una página fuera de rango: devuelve esa página
+vacía con el total real. Es lo correcto para una API —el paginado no puede saber si eso es un
+error de quien llama o una tabla que ha encogido—, pero deja un caso feo en pantalla: si se
+está en la página 4, se borran clientes hasta que solo quedan tres páginas y se refresca, la
+tabla sale vacía diciendo *"Página 4 de 3"* y sin ninguna salida obvia.
+
+La corrección va en el frontend, en `cargarClientes()`: si la respuesta viene vacía **pero hay
+páginas**, se pide la última que sí existe. Es una sola llamada más y solo en ese caso. El
+contador de peticiones en vuelo aguanta bien la recursión (la de dentro suma y resta antes que
+la de fuera, así que el "cargando" no se apaga a medias), y el canal de `AbortController` del
+listado tampoco se pisa: la petición anterior ya ha terminado cuando arranca la segunda.
+
+#### `actualizar` también devuelve `Optional`
+
+Igual que `obtenerPorId`, y por lo mismo: "ese cliente no existe" es un resultado normal que
+acaba en un `404`, no un error, y con un `null` el controller puede olvidarse de comprobarlo.
+Que los dos métodos del service que buscan un cliente concreto respondan igual quita una
+excepción que recordar.
+
+Relacionado, el `update` del repositorio quedó **documentado con su trampa**: devuelve si el
+`UPDATE` modificó alguna fila, y MySQL cuenta 0 cuando la sentencia no cambia ningún valor. Un
+`false` significa "no se ha modificado nada", que puede ser tanto que el cliente no exista como
+que se haya guardado igual que estaba, y **no sirve para distinguirlos**. De ahí el `findById`
+previo en la misma transacción.
+
 ### El buscador se solapaba con el filtro de al lado
 
 Estando cerrado, el círculo de la lupa pisaba el desplegable de provincia. No era el icono: era
@@ -439,9 +501,18 @@ su contenedor y se metía por debajo del control siguiente (el `gap` de la barra
 El arreglo es que **el ancho cerrado supere al relleno**. Al pasar el círculo a una píldora de
 `9rem` (ver abajo) ya caben de sobra los `3.2rem` de la lupa más el `1rem` de la derecha, así
 que el problema desaparece por construcción y el relleno puede ser el mismo abierto y cerrado.
-De paso, el contenedor lleva `flex: 0 0 auto` para que la barra no pueda encogerlo por debajo
-de ese ancho, y la posición de la lupa se calcula desde la misma variable (`--hueco-lupa`) que
-usa el relleno, para que no puedan volver a descuadrarse por separado.
+La posición de la lupa se calcula desde la misma variable (`--hueco-lupa`) que usa el relleno,
+para que no puedan volver a descuadrarse por separado.
+
+**Y abierto tampoco puede partir la barra en dos líneas.** Sumando el buscador abierto
+(`20rem`), los tres desplegables (210 + 210 + 290 px), el botón de limpiar y los huecos, no se
+cabe en el ancho útil de un escritorio de 1140 px: al pulsar la lupa, "Limpiar" se caía a la
+línea de abajo y la barra daba un salto. Dentro de la barra el tamaño lo decide el *flex*, así
+que el buscador se dimensiona con **`flex-basis`** (y la transición va sobre él, o abrirse
+sería un salto en vez de un crecimiento) y se le deja **encoger** (`flex-shrink: 1`) con un
+suelo de `min-width: var(--ancho-cerrado)`: cuando falta sitio cede él, que es el único con
+espacio de sobra, pero nunca queda más estrecho que cerrado. Con menos de 768 px la barra pasa
+a un control por línea y el `flex-basis` vuelve al `100%`.
 
 ### La lupa no parecía pulsable (y no se abría con el teclado)
 
@@ -469,11 +540,20 @@ Lo que se ha corregido, y por qué cada cosa:
   leer valores sueltos sin saber de quién son.
 - **La tabla tiene `<caption>`** (oculto visualmente) y el contenedor con scroll horizontal es
   un `role="region"` con `tabindex="0"`: una zona que se desplaza tiene que poder recorrerse
-  con el teclado, o las columnas de la derecha son inalcanzables sin ratón.
-- **Los botones de acción llevan el nombre del cliente** en su `aria-label`, puesto desde
-  `nombrarAcciones()` al pintar cada fila. Sin eso, pedir la lista de botones de la página
-  devuelve diez veces *"Editar cliente"* sin saber a cuál pertenece cada uno. El texto visible
-  no cambia: son botones de icono y ese nombre solo existe para la tecnología asistiva.
+  con el teclado, o las columnas de la derecha son inalcanzables sin ratón. Ese `tabindex`
+  viene puesto en el HTML y lo **quita `clientes.js` cuando la tabla cabe entera**, vigilando
+  el tamaño con un `ResizeObserver`: una parada del tabulador donde no hay nada que desplazar
+  es una molestia para quien navega así. Se hace en ese sentido —puesto de serie y quitado
+  después— para que un fallo del JS deje la versión accesible y no la contraria.
+- **Los botones de acción llevan el nombre del cliente** en su `aria-label`. Sin eso, pedir la
+  lista de botones de la página devuelve diez veces *"Editar cliente"* sin saber a cuál
+  pertenece cada uno. El texto visible no cambia: son botones de icono y ese nombre solo existe
+  para la tecnología asistiva.
+- **El nombre y el aviso emergente de cada botón se escriben en el mismo sitio**
+  (`marcarFila()` → `nombrarAccion()`) y el nombre **empieza por el texto del aviso**. Son dos
+  textos que tienen que decir lo mismo —quien maneja el ordenador por voz dicta lo que ve
+  (criterio **2.5.3**, *label in name*)— y repartidos en dos funciones se acaban
+  desincronizando en cuanto cambia uno.
 - **El estado abierto/cerrado lo dice `aria-expanded`**, no el nombre del botón: el nombre se
   mantiene estable ("Ver detalles de X") y es el atributo el que cambia. Es el patrón estándar
   de *disclosure*.
@@ -534,6 +614,16 @@ Lo que se ha corregido, y por qué cada cosa:
   mensaje: la salida tiene que estar donde se ve el problema.
 - En el formulario de edición, `autocomplete="off"` (son datos de otra persona, no de quien
   rellena) e `inputmode` numérico/telefónico para que en móvil salga el teclado correcto.
+- **Los asteriscos de campo obligatorio son `aria-hidden`**: se leerían como "asterisco", que no
+  dice nada, y los campos ya llevan `required`, que el lector anuncia como "obligatorio".
+- **Ningún número de columnas escrito a mano.** El `colspan` de la fila desplegada y el de la
+  fila de mensajes salen de contar los `<th>` de la tabla (`COLUMNAS_TABLA`), y el texto por
+  defecto del error del NIF se lee del propio `<template>` al arrancar. Son los dos sitios
+  donde una copia a mano se queda vieja sin que nadie se entere.
+- **Se ha quitado el `querySelectorAll('.btn-eliminar')` del final de `clientes.js`**: no
+  enganchaba nada, porque al ejecutarse ese código los botones todavía viven dentro del
+  `<template>`. En su sitio queda un comentario que explica que las acciones de la fila van por
+  delegación en el `<tbody>`, que es donde quien implemente el borrado tiene que añadir su caso.
 
 ## Logs y manejo de errores
 
@@ -633,12 +723,34 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 28. **Enlaces de la tabla**: pulsar el email → abre el cliente de correo y **la fila no se
     despliega**; pulsar en el hueco de esa misma celda, al lado del enlace → sí se despliega.
 29. **Lector de pantalla** (NVDA o el Narrador de Windows): en la lista de botones, cada uno
-    dice el nombre de su cliente ("Editar García S.L."). Al recorrer las celdas con las flechas
-    de tabla, cada valor va precedido del nombre del cliente.
+    dice el nombre de su cliente ("Editar cliente García S.L."). Al recorrer las celdas con las
+    flechas de tabla, cada valor va precedido del nombre del cliente.
 30. **Zona desplazable**: a 360 px de ancho, `Tab` tiene que parar en la tabla y las flechas
-    moverla en horizontal. Email y teléfono no se ven a ese ancho (están en el detalle).
+    moverla en horizontal. A pantalla completa, donde la tabla cabe entera, `Tab` **no** para
+    ahí (el `tabindex` se quita solo); estrechar la ventana y volver a probar.
 31. **Cargando**: con la pestaña Network en "Slow 3G", paginar → la tabla se atenúa mientras
     llega la respuesta y vuelve a su opacidad al pintarse.
+32. **Aviso de guardado**: guardar un cliente → sale la franja verde "Cliente guardado" encima
+    de la tabla, **sobrevive al refresco** y se va sola a los cinco segundos. Con un lector de
+    pantalla, se anuncia sin que haya que ir a buscarla.
+33. **Foco tras guardar**: abrir el lápiz con el teclado, cambiar algo y guardar con `Enter` →
+    el foco vuelve al lápiz **de esa misma fila**, no al principio de la página. Repetirlo
+    ordenando por nombre y cambiando el nombre (la fila se mueve de sitio): el foco la sigue.
+34. **NIF repetido, en el inspector**: poner el NIF de otro cliente y guardar → el `<input>`
+    tiene que quedar con `aria-invalid="true"` y un `aria-describedby` que apunte al id del
+    mensaje visible. Teclear en el campo → los dos atributos desaparecen.
+35. **Cliente borrado mientras se edita**: abrir el lápiz, borrarlo desde otra pestaña (o con
+    un `DELETE` en Swagger) y guardar → mensaje de "ya no existe" en la franja de avisos, que
+    **sigue ahí** después de que la tabla se refresque.
+36. **Página que se queda sin clientes**: dejar 31 clientes (4 páginas), ir a la página 4,
+    borrar los que sobran hasta dejar 30 desde otra pestaña y refrescar con
+    `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → tiene que aterrizar en la
+    **página 3 con datos**, no en una página vacía que diga "Página 4 de 3".
+37. **La barra de filtros no se parte**: a 1200 y a 1440 px, pulsar la lupa → el buscador se
+    abre encogiendo lo que haga falta y "Limpiar" **se queda en la misma línea**. A 768 px o
+    menos, cada control ocupa su propia línea completa.
+38. **Recuadro del último cliente**: abrir el detalle del **último** cliente de la página → el
+    recuadro de color tiene que cerrar por abajo (antes le faltaba esa raya).
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 

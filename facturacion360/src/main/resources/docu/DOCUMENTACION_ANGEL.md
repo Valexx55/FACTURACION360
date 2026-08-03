@@ -33,8 +33,9 @@ hubiera texto escrito o no—. Compartiendo endpoint, la búsqueda hereda todo e
 
 ## Qué entrega la rama `feature/verDetallesYEditar_Angel`
 
-Resumen de todo lo implementado, para no tener que reconstruirlo leyendo 29 commits. Cada punto
-tiene su explicación completa más abajo; aquí está el **qué** y el enlace al **porqué**.
+Resumen de todo lo implementado, para no tener que reconstruirlo leyendo los commits uno a uno.
+Cada punto tiene su explicación completa más abajo; aquí está el **qué** y el enlace al
+**porqué**.
 
 ### Backend
 
@@ -148,7 +149,7 @@ Navegador ←──── JSON ─── PaginaClienteResponse ←(Mapper)─ Cl
 | **Dominio** | `dto/Cliente` | Lo que se maneja entre capas, ajeno a HTTP y a SQL. |
 | **Mapper** | `dto/ClienteMapper.java` | Traduce `ClienteRequest` → `Cliente` → `ClienteResponse`. |
 
-## Cómo lo hemos hecho 
+## Cómo lo hemos hecho
 
 > ⚠️ **`listar-ultimos` está marcado como obsoleto (`@Deprecated`).** Lo que sigue explica cómo
 > funciona, porque es el endpoint con el que se montó el listado y sirve de ejemplo del caso
@@ -636,7 +637,8 @@ general, porque si no el usuario tendría que adivinar cuál de los ocho campos 
 > El modal de "Añadir Cliente" (de otra feature) solo tiene cuatro campos, y dirección,
 > población y provincia son obligatorias en el backend: por eso el formulario de edición los
 > lleva **todos**. Y por eso la función de guardar se llama `guardarEdicion` y no
-> `guardarCliente`: ese nombre lo ocupa el `onclick` de ese modal.
+> `guardarCliente`: ese nombre **se deja libre** para quien implemente el alta, que es a la que
+> le corresponde.
 
 #### Qué pasa exactamente al pulsar "Guardar"
 
@@ -1308,9 +1310,9 @@ Seis cosas que se han mirado y se dejan como están, a propósito:
   Partirlo es viable y limpio: **no hay ni un manejador `onclick` en el HTML** y el `<script>` ya
   va con `defer`, así que nada de la página depende de que estas funciones estén en el ámbito
   global; bastaría `type="module"` con `import`/`export`, sin *bundler* ni paso de compilación.
-  No entra aquí por una cuestión de orden: mover 2.133 líneas dentro de una rama que ya trae 31
-  *commits* de funcionalidad hace la revisión **más** difícil, no menos. Su sitio es una rama
-  propia, después de que esta se integre.
+  No entra aquí por una cuestión de orden: mover 2.133 líneas dentro de una rama que ya trae
+  decenas de *commits* de funcionalidad hace la revisión **más** difícil, no menos. Su sitio es
+  una rama propia, después de que esta se integre.
 
 - **La conciliación del formulario no tiene pruebas.** `conciliarFormulario` resuelve un
   *merge* a tres bandas —lo que se pintó, lo que hay ahora en la base de datos y lo que el
@@ -1549,10 +1551,19 @@ Ejemplo: si la columna pasara a llamarse `id` en vez de `idcliente`, habría que
 ---
 
 
-## TODO — Mejoras de calidad (de la auditoría)
+## Qué señaló la auditoría y cómo ha quedado
 
-Mejoras para dejar la parte más profesional. Aunque quizá no las implementemos, conviene
-**entenderlas**.
+Seis puntos. **Cinco están cerrados** y se resumen en una línea cada uno; el sexto es el único
+que sigue abierto y va al final, con su análisis entero.
+
+| | Punto | Estado |
+|---|---|---|
+| **A** | Inyección de dependencias y forma del `return` | Decisión razonada, abajo |
+| **B** | Manejo de errores centralizado | 🤝 Es una feature de otro |
+| **C** | Tests automáticos | ✅ Todo salvo lo que necesita BD |
+| **D** | `limite` como `@RequestParam` | ✅ Implementado |
+| **E** | Nombres de rama descriptivos | ✅ Resuelto |
+| **F** | Índices de base de datos | ⏳ **Pendiente** |
 
 
 ### A. Decisiones de estilo: inyección de dependencias y forma del `return`
@@ -1591,10 +1602,15 @@ que rellena un campo privado desde fuera; con un constructor sería un `new` nor
 | **Contras** | Un poco **más verboso** (una línea extra). | **No puedes ver ni loguear** el valor sin partir la expresión; **depurar es más incómodo** (no hay variable donde poner el ojo). |
 
 ```java
-// Ejemplo: 
-List<Cliente> c = repo.findUltimos(l);   return repo.findUltimos(l);
-log.debug("-> {}", c.size());
-return c;
+// Antes: no hay dónde mirar el valor
+return clienteRepository.findUltimos(limite);
+```
+
+```java
+// Ahora: la variable existe, así que se puede loguear y poner un breakpoint en el return
+List<Cliente> clientes = clienteRepository.findUltimos(limite);
+log.debug("findUltimos({}) -> {} filas", limite, clientes.size());
+return clientes;
 ```
 > **Decisión**: usamos el patrón variable sobre todo porque **facilita el log y el
 > depurado** (poder mirar el valor justo antes de devolverlo).
@@ -1622,8 +1638,7 @@ return c;
 > colar en una PR un cambio que su revisor no espera encontrar ahí.
 
 **Concepto**: cuando un endpoint lanza una excepción, Spring puede **desviarla** a una clase
-"guardiana" que decide qué responder, en vez de soltar el error por defecto. 
-Es como un `catch`
+"guardiana" que decide qué responder, en vez de soltar el error por defecto. Es como un `catch`
 global para todos los controllers.
 - **Cómo**: una clase con métodos `@ExceptionHandler`, uno por tipo de error:
   ```java
@@ -1644,68 +1659,21 @@ global para todos los controllers.
   ["Logs y manejo de errores"](#logs-y-manejo-de-errores). El manejador central arregla las dos
   cosas: quita la repetición y cubre también lo que ocurre fuera del método.
 
-### C. Tests automáticos (`@JdbcTest` y `@WebMvcTest`) — ✅ HECHA LA PARTE QUE NO NECESITA BD
-**Ya están escritos** los tests del `@WebMvcTest` y los que no tocan la base de datos: **36
-pruebas en cuatro clases**, descritas en ["Tests automáticos"](#tests-automáticos). Cubren la
-normalización de los criterios, el SQL que se construye, la lógica de `actualizar` en el service
-y los códigos HTTP del controller, incluidos los `500`. Queda pendiente **solo** el `@JdbcTest`,
-que necesita decidir antes qué base de datos de test se usa (H2 no imita la *collation* ni el
-`ESCAPE` de MySQL, así que haría falta Testcontainers) y eso es infraestructura de todo el
-equipo. El resto de este apartado se conserva como explicación de los conceptos.
+### C, D y E — cerrados
 
-**Concepto**: un test es código que **comprueba solo** que otro código hace lo que debe. Spring
-permite probar **una capa aislada** sin levantar toda la app. Un "mock" (o doble) es un objeto
-falso que simula a otro para no depender de él (p. ej. simular el service para probar el
-controller sin BD).
-- **Cómo**:
-  - `@JdbcTest` para el **repositorio**: arranca solo lo justo para la BD y comprueba que
-    `findUltimos` devuelve y ordena bien (con una BD de test o Testcontainers).
-  - `@WebMvcTest(ClienteController.class)` + `MockMvc`: levanta **solo la capa web** y simula
-    peticiones HTTP; con `@MockitoBean ClienteService` sustituyes el service por un doble, así
-    pruebas que `GET /cliente/listar-ultimos` responde `200` y el JSON correcto **sin tocar la
-    BD**. *(Se escribía `@MockBean`; en Spring Boot 4 esa anotación ya no existe y su sustituta
-    es `@MockitoBean`, del paquete `org.springframework.test.context.bean.override.mockito`.)*
-- **Por qué es relevante**: detectan roturas al cambiar código, **documentan** el comportamiento
-  esperado y aíslan cada capa. Dan confianza (y nota).
+- **C. Tests automáticos.** Escritas las **43 pruebas** que no necesitan base de datos, en cuatro
+  clases: qué cubre cada una está en ["Tests automáticos"](#tests-automáticos). Sigue abierto
+  **solo** el `@JdbcTest`, y no por falta de ganas: hay que decidir antes qué base de datos de
+  test se usa, porque H2 no imita ni la *collation* ni el `ESCAPE` de MySQL —que es justo lo que
+  habría que probar—, así que haría falta Testcontainers. Es infraestructura de todo el equipo.
+- **D. `limite` como `@RequestParam`.** Hecho: el `10` que estaba escrito en el código llega
+  ahora por la URL con `defaultValue`, y se acota entre las constantes `LIMITE_MIN` y
+  `LIMITE_MAX` para que nadie pida `?limite=999999`. *(Lo más "REST" sería `@Min`/`@Max`
+  devolviendo un `400`, pero eso necesita el manejador de errores del punto B, que es de otro.)*
+- **E. Nombres de rama descriptivos.** Venía de que la primera rama se llamaba `Angel` a secas,
+  que dice quién trabaja pero no en qué. La convención en uso es `feature/<loQueHace>_Angel`.
 
-### D. `limite` como `@RequestParam` (quitar el "número mágico") — ✅ IMPLEMENTADO
-**Concepto**: un "número mágico" es un valor fijo escrito en el código (aquí, el `10`) que no se
-puede cambiar desde fuera. Con `@RequestParam` ese valor llega por la URL.
-- **Cómo (ya hecho en `ClienteController.listarUltimos`)**:
-  ```java
-  @GetMapping("/listar-ultimos")
-  public ResponseEntity<List<ClienteResponse>> listarUltimos(
-          @RequestParam(defaultValue = "10") int limite) {
-      int limiteSeguro = Math.max(1, Math.min(100, limite)); // acotado a [1, 100]
-      // ... clienteService.listarUltimos(limiteSeguro) ...
-  }
-  ```
-- **Por qué es relevante**: **flexibilidad sin romper nada** (`/listar-ultimos` sigue dando 10;
-  `?limite=25` da 25). El valor se **acota a 1–100** para que nadie pida `?limite=999999` y sature
-  la BD. *(Alternativa más "REST": `@Validated` + `@Min/@Max` devolviendo `400`, pero necesita el
-  manejador de errores del TODO B; por eso de momento acotamos.)*
-
-### E. Nombres de rama descriptivos — ✅ RESUELTO
-
-Venía de que la primera rama se llamaba `Angel` a secas, que dice quién trabaja pero no en qué.
-Ya no queda ninguna así: la convención en uso es `feature/<loQueHace>_Angel`
-(`feature/verDetallesYEditar_Angel`), que se lee de un vistazo en la lista de ramas y en las PR.
-
-Se deja apuntado el procedimiento, porque renombrar una rama **que ya está subida** no es solo
-`git branch -m` y se olvida con facilidad:
-
-```bash
-# 1. Renombrar la rama LOCAL
-git branch -m feature/nombreNuevo_Angel
-
-# 2. Subir la rama con el nombre nuevo y fijar su seguimiento (upstream)
-git push -u origin feature/nombreNuevo_Angel
-
-# 3. Borrar la rama vieja del remoto (solo si no hay una PR abierta sobre ella)
-git push origin --delete nombreViejo
-```
-
-### F. Índices de base de datos para los filtros y la ordenación (pendiente)
+### F. Índices de base de datos para los filtros y la ordenación — ⏳ el único pendiente
 
 La tabla `clientes` solo tiene `PRIMARY KEY (idcliente)` y `UNIQUE KEY (nif_cif)`. Los filtros que
 añadimos comparan por **igualdad** (`WHERE provincia = ?`, `WHERE poblacion = ?`) y la ordenación
@@ -1787,9 +1755,12 @@ El id del cliente está en `fila.dataset.clienteId`. Después de un `await` (una
 `fetch`), **no reutilicéis esa variable `fila`**: la tabla puede haberse repintado y ese `<tr>`
 ya no estar en el documento. Para eso están `filaViva(id)` y `formularioVivo(id)`.
 
-**2) `clientes.js` ocupa el ámbito global de la página.** No es un módulo porque el HTML necesita
-poder llamar a alguna función desde un `onclick`. Si añadís otro `<script>` a `clientes.html`,
-evitad estos nombres o se pisarán en silencio:
+**2) `clientes.js` ocupa el ámbito global de la página.** Se carga con `<script defer>` y no con
+`type="module"`, así que todo lo que declara vive en `window`. No es una decisión, es cómo se
+quedó: hoy **el HTML no llama a ninguna función desde un `onclick`** —no queda ninguno en
+`clientes.html`—, así que pasarlo a módulos es viable y está anotado en
+[Limitaciones conocidas](#limitaciones-conocidas). Mientras siga siendo global, si añadís otro
+`<script>` a `clientes.html`, evitad estos nombres o se pisarán en silencio:
 
 | Tipo | Nombres ocupados |
 |---|---|

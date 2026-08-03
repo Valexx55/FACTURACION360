@@ -634,11 +634,12 @@ petición para recibir un `400`. Del servidor solo puede llegar un error que el 
 puede prever: el **`409` del NIF repetido**, y se señala en *su* campo y no en un aviso
 general, porque si no el usuario tendría que adivinar cuál de los ocho campos falla.
 
-> El modal de "Añadir Cliente" (de otra feature) solo tiene cuatro campos, y dirección,
+> El modal de "Añadir Cliente" que hay hoy en la página solo tiene cuatro campos, y dirección,
 > población y provincia son obligatorias en el backend: por eso el formulario de edición los
 > lleva **todos**. Y por eso la función de guardar se llama `guardarEdicion` y no
-> `guardarCliente`: ese nombre **se deja libre** para quien implemente el alta, que es a la que
-> le corresponde.
+> `guardarCliente`: ese nombre **se deja libre** para el alta, sea cual sea la forma que acabe
+> tomando —también si se resuelve en la propia tabla, que es donde la colisión de nombres sería
+> más fácil de provocar—.
 
 #### Qué pasa exactamente al pulsar "Guardar"
 
@@ -1283,8 +1284,12 @@ Seis cosas que se han mirado y se dejan como están, a propósito:
   consola. Se ha inhabilitado para que no parezca que hace algo. Además el formulario recoge
   cuatro de los siete campos que `ClienteRequest` exige —le faltan dirección, población y
   provincia, las tres `@NotBlank`—, con lo que el `POST` devolvería `400` aunque se conectara.
-  Quien la implemente tiene las instrucciones en un comentario junto al propio botón, en
-  `clientes.html`.
+
+  **El modal no es la única salida, y quien haga el alta decide.** La otra es resolverla en la
+  propia tabla, reutilizando el panel de edición que ya está montado; en ese caso el modal sobra
+  entero y se puede borrar con su botón y con el *listener* que lo vacía al abrir. Lo que vale
+  para las dos opciones —cómo se enganchan los botones de la fila y el evento que hay que
+  disparar al recibir el `201`— está en el comentario junto al propio botón, en `clientes.html`.
 
 - **La última edición gana, sin avisar.** Si dos personas abren el mismo cliente y guardan, la
   segunda pisa lo de la primera y nadie se entera. Resolverlo bien pide una columna de versión

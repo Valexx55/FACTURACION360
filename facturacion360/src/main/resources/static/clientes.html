@@ -500,13 +500,22 @@
                     <!-- Inhabilitado a propósito: el alta de clientes todavía no tiene lógica de
                          frontend. La función guardarCliente() que llamaba este botón no existe en
                          ningún sitio, así que pulsarlo solo dejaba un ReferenceError en la consola,
-                         y además el formulario recoge 4 de los 7 campos que ClienteRequest exige
+                         y además este formulario recoge 4 de los 7 campos que ClienteRequest exige
                          (faltan dirección, población y provincia, las tres @NotBlank), con lo que
                          el POST devolvería 400 igualmente.
-                         PARA QUIEN IMPLEMENTE EL ALTA: quita el disabled, añade esos tres campos
-                         con las mismas restricciones que el formulario de edición de la fila, y
-                         dispara document.dispatchEvent(new CustomEvent('clientes:cambiaron')) al
-                         recibir el 201 para que la tabla se refresque sola. -->
+
+                         PARA QUIEN IMPLEMENTE EL ALTA: decide tú por dónde va. Este modal es una
+                         opción; la otra es hacerlo en la propia tabla, reutilizando el panel de
+                         edición que ya existe. Si eliges el modal, quita el disabled y añade los
+                         tres campos que faltan; si eliges la tabla, este modal sobra entero y se
+                         puede borrar con su botón de arriba y el listener que lo vacía al abrir,
+                         al final de clientes.js.
+
+                         Vaya por donde vaya, dos cosas valen igual: los botones de la fila se
+                         enganchan por delegación en el <tbody> (está explicado en clientes.js,
+                         donde se resuelven ver y editar), y hay que disparar
+                         document.dispatchEvent(new CustomEvent('clientes:cambiaron')) al recibir
+                         el 201 para que la tabla se refresque sola. -->
                     <button type="button" class="btn btn-primary-custom" disabled
                             data-bs-title="El alta de clientes todavía no está disponible">
                         Guardar Cambios

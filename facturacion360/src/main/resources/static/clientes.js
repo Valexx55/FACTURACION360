@@ -2081,16 +2081,13 @@ observadorTabla.observe(cuerpoTabla.closest("table"));
 // y editar.
 
 /*
- * El modal de "Añadir Cliente" se vacía cada vez que se abre.
+ * El modal de "Añadir Cliente" se vacía cada vez que se abre. Bootstrap no lo hace solo, así
+ * que quien escriba medio cliente, cierre sin guardar y vuelva a abrirlo se encontraría lo de
+ * antes dentro y podría creer que son los datos de un cliente que ya existe. Al ABRIR y no al
+ * cerrar, porque cerrar se puede de cuatro maneras (botón, X, Escape y fondo).
  *
- * Bootstrap no lo hace por su cuenta al cerrarlo: si alguien escribe medio cliente, cierra el
- * diálogo sin guardar y vuelve a abrirlo, se encuentra lo de antes dentro y puede creer que
- * son los datos de un cliente que ya existe. Se hace al ABRIR y no al cerrar porque el diálogo
- * se puede cerrar de cuatro maneras (el botón, la X, Escape y el fondo), y así da igual por
- * cuál se haya ido.
- *
- * El alta en sí es otra feature y su botón de guardar está inhabilitado; esto es solo la
- * higiene del formulario, que servirá igual el día que se implemente.
+ * Si el alta acaba haciéndose en la tabla y no aquí, esto sobra: ver el comentario del botón
+ * "Guardar Cambios" en clientes.html.
  */
 const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
 

@@ -113,7 +113,7 @@ los saltos de línea antes de llegar al log ([por qué](#qué-registra-cada-endp
 
 ### Calidad
 
-- **43 pruebas** en cuatro clases, **ninguna necesita MySQL**
+- **44 pruebas** en cuatro clases, **ninguna necesita MySQL**
   ([qué cubre cada una](#tests-automáticos)).
 - Nomenclatura en español y descriptiva en todo, y la regla de "variable antes del `return`"
   **sin excepciones** ([por qué](#a-decisiones-de-estilo-inyección-de-dependencias-y-forma-del-return)).
@@ -1175,17 +1175,17 @@ el `400` se devuelve desde aquí, con cuerpo vacío, igual que el del `PUT`.
 ## Tests automáticos
 
 Cuatro clases en `src/test/java`, **ninguna necesita base de datos**, que es la condición para
-que se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Son **43
-pruebas**: 18 del controller, 13 del repositorio, 8 de los criterios y 4 del service.
+que se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Son **44
+pruebas**: 18 del controller, 13 del repositorio, 9 de los criterios y 4 del service.
 
-Al lanzarlas con `./mvnw test` verás **44**, no 43. La que sobra es
+Al lanzarlas con `./mvnw test` verás **45**, no 44. La que sobra es
 `Facturacion360ApplicationTests.contextLoads`, que vino con el esqueleto de Spring Initializr y
 no es de esta feature. Se anota la diferencia para que nadie tenga que averiguar por qué los dos
 números no cuadran.
 
 | Clase | Qué asegura |
 |---|---|
-| `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null`, los saltos de línea neutralizados y que el `offset` no desborde |
+| `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null`, los saltos de línea neutralizados y que el `offset` no desborde. Y que el mensaje de longitud **saque el número de la constante** y no de un literal: es lo único que no se nota por ningún otro sitio, porque el `400` sale con el cuerpo vacío y ese texto solo llega al log |
 | `ClienteRepositoryJdbcImplTest` | El SQL que se construye: comodines de `LIKE` escapados, lista blanca del `ORDER BY`, filtros acumulados y el recuento con los mismos filtros que la página. Y el **filtro en cascada**: que el `AND provincia = ?` aparezca al elegir provincia y desaparezca sin ella, que una provincia en blanco cuente como ninguna, y que las provincias salgan sin repetir y sin huecos |
 | `ClienteServiceImplTest` | La lógica de `actualizar`: no tocar la BD si el cliente no existe, conservar la fecha de alta, usar el id de la ruta y que guardar sin cambios siga siendo un guardado correcto |
 | `ClienteControllerTest` | Los códigos HTTP del detalle, el guardado y el listado: `200`, `400`, `404`, `409` y `500`, y que todos los errores salgan con el cuerpo vacío. También los **dos endpoints de los desplegables**, incluido que al *service* le llegue `null` —y no una cadena vacía— cuando la petición no trae provincia, que es de lo que depende la cascada |
@@ -1464,8 +1464,8 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 46. **Mensaje centrado en móvil**: a 360 px de ancho, buscar algo que no exista → el mensaje de
     "no hay clientes" tiene que quedar centrado **dentro** de la tabla. Con un panel abierto,
     estrechar la ventana de escritorio a móvil → el panel sigue ocupando el ancho justo.
-47. **Tests**: `./mvnw test` desde `facturacion360/` → 44 pruebas en verde **sin MySQL
-    arrancado**. (Son 43 las de esta feature; la 44 es el `contextLoads` que trae el esqueleto
+47. **Tests**: `./mvnw test` desde `facturacion360/` → 45 pruebas en verde **sin MySQL
+    arrancado**. (Son 44 las de esta feature; la 45 es el `contextLoads` que trae el esqueleto
     de Spring.)
 48. **El panel se abre lleno**: en Network, poner "Slow 3G" y pulsar una fila → los datos
     aparecen **al instante**, sin pasar por "Cargando", y la petición a `/cliente/{id}` sigue
@@ -1666,7 +1666,7 @@ global para todos los controllers.
 
 ### C, D y E — cerrados
 
-- **C. Tests automáticos.** Escritas las **43 pruebas** que no necesitan base de datos, en cuatro
+- **C. Tests automáticos.** Escritas las **44 pruebas** que no necesitan base de datos, en cuatro
   clases: qué cubre cada una está en ["Tests automáticos"](#tests-automáticos). Sigue abierto
   **solo** el `@JdbcTest`, y no por falta de ganas: hay que decidir antes qué base de datos de
   test se usa, porque H2 no imita ni la *collation* ni el `ESCAPE` de MySQL —que es justo lo que

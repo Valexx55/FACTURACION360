@@ -23,7 +23,8 @@ import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.CriteriosCliente;
 
 /**
- * Pruebas del SQL que construye {@link ClienteRepositoryJdbcImpl} para el listado paginado.
+ * Pruebas del SQL que construye {@link ClienteRepositoryJdbcImpl} para el listado paginado y
+ * para los desplegables de filtro.
  *
  * <p>Lo que se comprueba aquí son las dos defensas del buscador, que son invisibles mirando la
  * pantalla y solo se notan cuando fallan: que los comodines de {@code LIKE} llegan escapados
@@ -31,6 +32,11 @@ import edu.xtd.facturacion360.dto.CriteriosCliente;
  * {@code ORDER BY} no admite parámetros, así que lo que el usuario mande no puede acabar
  * concatenado en la consulta). Y que el recuento del total lleva los mismos filtros que la
  * página, o el número de páginas dejaría de cuadrar con lo que se ve.</p>
+ *
+ * <p>Los cuatro últimos cubren <strong>el filtro en cascada</strong>, que es el único punto de
+ * esta clase donde la consulta cambia de forma según lo que llegue. Invertir ese {@code if} no
+ * rompe nada visible —el desplegable se sigue llenando— pero deja de recortarse al elegir
+ * provincia, así que es justo el tipo de fallo que una revisión de código no ve.</p>
  *
  * <p>Con un {@code JdbcTemplate} simulado: no hace falta MySQL levantado, porque lo que se
  * mira es la consulta que se le entrega, no lo que devolvería.</p>
@@ -91,6 +97,38 @@ class ClienteRepositoryJdbcImplTest {
 		}).when(jdbcTemplate).queryForObject(anyString(), eq(Long.class), any(Object[].class));
 
 		return repositorio.contarTotal(criterios);
+	}
+
+	/**
+	 * Pide las poblaciones de una provincia y deja anotada la consulta que se ha ejecutado.
+	 *
+	 * <p>Simula la sobrecarga <b>variádica</b> de {@code queryForList}, que es la que usa
+	 * {@code findPoblaciones}. No sirve la misma respuesta simulada que
+	 * {@link #pedirProvincias()}: {@code findProvincias} llama a la versión de <b>dos</b>
+	 * argumentos, y Java las resuelve como métodos distintos.</p>
+	 *
+	 * @param provincia la provincia por la que filtrar; {@code null} o en blanco = todas
+	 */
+	private void pedirPoblaciones(String provincia) {
+		doAnswer(invocacion -> {
+			registrar(invocacion);
+			return List.<String>of();
+		}).when(jdbcTemplate).queryForList(anyString(), eq(String.class), any(Object[].class));
+
+		repositorio.findPoblaciones(provincia);
+	}
+
+	/**
+	 * Pide las provincias y deja anotada la consulta. Ojo con los índices: aquí no hay valores
+	 * de '?', así que {@link #registrar(InvocationOnMock)} deja {@code parametros} vacío.
+	 */
+	private void pedirProvincias() {
+		doAnswer(invocacion -> {
+			registrar(invocacion);
+			return List.<String>of();
+		}).when(jdbcTemplate).queryForList(anyString(), eq(String.class));
+
+		repositorio.findProvincias();
 	}
 
 	@Test
@@ -191,5 +229,53 @@ class ClienteRepositoryJdbcImplTest {
 	@DisplayName("Si el recuento devolviera null, el total es 0 y no una excepción")
 	void elTotalNuloSeTraduceACero() {
 		assertThat(contarTotal(new CriteriosCliente(0, 10, null, null, null, null, null), null)).isZero();
+	}
+
+	@Test
+	@DisplayName("Sin provincia se piden todas las poblaciones, sin AND y sin parámetros")
+	void sinProvinciaNoSeFiltraLaCascada() {
+		pedirPoblaciones(null);
+
+		assertThat(sql).doesNotContain("AND provincia");
+		assertThat(parametros).isEmpty();
+	}
+
+	@Test
+	@DisplayName("Con provincia, la cascada añade el AND y la manda como parámetro")
+	void conProvinciaLaCascadaFiltra() {
+		pedirPoblaciones("Valencia");
+
+		assertThat(sql).contains("AND provincia = ?");
+
+		// Como '?' y no concatenada: el nombre de la provincia sale de un desplegable, pero
+		// llega por la URL y cualquiera puede escribir en ella lo que quiera.
+		assertThat(parametros).containsExactly("Valencia");
+	}
+
+	@Test
+	@DisplayName("Una provincia en blanco se trata igual que si no llegara")
+	void laProvinciaEnBlancoNoFiltra() {
+		// Es la otra mitad de la condición, la del isBlank(). Un select que se vacía deja el
+		// parámetro puesto pero vacío, así que este caso ocurre de verdad: sin el isBlank(),
+		// la consulta buscaría las poblaciones de una provincia llamada "   " y el desplegable
+		// se quedaría a cero sin que nada fallara.
+		pedirPoblaciones("   ");
+
+		assertThat(sql).doesNotContain("AND provincia");
+		assertThat(parametros).isEmpty();
+	}
+
+	@Test
+	@DisplayName("Las provincias van sin repetir y descartando nulos y cadenas vacías")
+	void lasProvinciasDescartanLosVacios() {
+		pedirProvincias();
+
+		// El DISTINCT es lo que evita una entrada por cliente en el desplegable, y el filtro de
+		// nulos y vacíos evita las opciones en blanco. Las dos columnas admiten NULL, así que
+		// sin ese WHERE el desplegable enseñaría huecos que no se pueden ni seleccionar.
+		assertThat(sql).contains("SELECT DISTINCT provincia")
+				.contains("provincia IS NOT NULL AND provincia <> ''")
+				.contains("ORDER BY provincia");
+		assertThat(parametros).isEmpty();
 	}
 }

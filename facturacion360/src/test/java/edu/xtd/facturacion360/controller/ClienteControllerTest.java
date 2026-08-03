@@ -36,8 +36,8 @@ import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.service.ClienteService;
 
 /**
- * Pruebas de los códigos HTTP que devuelve {@link ClienteController} en el detalle, la edición
- * y el listado paginado.
+ * Pruebas de los códigos HTTP que devuelve {@link ClienteController} en el detalle, la edición,
+ * los desplegables de filtro y el listado paginado.
  *
  * <p>El controller no calcula nada: lo suyo es traducir lo que responde el service (un
  * {@link Optional} vacío, una excepción de clave duplicada) al código que le toca. Esa
@@ -81,6 +81,58 @@ class ClienteControllerTest {
 				  "email": "info@garcia.es"
 				}
 				""";
+	}
+
+	// --- GET /cliente/provincias y /cliente/poblaciones ---
+
+	@Test
+	@DisplayName("Las provincias se devuelven como una lista de textos")
+	void listadoDeProvincias() throws Exception {
+		when(clienteService.listarProvincias()).thenReturn(List.of("Madrid", "Valencia"));
+
+		mockMvc.perform(get("/cliente/provincias"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0]").value("Madrid"));
+	}
+
+	@Test
+	@DisplayName("Pedir las poblaciones de una provincia se la pasa al service")
+	void lasPoblacionesSeFiltranPorProvincia() throws Exception {
+		when(clienteService.listarPoblaciones("Valencia")).thenReturn(List.of("Gandia", "Xàtiva"));
+
+		mockMvc.perform(get("/cliente/poblaciones").param("provincia", "Valencia"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0]").value("Gandia"));
+	}
+
+	@Test
+	@DisplayName("Sin el parámetro, al service le llega null y no una cadena vacía")
+	void lasPoblacionesSinProvinciaLasPideTodas() throws Exception {
+		when(clienteService.listarPoblaciones(null)).thenReturn(List.of("Gandia", "Madrid"));
+
+		mockMvc.perform(get("/cliente/poblaciones")).andExpect(status().isOk());
+
+		// Esta es la línea que importa, y por eso el test no se queda en el 200. El repositorio
+		// decide si filtra o no mirando si la provincia es null o está en blanco; si el
+		// @RequestParam dejara aquí una cadena vacía en vez de null, la cascada seguiría
+		// funcionando de casualidad —el isBlank() lo salva— pero la primera capa estaría
+		// mintiéndole a la segunda. Que llegue null es el contrato, no un detalle.
+		verify(clienteService).listarPoblaciones(null);
+	}
+
+	@Test
+	@DisplayName("Si la base de datos no responde, los desplegables devuelven 500 y no una traza")
+	void desplegablesConLaBaseDeDatosCaida() throws Exception {
+		when(clienteService.listarProvincias())
+				.thenThrow(new DataAccessResourceFailureException("MySQL no responde"));
+
+		// Sin cuerpo, igual que el resto: el frontend deja el desplegable vacío y sigue
+		// funcionando. Con la página de error de Spring recibiría HTML donde espera un JSON.
+		mockMvc.perform(get("/cliente/provincias"))
+				.andExpect(status().isInternalServerError())
+				.andExpect(content().string(""));
 	}
 
 	// --- GET /cliente/{id} ---

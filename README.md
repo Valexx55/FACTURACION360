@@ -57,7 +57,7 @@ Cada capa tiene una única responsabilidad:
     - Coordina operaciones entre repositorios.
 
 - **Repository**
-    - Accede a la base de datos mediante Spring Data JPA.
+    - Accede a la base de datos mediante JDBC
 
 ---
 

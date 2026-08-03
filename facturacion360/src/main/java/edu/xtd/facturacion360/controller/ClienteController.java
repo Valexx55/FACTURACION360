@@ -115,7 +115,8 @@ public class ClienteController {
 			description = "OBSOLETO: usa GET /cliente/listar-pagina, que admite además búsqueda, "
 					+ "filtros y ordenación, y devuelve los metadatos de paginación. Este se "
 					+ "mantiene funcionando porque es con el que se montó el listado.")
-	@ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Clientes recuperados correctamente"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar los clientes") })
 	@GetMapping("/listar-ultimos")
 	public ResponseEntity<List<ClienteResponse>> listarUltimos(
 			@Parameter(description = "Número de clientes listados.", example = "10") @RequestParam(defaultValue = "10") int limite) {
@@ -238,7 +239,8 @@ public class ClienteController {
 	 * @see #listarPoblaciones(String)
 	 */
 	@Operation(summary = "Lista las provincias", description = "Devuelve las provincias distintas de la tabla clientes, ordenadas alfabéticamente")
-	@ApiResponse(responseCode = "200", description = "Provincias recuperadas correctamente")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Provincias recuperadas correctamente"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar las provincias") })
 	@GetMapping("/provincias")
 	public ResponseEntity<List<String>> listarProvincias() {
 
@@ -269,7 +271,8 @@ public class ClienteController {
 	 * @see #listarProvincias()
 	 */
 	@Operation(summary = "Lista las poblaciones", description = "Devuelve las poblaciones distintas de la tabla clientes; si se indica provincia, solo las de esa provincia")
-	@ApiResponse(responseCode = "200", description = "Poblaciones recuperadas correctamente")
+	@ApiResponses({ @ApiResponse(responseCode = "200", description = "Poblaciones recuperadas correctamente"),
+			@ApiResponse(responseCode = "500", description = "Error interno al consultar las poblaciones") })
 	@GetMapping("/poblaciones")
 	public ResponseEntity<List<String>> listarPoblaciones(
 			@Parameter(description = "Provincia por la que filtrar", example = "Valencia") @RequestParam(required = false) String provincia) {

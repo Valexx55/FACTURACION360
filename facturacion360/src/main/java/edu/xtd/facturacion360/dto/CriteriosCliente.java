@@ -1,5 +1,7 @@
 package edu.xtd.facturacion360.dto;
 
+import java.util.regex.Pattern;
+
 import jakarta.validation.constraints.Size;
 
 /**
@@ -39,13 +41,19 @@ public record CriteriosCliente(
 
 		// Las longitudes máximas son las de las columnas reales de la tabla: un término
 		// más largo no puede coincidir con nada, así que se rechaza antes de ir a la BD.
-		@Size(max = LONGITUD_MAX_BUSQUEDA, message = "La búsqueda no puede superar los 60 caracteres")
+		//
+		// El {max} del mensaje NO es una plantilla nuestra: Bean Validation sustituye entre
+		// llaves los atributos de la propia anotación (es como están escritos sus mensajes de
+		// serie: "size must be between {min} and {max}"). Así la constante es el único sitio
+		// donde vive el número; escribiéndolo a mano, cambiar la constante dejaba el mensaje
+		// diciendo otra cosa y nada en la línea lo delataba.
+		@Size(max = LONGITUD_MAX_BUSQUEDA, message = "La búsqueda no puede superar los {max} caracteres")
 		String busqueda,
 
-		@Size(max = LONGITUD_MAX_PROVINCIA, message = "La provincia no puede superar los 15 caracteres")
+		@Size(max = LONGITUD_MAX_PROVINCIA, message = "La provincia no puede superar los {max} caracteres")
 		String provincia,
 
-		@Size(max = LONGITUD_MAX_POBLACION, message = "La población no puede superar los 30 caracteres")
+		@Size(max = LONGITUD_MAX_POBLACION, message = "La población no puede superar los {max} caracteres")
 		String poblacion,
 
 		String ordenarPor,
@@ -77,6 +85,17 @@ public record CriteriosCliente(
 
 	/** Sentido de ordenación por defecto: lo más reciente primero. */
 	public static final String DIRECCION_DEFECTO = "desc";
+
+	/**
+	 * Saltos de línea, uno o varios seguidos. Los neutraliza {@link #normalizar(String)} para
+	 * que un criterio no pueda partir una línea del log en dos.
+	 *
+	 * <p>Se compila <strong>una sola vez</strong> y no en cada llamada: {@code String.replaceAll}
+	 * hace un {@code Pattern.compile} completo cada vez que se invoca, y {@code normalizar} se
+	 * llama cinco veces por cada {@code CriteriosCliente}, o sea cinco por petición del listado,
+	 * que es la pantalla más usada.</p>
+	 */
+	private static final Pattern SALTOS_DE_LINEA = Pattern.compile("[\\r\\n]+");
 
 	/**
 	 * Constructor compacto: deja todos los componentes ya normalizados, de modo que
@@ -139,7 +158,7 @@ public record CriteriosCliente(
 	private static String normalizar(String valor) {
 		String valorNormalizado = (valor == null || valor.isBlank())
 				? null
-				: valor.trim().replaceAll("[\\r\\n]+", " ");
+				: SALTOS_DE_LINEA.matcher(valor.trim()).replaceAll(" ");
 
 		return valorNormalizado;
 	}

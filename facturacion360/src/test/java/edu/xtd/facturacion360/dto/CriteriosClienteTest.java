@@ -2,8 +2,15 @@ package edu.xtd.facturacion360.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 
 /**
  * Pruebas del constructor compacto de {@link CriteriosCliente}.
@@ -129,5 +136,28 @@ class CriteriosClienteTest {
 		// Multiplicando en int, 2147483647 * 100 da la vuelta y sale negativo; MySQL rechaza
 		// un OFFSET negativo y la consulta reventaría en vez de devolver una página vacía.
 		assertThat(criterios.offset()).isEqualTo(214748364700L);
+	}
+
+	@Test
+	@DisplayName("El mensaje de longitud lleva el número de la constante, no uno escrito a mano")
+	void elMensajeDeLongitudSaleDeLaConstante() {
+		// El mensaje de los @Size usa {max}, que Bean Validation sustituye por el atributo de la
+		// propia anotación. Así el número vive en un único sitio: la constante.
+		//
+		// Hace falta probarlo aquí porque NO se nota en ningún otro sitio: el 400 sale con el
+		// cuerpo vacío y el mensaje solo llega al log. Si la interpolación fallara, el log diría
+		// literalmente "los {max} caracteres" y las demás pruebas seguirían en verde.
+		CriteriosCliente criterios = new CriteriosCliente(0, 10,
+				"x".repeat(CriteriosCliente.LONGITUD_MAX_BUSQUEDA + 1), null, null, null, null);
+
+		try (ValidatorFactory fabrica = Validation.buildDefaultValidatorFactory()) {
+			Validator validador = fabrica.getValidator();
+			Set<ConstraintViolation<CriteriosCliente>> incumplimientos = validador.validate(criterios);
+
+			assertThat(incumplimientos).singleElement()
+					.extracting(ConstraintViolation::getMessage)
+					.isEqualTo("La búsqueda no puede superar los "
+							+ CriteriosCliente.LONGITUD_MAX_BUSQUEDA + " caracteres");
+		}
 	}
 }

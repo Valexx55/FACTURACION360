@@ -112,7 +112,7 @@ los saltos de línea antes de llegar al log ([por qué](#qué-registra-cada-endp
 
 ### Calidad
 
-- **36 pruebas** en cuatro clases, **ninguna necesita MySQL**
+- **43 pruebas** en cuatro clases, **ninguna necesita MySQL**
   ([qué cubre cada una](#tests-automáticos)).
 - Nomenclatura en español y descriptiva en todo, y la regla de "variable antes del `return`"
   **sin excepciones** ([por qué](#a-decisiones-de-estilo-inyección-de-dependencias-y-forma-del-return)).
@@ -1172,15 +1172,20 @@ el `400` se devuelve desde aquí, con cuerpo vacío, igual que el del `PUT`.
 ## Tests automáticos
 
 Cuatro clases en `src/test/java`, **ninguna necesita base de datos**, que es la condición para
-que se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Se lanzan con
-`./mvnw test` y son **36 pruebas**.
+que se ejecuten siempre y no solo cuando alguien se acuerda de arrancar MySQL. Son **43
+pruebas**: 18 del controller, 13 del repositorio, 8 de los criterios y 4 del service.
+
+Al lanzarlas con `./mvnw test` verás **44**, no 43. La que sobra es
+`Facturacion360ApplicationTests.contextLoads`, que vino con el esqueleto de Spring Initializr y
+no es de esta feature. Se anota la diferencia para que nadie tenga que averiguar por qué los dos
+números no cuadran.
 
 | Clase | Qué asegura |
 |---|---|
 | `CriteriosClienteTest` | La normalización del record: la página negativa, el tamaño acotado, los textos en blanco a `null`, los saltos de línea neutralizados y que el `offset` no desborde |
-| `ClienteRepositoryJdbcImplTest` | El SQL que se construye: comodines de `LIKE` escapados, lista blanca del `ORDER BY`, filtros acumulados y el recuento con los mismos filtros que la página |
+| `ClienteRepositoryJdbcImplTest` | El SQL que se construye: comodines de `LIKE` escapados, lista blanca del `ORDER BY`, filtros acumulados y el recuento con los mismos filtros que la página. Y el **filtro en cascada**: que el `AND provincia = ?` aparezca al elegir provincia y desaparezca sin ella, que una provincia en blanco cuente como ninguna, y que las provincias salgan sin repetir y sin huecos |
 | `ClienteServiceImplTest` | La lógica de `actualizar`: no tocar la BD si el cliente no existe, conservar la fecha de alta, usar el id de la ruta y que guardar sin cambios siga siendo un guardado correcto |
-| `ClienteControllerTest` | Los códigos HTTP del detalle, el guardado y el listado: `200`, `400`, `404`, `409` y `500`, y que todos los errores salgan con el cuerpo vacío |
+| `ClienteControllerTest` | Los códigos HTTP del detalle, el guardado y el listado: `200`, `400`, `404`, `409` y `500`, y que todos los errores salgan con el cuerpo vacío. También los **dos endpoints de los desplegables**, incluido que al *service* le llegue `null` —y no una cadena vacía— cuando la petición no trae provincia, que es de lo que depende la cascada |
 
 Por qué esas cuatro y no otras:
 
@@ -1193,6 +1198,15 @@ Por qué esas cuatro y no otras:
   que se entrega, no lo que devolvería MySQL. Los parámetros se recogen desde la propia
   respuesta simulada y no con un `ArgumentCaptor`: el último argumento de `query` es variable y
   un captor ahí solo recoge un valor, mientras que estas consultas llevan hasta seis.
+
+  Y guarda además **el único método cuya consulta cambia de forma según lo que llegue**:
+  `findPoblaciones`, el del filtro en cascada. Invertir ese `if` compila, deja el resto de
+  pruebas en verde y no produce ningún error en pantalla —el desplegable se sigue llenando—,
+  solo que deja de recortarse al elegir provincia. Para verlo hay que abrir la aplicación y
+  acordarse de qué poblaciones debería haber, que es justo lo que una revisión de código no
+  hace. **Comprobado invirtiéndolo a propósito antes de dar las pruebas por buenas: tres de las
+  cuatro se ponen en rojo**, y el código se restauró después. Una prueba que no falla cuando
+  rompes lo que vigila no está vigilando nada.
 - **El service** es donde vive la única lógica de negocio de verdad del módulo, y sus tres
   decisiones se romperían **en silencio**: conservar la fecha de alta, distinguir "no existe" de
   "guardado sin cambios" e ignorar a propósito el `boolean` del `update`. Hacía falta probarlo
@@ -1443,8 +1457,9 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
 46. **Mensaje centrado en móvil**: a 360 px de ancho, buscar algo que no exista → el mensaje de
     "no hay clientes" tiene que quedar centrado **dentro** de la tabla. Con un panel abierto,
     estrechar la ventana de escritorio a móvil → el panel sigue ocupando el ancho justo.
-47. **Tests**: `./mvnw test` desde `facturacion360/` → 36 pruebas en verde **sin MySQL
-    arrancado**.
+47. **Tests**: `./mvnw test` desde `facturacion360/` → 44 pruebas en verde **sin MySQL
+    arrancado**. (Son 43 las de esta feature; la 44 es el `contextLoads` que trae el esqueleto
+    de Spring.)
 48. **El panel se abre lleno**: en Network, poner "Slow 3G" y pulsar una fila → los datos
     aparecen **al instante**, sin pasar por "Cargando", y la petición a `/cliente/{id}` sigue
     saliendo (es la comprobación). Cuando llega, nada se mueve.

@@ -1226,18 +1226,32 @@ test verde ahí no probaría lo que parece. Queda para cuando se decida esa infr
 
 ## Limitaciones conocidas
 
-Cuatro cosas que se han mirado y se dejan como están, a propósito:
+Seis cosas que se han mirado y se dejan como están, a propósito:
 
 - **El NIF/CIF y el código postal solo se validan por longitud, no por formato.** Un `????` de
   diez caracteres pasa como NIF, y `ABCDE` como código postal. Lo suyo sería un `@Pattern` en
   `ClienteRequest`, y no se ha puesto por dos motivos concretos:
 
-  El primero es que **rompería la aplicación con los datos que hay**. En
-  `backupFacturacion360.sql`, el cliente 6 es `(6,'Fundación Once','G6975841', ...)`: ese CIF
-  tiene siete dígitos tras la letra y uno válido lleva ocho. Con un `@Pattern`, ese cliente no
-  se podría volver a guardar nunca desde el formulario de edición —el `PUT` devolvería `400`
-  para siempre—, y encima es uno de los dos que esta misma documentación recomienda para probar
-  el borrado, porque no tiene facturas. Habría que limpiar antes los datos semilla.
+  El primero es que **rompería la aplicación con los datos que hay**, y no en un caso aislado:
+  al repasar `backupFacturacion360.sql` uno por uno, **tres de los siete identificadores
+  fiscales semilla son inválidos**.
+
+  | Cliente | Valor | Letra que le tocaría | |
+  |---|---|---|---|
+  | 2 | `12345678Z` | `Z` | ✅ |
+  | 5 | `48765432P` | **`G`** | ❌ letra de control equivocada |
+  | 16 | `12345678Q` | **`Z`** | ❌ letra de control equivocada |
+  | 6 | `G6975841` | — | ❌ siete dígitos tras la letra; un CIF lleva ocho |
+
+  La letra de un DNI sale del resto de dividir el número entre 23, buscado en la tabla
+  `TRWAGMYFPDXBNJZSQVHLCKE`: `48765432 mod 23 = 4` → `G`, y `12345678 mod 23 = 14` → `Z`.
+
+  Con un `@Pattern`, esos tres clientes no se podrían volver a guardar nunca desde el formulario
+  de edición —el `PUT` devolvería `400` para siempre—, y el cliente 6 es además uno de los dos
+  que esta misma documentación recomienda para probar el borrado, porque no tiene facturas. Que
+  fallen tres de siete es el dato importante: no es un registro que se coló, es que **los datos
+  semilla nunca se validaron**, así que la restricción tiene que ir *detrás* del saneado y no
+  delante. Habría que limpiarlos antes, y ese fichero es de quien montó el alta.
 
   El segundo es que `ClienteRequest` no es nuestro: lo escribió quien hizo el alta, y una
   validación nueva ahí afecta también a su `POST`. Es una conversación, no un *commit*.
@@ -1271,6 +1285,29 @@ Cuatro cosas que se han mirado y se dejan como están, a propósito:
   sesión. Es el precio de que un panel abierto sobreviva a buscar y a paginar: no hay forma de
   distinguir "este cliente ya no está en la página" de "ya no está en la base de datos" sin
   preguntar por él. Son unos pocos objetos pequeños y se van al recargar la página.
+
+- **`clientes.js` es un único fichero de 2.133 líneas, sin módulos ES.** Dentro conviven al
+  menos cinco responsabilidades que se podrían separar: la capa de red (`pedirJson`, los canales
+  con `AbortController`), el pintado desde los `<template>`, el despliegue de la fila, la
+  edición con su conciliación, y los anuncios de accesibilidad.
+
+  Partirlo es viable y limpio: **no hay ni un manejador `onclick` en el HTML** y el `<script>` ya
+  va con `defer`, así que nada de la página depende de que estas funciones estén en el ámbito
+  global; bastaría `type="module"` con `import`/`export`, sin *bundler* ni paso de compilación.
+  No entra aquí por una cuestión de orden: mover 2.133 líneas dentro de una rama que ya trae 31
+  *commits* de funcionalidad hace la revisión **más** difícil, no menos. Su sitio es una rama
+  propia, después de que esta se integre.
+
+- **La conciliación del formulario no tiene pruebas.** `conciliarFormulario` resuelve un
+  *merge* a tres bandas —lo que se pintó, lo que hay ahora en la base de datos y lo que el
+  usuario lleva escrito— campo a campo, y es la lógica más delicada del frontend.
+
+  No necesita navegador: es una función sobre tres objetos y tres pruebas cubrirían sus tres
+  ramas (el campo que nadie tocó, el que el usuario cambió, y el que escribió igual que el
+  servidor). Lo que sí necesita es un ejecutor de JavaScript dentro de un proyecto Maven, y eso
+  cambia el *build* de todo el equipo. Es la misma categoría que los índices y que el
+  `@JdbcTest`: una decisión de infraestructura que se habla con Val, no algo que se mete desde
+  una *feature*.
 
 ## Base de datos
 

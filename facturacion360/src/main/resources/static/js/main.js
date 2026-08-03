@@ -50,7 +50,7 @@
  * @see clientes.html — los &lt;template&gt; que se clonan y los elementos que se enlazan aquí
  * @see edu.xtd.facturacion360.controller.ClienteController — el otro extremo de cada fetch
  */
-import { ESPERA_TECLEO_MS, DIRECCION_POR_DEFECTO } from "./config.js";
+import { DIRECCION_POR_DEFECTO, ESPERA_TECLEO_MS, EVENTO_CLIENTES_CAMBIARON } from "./config.js";
 import {
     btnAnterior, btnSiguiente, btnDireccion, btnLimpiar, cabecerasOrdenables,
     columnasVisibles, contenedorBuscador, contenedorTabla, cuerpoTabla, inputBuscador,
@@ -148,7 +148,7 @@ btnSiguiente.addEventListener("click", () => cargarClientes(paginaActual + 1));
 // Cuando otro compañero cambie un cliente, avisa disparando este evento y recargamos la
 // página actual (así la tabla siempre refleja la BD, sin que su código conozca el nuestro).
 // Ellos solo hacen: document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
-document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActual));
+document.addEventListener(EVENTO_CLIENTES_CAMBIARON, () => cargarClientes(paginaActual));
 
 // --- Enlazado de los clics de la tabla ---
 

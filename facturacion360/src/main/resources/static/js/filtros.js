@@ -8,8 +8,11 @@
  * @see main.js — el mapa de módulos y la regla de capas
  */
 import { ETIQUETAS_ORDEN } from "./config.js";
-import { btnLimpiar, cabecerasOrdenables, contadorFiltros, contenedorBuscador, etiquetaDireccion, iconoDireccion, inputBuscador, selectOrdenarPor, selectPoblacion, selectProvincia } from "./dom.js";
-import { criterios } from "./estado.js";
+import {
+    btnLimpiar, cabecerasOrdenables, contadorFiltros, contenedorBuscador, etiquetaDireccion,
+    iconoDireccion, inputBuscador, selectOrdenarPor, selectPoblacion, selectProvincia,
+} from "./dom.js";
+import { contarCriteriosActivos, criterios } from "./estado.js";
 import { cargarClientes, cargarPoblaciones } from "./listado.js";
 /**
  * Repinta TODOS los controles de ordenación (el selector, el botón y las flechas de las
@@ -55,8 +58,7 @@ export function pintarControlesOrden() {
  * 4 clientes?" obligaba a abrir los desplegables uno a uno.
  */
 export function pintarEstadoFiltros() {
-    const activos = [criterios.busqueda, criterios.provincia, criterios.poblacion]
-        .filter(Boolean).length;
+    const activos = contarCriteriosActivos();
 
     contenedorBuscador.classList.toggle("activo", Boolean(criterios.busqueda));
     selectProvincia.closest(".control-filtro")

@@ -67,5 +67,16 @@ export const clientesEnPagina = new Map();
  * @return {boolean} true si hay búsqueda, provincia o población
  */
 export function hayCriteriosActivos() {
-    return Boolean(criterios.busqueda || criterios.provincia || criterios.poblacion);
+    return contarCriteriosActivos() > 0;
+}
+
+/**
+ * Cuántos filtros hay puestos ahora mismo. Lo enseña el contador de la barra, y de aquí sale
+ * también {@link hayCriteriosActivos}, para que **la lista de qué cuenta como filtro esté en un
+ * solo sitio**: escrita dos veces, añadir un cuarto obligaría a acordarse de los dos.
+ *
+ * @return {number} entre 0 y 3
+ */
+export function contarCriteriosActivos() {
+    return [criterios.busqueda, criterios.provincia, criterios.poblacion].filter(Boolean).length;
 }

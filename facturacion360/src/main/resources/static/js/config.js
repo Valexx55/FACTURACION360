@@ -14,6 +14,21 @@ export const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 export const API_PROVINCIAS = "/cliente/provincias";
 export const API_POBLACIONES = "/cliente/poblaciones";
 
+/**
+ * El evento con el que cualquiera avisa de que un cliente ha cambiado, y con el que la tabla
+ * se entera de que tiene que recargarse.
+ *
+ * <p>Está en una constante porque una errata aquí <strong>no da ningún error</strong>: el
+ * evento simplemente no lo escucha nadie y la tabla deja de refrescarse sin decir por qué. El
+ * caso peor es equivocarse en el que ESCUCHA, en `main.js`, porque entonces se rompen de golpe
+ * los tres sitios que lo disparan.</p>
+ *
+ * <p><strong>El texto no se puede cambiar</strong>: es contrato público. Los compañeros lo
+ * disparan desde su propio código escribiendo la cadena a mano, así que renombrarlo aquí los
+ * dejaría a todos sin refresco.</p>
+ */
+export const EVENTO_CLIENTES_CAMBIARON = "clientes:cambiaron";
+
 // Clientes por página. Tiene que valer lo mismo que CriteriosCliente.TAMANO_DEFECTO en el
 // backend; no hay forma de compartir la constante entre Java y este archivo, así que queda
 // anotado en los dos sitios. Si aquí se pusiera más de TAMANO_MAX (100), el backend lo

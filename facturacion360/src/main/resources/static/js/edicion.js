@@ -9,7 +9,7 @@
  */
 import { enviarJson, esCancelacion } from "./api.js";
 import { anunciar } from "./avisos.js";
-import { API_CLIENTE } from "./config.js";
+import { API_CLIENTE, EVENTO_CLIENTES_CAMBIARON } from "./config.js";
 import { cerrarDespliegue } from "./despliegue.js";
 import { cuerpoTabla } from "./dom.js";
 import { filasDesplegadas } from "./estado.js";
@@ -69,7 +69,7 @@ export async function guardarEdicion(formulario) {
 
             // El contrato del proyecto para avisar de un cambio. La tabla se recarga sola, así
             // que la fila enseña lo guardado y se recoloca si el orden la ha movido de sitio.
-            document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+            document.dispatchEvent(new CustomEvent(EVENTO_CLIENTES_CAMBIARON));
             return;
         }
 
@@ -150,7 +150,7 @@ function mostrarErrorGuardado(formulario, estado) {
         anunciar("Este cliente ya no existe: alguien lo ha eliminado mientras lo editabas.",
             { visible: true, esError: true });
         filasDesplegadas.delete(Number(formulario.dataset.clienteId));
-        document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+        document.dispatchEvent(new CustomEvent(EVENTO_CLIENTES_CAMBIARON));
         return;
     }
 

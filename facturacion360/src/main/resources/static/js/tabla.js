@@ -9,7 +9,9 @@
  */
 import { anunciar, limpiarPistas } from "./avisos.js";
 import { marcarFila, reabrirDespliegues } from "./despliegue.js";
-import { btnAnterior, btnSiguiente, columnasVisibles, cuerpoTabla, infoPagina, plantillaFila } from "./dom.js";
+import {
+    btnAnterior, btnSiguiente, columnasVisibles, cuerpoTabla, infoPagina, plantillaFila,
+} from "./dom.js";
 import { guardarBorradores } from "./edicion.js";
 import { clientesEnPagina, hayCriteriosActivos } from "./estado.js";
 import { pintarCeldasFila } from "./fila.js";

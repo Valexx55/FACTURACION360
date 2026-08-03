@@ -22,7 +22,10 @@
  */
 import { esCancelacion, pedirJson, peticionesEnVuelo } from "./api.js";
 import { anunciar, escribirPista, limpiarPistas, ocultarPistas } from "./avisos.js";
-import { API_CLIENTE, CAMPOS_CLIENTE, CAMPOS_EDITABLES, DURACION_PLEGADO_MS } from "./config.js";
+import {
+    API_CLIENTE, CAMPOS_CLIENTE, CAMPOS_EDITABLES, DURACION_PLEGADO_MS,
+    EVENTO_CLIENTES_CAMBIARON,
+} from "./config.js";
 import { confirmarDescarte } from "./dialogo.js";
 import { columnasVisibles, cuerpoTabla, plantillaDespliegue } from "./dom.js";
 import { clientesEnPagina, filasDesplegadas } from "./estado.js";
@@ -412,7 +415,7 @@ function fallaComprobacion(idCliente, error) {
         anunciar("Este cliente ya no existe: alguien lo ha eliminado.",
             { visible: true, esError: true });
         filasDesplegadas.delete(idCliente);
-        document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
+        document.dispatchEvent(new CustomEvent(EVENTO_CLIENTES_CAMBIARON));
         return;
     }
 

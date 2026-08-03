@@ -97,26 +97,33 @@ export function limpiarPistas(raiz = cuerpoTabla) {
  * container: 'body' porque la tabla va dentro de .table-responsive, que tiene overflow y
  * recortaría el globo por arriba.
  */
+/*
+ * Los ajustes van en una constante y no repetidos en los dos, y no es por ahorrar cuatro
+ * líneas: un aviso que se abriera distinto o con otro retardo según la zona de la pantalla se
+ * nota enseguida. Compartiendo el objeto, esa invariante la garantiza el código; escritos dos
+ * veces, la garantizaba un comentario y bastaba con tocar uno para romperla.
+ */
+const OPCIONES_PISTA = {
+    delay: { show: RETARDO_PISTA_MS, hide: 0 },
+    container: "body",
+    placement: "top",
+    trigger: "hover focus",
+};
+
 if (window.bootstrap) {
     new bootstrap.Tooltip(cuerpoTabla, {
+        ...OPCIONES_PISTA,
+
         // El del enlace va el primero por claridad, pero el orden da igual: Bootstrap se
         // queda con el elemento coincidente MÁS INTERNO, así que el aviso del correo gana al
         // de su celda.
         selector: ".enlace-celda, .fila-cliente th, .fila-cliente td:not(.celda-acciones), .celda-acciones .btn[data-bs-title]",
-        delay: { show: RETARDO_PISTA_MS, hide: 0 },
-        container: "body",
-        placement: "top",
-        trigger: "hover focus",
     });
 
-    // Y otro para la barra de filtros, con los mismos ajustes: un aviso que se abre distinto
-    // o con otro retardo según la zona de la pantalla se nota, y ahí es donde estaba el title
-    // del navegador que ponía el botón de dirección.
+    // Y otro para la barra de filtros, que es donde estaba el title del navegador que ponía el
+    // botón de dirección.
     new bootstrap.Tooltip(barraFiltros, {
+        ...OPCIONES_PISTA,
         selector: "[data-bs-title]",
-        delay: { show: RETARDO_PISTA_MS, hide: 0 },
-        container: "body",
-        placement: "top",
-        trigger: "hover focus",
     });
 }

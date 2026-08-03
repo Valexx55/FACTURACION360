@@ -9,8 +9,8 @@
  * @author AngelDanielC0des
  * @see main.js — el mapa de módulos y la regla de capas
  */
-import { DURACION_AVISO_MS } from "./config.js";
-import { avisoClientes, cuerpoTabla, regionAnuncios } from "./dom.js";
+import { DURACION_AVISO_MS, RETARDO_PISTA_MS } from "./config.js";
+import { avisoClientes, barraFiltros, cuerpoTabla, regionAnuncios } from "./dom.js";
 
 // Temporizador que borra el aviso de la zona de estado pasado un rato.
 let temporizadorAviso = null;
@@ -84,4 +84,39 @@ export function limpiarPistas(raiz = cuerpoTabla) {
     for (const elemento of raiz.querySelectorAll("[data-bs-title]")) {
         window.bootstrap?.Tooltip.getInstance(elemento)?.dispose();
     }
+}
+
+/*
+ * Los dos avisos emergentes de la pantalla se crean AQUÍ, al cargar el módulo, y no en main.js:
+ * este fichero es el dueño de su ciclo de vida entero —escribirPista los escribe, ocultarPistas
+ * los oculta y limpiarPistas los destruye—, y crearlos en otro sitio dejaría a limpiarPistas
+ * destruyendo instancias que no ha creado nadie de por aquí.
+ *
+ * Un único aviso delegado en el <tbody>, no uno por celda: así vale también para las filas
+ * que todavía no se han pintado y no hay que crearlos y destruirlos en cada repintado.
+ * container: 'body' porque la tabla va dentro de .table-responsive, que tiene overflow y
+ * recortaría el globo por arriba.
+ */
+if (window.bootstrap) {
+    new bootstrap.Tooltip(cuerpoTabla, {
+        // El del enlace va el primero por claridad, pero el orden da igual: Bootstrap se
+        // queda con el elemento coincidente MÁS INTERNO, así que el aviso del correo gana al
+        // de su celda.
+        selector: ".enlace-celda, .fila-cliente th, .fila-cliente td:not(.celda-acciones), .celda-acciones .btn[data-bs-title]",
+        delay: { show: RETARDO_PISTA_MS, hide: 0 },
+        container: "body",
+        placement: "top",
+        trigger: "hover focus",
+    });
+
+    // Y otro para la barra de filtros, con los mismos ajustes: un aviso que se abre distinto
+    // o con otro retardo según la zona de la pantalla se nota, y ahí es donde estaba el title
+    // del navegador que ponía el botón de dirección.
+    new bootstrap.Tooltip(barraFiltros, {
+        selector: "[data-bs-title]",
+        delay: { show: RETARDO_PISTA_MS, hide: 0 },
+        container: "body",
+        placement: "top",
+        trigger: "hover focus",
+    });
 }

@@ -179,7 +179,7 @@ export async function alternarDespliegue(fila, modo) {
  * @param {boolean} animar si se despliega con transición
  * @return {HTMLElement} el panel, nuevo o el que ya estaba abierto
  */
-export function obtenerPanel(fila, animar) {
+function obtenerPanel(fila, animar) {
     const existente = panelDe(fila);
     if (existente) {
         // Puede estar plegándose de un cierre reciente: se cancela su borrado o desaparecería
@@ -277,7 +277,7 @@ export function marcarFila(fila, modo) {
  * @param {string} accion el texto del aviso emergente ("Editar cliente")
  * @param {string} comienzoNombre con qué empieza el nombre accesible, antes del cliente
  */
-export function nombrarAccion(boton, accion, comienzoNombre) {
+function nombrarAccion(boton, accion, comienzoNombre) {
     const nombreCliente = boton.closest("tr").querySelector(".cliente-nombre").textContent;
 
     escribirPista([boton], accion);
@@ -320,7 +320,7 @@ export function reabrirDespliegues() {
  * @param {string} modo "detalle" o "edicion"
  * @param {Object} recibido el cliente tal y como está ahora en la base de datos
  */
-export function conciliar(fila, contenido, modo, recibido) {
+function conciliar(fila, contenido, modo, recibido) {
     const anterior = clientesEnPagina.get(recibido.idCliente);
     if (anterior && mismosDatos(anterior, recibido)) return;
 
@@ -355,7 +355,7 @@ export function conciliar(fila, contenido, modo, recibido) {
  * @param {HTMLFormElement} formulario el formulario de edición abierto
  * @param {Object} recibido el cliente tal y como está ahora en la base de datos
  */
-export function conciliarFormulario(formulario, recibido) {
+function conciliarFormulario(formulario, recibido) {
     if (!formulario) return;
 
     const valoresNuevos = valoresDe(recibido);
@@ -405,7 +405,7 @@ export function conciliarFormulario(formulario, recibido) {
  * @param {number} idCliente el cliente que se estaba comprobando
  * @param {Error} error lo que devolvió pedirJson, con su código en `estado`
  */
-export function fallaComprobacion(idCliente, error) {
+function fallaComprobacion(idCliente, error) {
     if (error.estado === 404) {
         // Lo han borrado. Se avisa fuera de la tabla, que es lo único que sobrevive al
         // refresco, y se olvida el panel para que no se reabra sobre una fila que ya no viene.
@@ -429,6 +429,6 @@ export function fallaComprobacion(idCliente, error) {
  * @param {Object} otro el otro
  * @return {boolean} true si coinciden en los CAMPOS_CLIENTE (null y "" cuentan como iguales)
  */
-export function mismosDatos(uno, otro) {
+function mismosDatos(uno, otro) {
     return CAMPOS_CLIENTE.every((campo) => (uno[campo] ?? "") === (otro[campo] ?? ""));
 }

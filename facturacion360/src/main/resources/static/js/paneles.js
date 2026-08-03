@@ -37,7 +37,7 @@ export function pintarPanelDetalle(contenido, cliente) {
  * @param {Object|null} borrador lo que el usuario tenía escrito antes de un repintado
  * @param {boolean} enfocar si se lleva el cursor al primer campo
  */
-export function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
+function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
     const panel = plantillaPanelEdicion.content.cloneNode(true);
     const formulario = panel.querySelector(".formulario-edicion");
     const valoresBd = valoresDe(cliente);
@@ -93,7 +93,7 @@ export function pintarPanelEdicion(contenido, cliente, borrador, enfocar) {
  * @param {string} accion con qué empieza la frase ("Viendo detalles de", "Editando")
  * @param {Object} cliente el cliente que se está mostrando
  */
-export function nombrarPanel(panel, accion, cliente) {
+function nombrarPanel(panel, accion, cliente) {
     const etiquetaEstado = panel.querySelector(".etiqueta-estado");
 
     etiquetaEstado.querySelector(".texto-estado").textContent = `${accion} ${cliente.nombre}`;

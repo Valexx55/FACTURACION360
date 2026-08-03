@@ -101,7 +101,7 @@ export async function guardarEdicion(formulario) {
  * @param {number} idCliente el cliente que se intentaba guardar
  * @param {number} estado el código HTTP (0 si ni siquiera hubo respuesta)
  */
-export function contarErrorGuardado(idCliente, estado) {
+function contarErrorGuardado(idCliente, estado) {
     const formulario = formularioVivo(idCliente);
 
     if (formulario) {
@@ -118,7 +118,7 @@ export function contarErrorGuardado(idCliente, estado) {
  * @param {HTMLFormElement} formulario el formulario que se intentó guardar
  * @param {number} estado el código HTTP (0 si ni siquiera hubo respuesta)
  */
-export function mostrarErrorGuardado(formulario, estado) {
+function mostrarErrorGuardado(formulario, estado) {
     // El NIF/CIF tiene un índice UNIQUE en la base de datos: es el único dato que puede chocar
     // con otro cliente, así que el 409 se señala en SU campo. Un aviso general obligaría al
     // usuario a adivinar cuál de los ocho campos es el del problema.

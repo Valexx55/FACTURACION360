@@ -116,7 +116,7 @@ export async function enviarJson(canal, metodo, url, cuerpo) {
  * @param {string} canal nombre del flujo de peticiones
  * @param {AbortController} controlador el de la petición que acaba de terminar
  */
-export function cerrarCanal(canal, controlador) {
+function cerrarCanal(canal, controlador) {
     if (peticionesEnVuelo[canal] === controlador) {
         delete peticionesEnVuelo[canal];
     }

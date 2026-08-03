@@ -121,7 +121,7 @@ export async function cargarPoblaciones(provincia) {
  * @param {HTMLSelectElement} select el desplegable a rellenar
  * @param {Array<string>} valores las opciones a añadir
  */
-export function rellenarSelect(select, valores) {
+function rellenarSelect(select, valores) {
     // Quitamos todo menos la primera opción, que es la de "sin filtro".
     while (select.options.length > 1) {
         select.remove(1);

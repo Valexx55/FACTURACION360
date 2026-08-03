@@ -33,7 +33,7 @@ let focoPrevioDialogo = null;
  *
  * @return {Promise<boolean>} true si se descartan los cambios
  */
-export function preguntarDescarte() {
+function preguntarDescarte() {
     // Si Bootstrap no ha cargado (su CDN caído, por ejemplo), se pregunta con el diálogo del
     // navegador: es feo, pero sin él la fila se cerraría llevándose lo escrito sin avisar.
     if (!window.bootstrap) {

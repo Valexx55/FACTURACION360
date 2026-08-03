@@ -105,7 +105,7 @@ export function pintarPaginacion(datos) {
  * @param {boolean} opciones.conLimpiar añade el botón de quitar filtros: cuando la tabla
  *        sale vacía por un filtro, la salida tiene que estar donde se ve el problema
  */
-export function mostrarMensaje(texto, { conLimpiar = false } = {}) {
+function mostrarMensaje(texto, { conLimpiar = false } = {}) {
     cuerpoTabla.replaceChildren();
     const fila = document.createElement("tr");
     const celda = document.createElement("td");

@@ -44,7 +44,7 @@ export const btnDescartar = document.getElementById("btn-descartar");
 // de mensajes y la del despliegue, en vez de escribir un 6 que habría que acordarse de cambiar
 // aquí y en el HTML al añadir una columna. El ":scope >" deja fuera las cabeceras de las
 // tablas de los paneles, que se insertan dentro de esta.
-export const CABECERAS_TABLA = cuerpoTabla.closest("table")
+const CABECERAS_TABLA = cuerpoTabla.closest("table")
     .querySelectorAll(":scope > thead > tr > th");
 
 // El texto por defecto del error del NIF/CIF, sacado del propio <template> donde está escrito.

@@ -57,7 +57,7 @@ export function pintarCeldasFila(fila, cliente) {
  *        suyo porque, si no, heredaría el de la celda ("Ver detalles") y estaría anunciando
  *        algo distinto de lo que hace al pulsarlo
  */
-export function pintarEnlace(celda, valor, construirHref, pista) {
+function pintarEnlace(celda, valor, construirHref, pista) {
     const texto = (valor ?? "").trim();
     if (!texto) {
         celda.textContent = "—";
@@ -82,7 +82,7 @@ export function pintarEnlace(celda, valor, construirHref, pista) {
  * @param {string|null} fechaIso fecha en formato ISO, o null si el cliente no la tiene
  * @return {string} la fecha formateada, o un guion si no hay fecha
  */
-export function formatearFecha(fechaIso) {
+function formatearFecha(fechaIso) {
     if (!fechaIso) {
         return "—";   // fecha_alta admite NULL en base de datos
     }

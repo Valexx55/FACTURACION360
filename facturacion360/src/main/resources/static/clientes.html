@@ -21,7 +21,10 @@
     <link rel="icon" href="./img/fav.ico" type="image/png">
     <!-- defer: descarga en paralelo con el parseo del HTML y se ejecuta cuando el
          DOM ya está listo, así que no hace falta DOMContentLoaded. -->
-    <script src="clientes.js" defer></script>
+    <!-- type="module" ya es diferido, así que se ejecuta con el documento entero, igual que
+         hacía el defer. Solo se carga este: el resto de módulos se traen solos por sus import.
+         El mapa de los quince y la regla de capas están en la cabecera de js/main.js. -->
+    <script type="module" src="js/main.js"></script>
 </head>
 <body>
 

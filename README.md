@@ -1,6 +1,6 @@
 # 📄 FACTURACION360
 
-Sistema de gestión de clientes y facturación desarrollado con **Java 21**, **Spring Boot**, **Hibernate/JPA**, **MySQL** y tecnologías web estándar (**HTML, CSS y JavaScript**).
+Sistema de gestión de clientes y facturación desarrollado con **Java 21**, **Spring Boot**, **Spring JDBC**, **MySQL** y tecnologías web estándar (**HTML, CSS y JavaScript**).
 
 El objetivo del proyecto es proporcionar una aplicación sencilla, escalable y mantenible para la administración de clientes y facturas siguiendo una arquitectura profesional basada en capas.
 
@@ -11,19 +11,23 @@ El objetivo del proyecto es proporcionar una aplicación sencilla, escalable y m
 ### Backend
 
 - Java 21
-- Spring Boot
+- Spring Boot 4.1.0
 - Spring MVC
-- Spring Data JPA (Hibernate)
+- Spring JDBC (`JdbcTemplate`)
+- Bean Validation
+- springdoc-openapi (Swagger UI)
+- SLF4J + Logback
 - Maven
 
 ### Base de datos
 
-- MySQL
+- MySQL 8
 
 ### Frontend
 
 - HTML5
 - CSS3
+- Bootstrap 5.3
 - JavaScript (Fetch API)
 
 ---
@@ -33,54 +37,43 @@ El objetivo del proyecto es proporcionar una aplicación sencilla, escalable y m
 El proyecto sigue una arquitectura por capas:
 
 ```
-Controller
-     │
-     ▼
-Service
-     │
-     ▼
-Repository
-     │
-     ▼
-Base de datos MySQL
+Navegador ──GET /cliente/listar-pagina──►  Controller ──► Service ──► Repository ──► MySQL
+Navegador ◄──── JSON ── ClienteResponse ◄──(Mapper)── Cliente ◄──(RowMapper)── fila
 ```
 
 Cada capa tiene una única responsabilidad:
 
-- **Controller**
-    - Gestiona las peticiones HTTP.
-    - Valida la entrada.
-    - Devuelve respuestas REST.
-
-- **Service**
-    - Contiene toda la lógica de negocio.
-    - Coordina operaciones entre repositorios.
-
-- **Repository**
-    - Accede a la base de datos mediante JDBC
+| Capa | Ficheros | Responsabilidad |
+|------|----------|-----------------|
+| **Controller** | `controller/ClienteController` | Recibe la petición HTTP, valida la entrada y traduce el resultado a códigos de estado REST. |
+| **Service** | `service/ClienteService` + `ClienteServiceImpl` | La lógica de negocio: metadatos de paginación, reglas de dominio y coordinación de repositorios. |
+| **Repository** | `repository/ClienteRepository` + `ClienteRepositoryJdbcImpl` | La única capa que habla SQL, con `JdbcTemplate`. |
+| **RowMapper** | `repository/ClienteRowMapper` | Convierte cada fila del `ResultSet` en un objeto `Cliente`. |
+| **DTO** | `dto/ClienteRequest` · `dto/ClienteResponse` · `dto/Cliente` | Entrada, salida y dominio van separados, de modo que el modelo interno puede cambiar sin romper el contrato con el frontend. |
+| **Mapper** | `dto/ClienteMapper` | Traduce entre los DTO y el dominio. |
 
 ---
 
 # 📁 Estructura del proyecto
 
 ```
-src
- ├── main
- │   ├── java
- │   │    └── ...
- │   │         ├── controller
- │   │         ├── service
- │   │         ├── repository
- │   │         ├── dto
- │   │         ├── entity
- │   │         └── config
- │   │
- │   └── resources
- │        ├── static
- │        ├── templates
- │        └── application.properties
- │
- └── test
+FACTURACION360
+ ├── LICENSE
+ ├── README.md
+ └── facturacion360              <- aquí está el pom.xml
+      └── src
+           ├── main
+           │    ├── java/edu/xtd/facturacion360
+           │    │    ├── controller
+           │    │    ├── service
+           │    │    ├── repository
+           │    │    └── dto
+           │    └── resources
+           │         ├── static          <- HTML, CSS, JS e imágenes
+           │         ├── docu            <- backup SQL, diagramas y protocolo de Git
+           │         ├── application.properties
+           │         └── logback-spring.xml
+           └── test
 ```
 
 ---
@@ -93,53 +86,59 @@ src
 git clone https://github.com/Valexx55/FACTURACION360.git
 ```
 
-Entrar en la carpeta:
+---
+
+## 2. Crear la base de datos
+
+En el repositorio está el volcado completo, que crea la base de datos `bd_facturacion` con las tablas `clientes`, `conceptos` y `facturas`:
 
 ```bash
-cd FACTURACION360
+mysql -u root -p < facturacion360/src/main/resources/docu/backupFacturacion360.sql
 ```
+
+También puede importarse desde MySQL Workbench con *Server → Data Import*.
 
 ---
 
-## 2. Configurar la base de datos
+## 3. Configurar la conexión
 
-Crear una base de datos MySQL.
-
-Ejemplo:
-
-```sql
-CREATE DATABASE facturacion360;
-```
-
-Modificar el archivo:
-
-```
-src/main/resources/application.properties
-```
-
-Ejemplo:
+Ajusta tus credenciales en `facturacion360/src/main/resources/application.properties`:
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/facturacion360
-spring.datasource.username=root
-spring.datasource.password=tu_password
+spring.application.name=facturacion360
 
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.format_sql=true
+spring.datasource.url=jdbc:mysql://localhost:3306/bd_facturacion
+spring.datasource.username=root
+spring.datasource.password=root
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+spring.datasource.hikari.maximum-pool-size=10
+spring.datasource.hikari.minimum-idle=2
+spring.datasource.hikari.connection-timeout=30000
+
+logging.level.org.springframework.jdbc.core=DEBUG
 ```
 
 ---
 
-## 3. Ejecutar la aplicación
+## 4. Ejecutar la aplicación
 
-Desde Maven:
+Con el wrapper incluido en el repositorio, sin necesidad de tener Maven instalado:
 
 ```bash
-mvn spring-boot:run
+cd FACTURACION360/facturacion360
+./mvnw spring-boot:run
 ```
 
-O desde tu IDE (IntelliJ IDEA o Eclipse).
+En Windows, `mvnw.cmd spring-boot:run`. También puede importarse la carpeta `facturacion360` en Eclipse o IntelliJ IDEA como proyecto Maven.
+
+Una vez arrancada:
+
+| | |
+|---|---|
+| Panel de clientes | http://localhost:8080/clientes.html |
+| Documentación interactiva de la API | http://localhost:8080/swagger-ui.html |
+| Esquema OpenAPI en JSON | http://localhost:8080/v3/api-docs |
 
 ---
 
@@ -147,55 +146,92 @@ O desde tu IDE (IntelliJ IDEA o Eclipse).
 
 Actualmente el sistema incluye:
 
-- Gestión de clientes
-- Alta de clientes
-- Edición de clientes
-- Consulta de clientes
-- Persistencia mediante JPA/Hibernate
-- API REST
-- Interfaz web
-- Integración con MySQL
+- Listado de clientes paginado
+- Búsqueda por nombre y por NIF/CIF
+- Filtros por provincia y por población, en cascada
+- Ordenación por nombre y por fecha de alta, en ambos sentidos
+- API REST documentada con OpenAPI / Swagger UI
+- Persistencia con Spring JDBC sobre MySQL
+- Interfaz web con Bootstrap
 
 Próximamente:
 
+- Alta de clientes desde la interfaz 
+- Detalle y edición de clientes desde la interfaz
 - Eliminación de clientes
-- Gestión de productos
-- Facturación
-- PDF de facturas
-- Dashboard
-- Búsquedas avanzadas
-- Paginación
-
+- Facturas
 ---
 
 # 📡 API REST
 
-Ejemplos de endpoints:
+Todos los endpoints de clientes cuelgan de `/cliente`
 
 | Método | Endpoint | Descripción |
 |---------|----------|-------------|
-| GET | `/clientes` | Obtener todos los clientes |
-| GET | `/clientes/{id}` | Obtener un cliente |
-| POST | `/clientes` | Crear cliente |
-| PUT | `/clientes/{id}` | Actualizar cliente |
-| DELETE | `/clientes/{id}` | Eliminar cliente |
+| GET | `/cliente/listar-pagina` | Página de clientes. Admite `?pagina=`, `?tamano=`, `?busqueda=`, `?provincia=`, `?poblacion=`, `?ordenarPor=`, `?direccion=` |
+| GET | `/cliente/listar-ultimos` | Los últimos clientes dados de alta. Admite `?limite=` (1–100, por defecto 10) |
+| GET | `/cliente/provincias` | Provincias distintas, para el desplegable de filtro |
+| GET | `/cliente/poblaciones` | Poblaciones distintas. Admite `?provincia=` para el filtro en cascada |
+| GET | `/cliente/{id}` | Un cliente por su identificador |
+| POST | `/cliente` | Crear cliente |
+| PUT | `/cliente/{id}` | Actualizar cliente |
+| DELETE | `/cliente/{id}` | Eliminar cliente |
+
+Buscar, filtrar y ordenar comparten endpoint con el listado en lugar de tener uno propio: buscar es «listar con un filtro de texto más», así que de este modo hereda la paginación, los metadatos y el manejo de errores, y el frontend usa un único camino de código haya término escrito o no.
+
+Aparte del CRUD, `GET /jsonp/cliente` es una demostración de JSONP y no forma parte de la API de clientes.
 
 ---
 
-# 🛠 Buenas prácticas aplicadas
+# 🛠 Buenas prácticas y convenios de código
 
-- Arquitectura en capas
-- Separación de responsabilidades
-- Programación orientada a objetos
-- Uso de DTOs
-- Spring Data JPA
-- Código limpio
-- Principios SOLID
-- Reutilización de código
-- Manejo de excepciones
-- Respuestas HTTP adecuadas
+**Diseño**
+
+- Arquitectura en capas con separación estricta de responsabilidades.
+- DTO de entrada y de salida separados del modelo de dominio.
+- Cada capa se programa contra una interfaz (`ClienteService`, `ClienteRepository`).
+
+**Seguridad**
+
+- Consultas parametrizadas (`PreparedStatement`) en todo el acceso a datos.
+- Lista blanca de columnas para el `ORDER BY`, que no admite parámetros.
+- Los comodines de `LIKE` se escapan para que no se pueda saltar el filtro de búsqueda.
+- Validación de entrada con Bean Validation (`@Valid`).
+- El frontend pinta los datos con `textContent`, nunca interpolando en `innerHTML`.
+
+**Estilo**
+
+- Nomenclatura en español, coherente con el dominio.
+- Regla de **variable + un solo `return`**: el resultado se guarda en una variable, se registra en el log y se devuelve al final. Así siempre hay un punto donde loguear lo que se devuelve.
+- Trazas con SLF4J parametrizado (`log.info("... {}", valor)`).
+- Nivel `DEBUG` para el paquete `edu.xtd` y `INFO` para el resto, con salida a consola y a fichero (`logback-spring.xml`).
+
+**Documentación**
+
+- El contrato se documenta en la interfaz y las implementaciones lo heredan con `{@inheritDoc}`.
+- El `maven-javadoc-plugin` declara la etiqueta personalizada **`@autor`** (con `placement` de tipos y métodos), que permite atribuir métodos concretos dentro de clases compartidas: el `@author` estándar solo admite clases e interfaces.
+
+```bash
+./mvnw javadoc:javadoc     # genera la documentación en target/reports/apidocs
+```
 
 ---
+
+# 🔀 Flujo de trabajo
+
+Trabajamos con **Feature Branch**: cada mejora vive en su propia rama y se integra en `master` mediante Pull Request. El protocolo completo está en `docu/protocoloGit.txt`.
+
+```bash
+git checkout master
+git pull --ff-only origin master
+git checkout -b feature/<nombreMejora>
+# ... trabajo, y demo antes de subir ...
+git push -u origin feature/<nombreMejora>
+```
+
+En GitHub se abre la Pull Request describiendo los cambios y cómo probarlos, y se asigna a **Val** como revisor. Nunca se hace *commit* directamente sobre `master`.
+
+
 
 # 📸 Capturas
 
@@ -205,32 +241,13 @@ Ejemplos de endpoints:
 
 <img width="1565" height="959" alt="image" src="https://github.com/user-attachments/assets/a656b2fe-6fe5-42ea-9ac4-7fe93e00dc01" />
 
-
 ---
 
-# 🔮 Mejoras futuras
 
-- Spring Security
-- Roles y permisos (Login)
-- Exportación PDF
-- Exportación Excel
-- Gestión de productos
-- Gestión de impuestos
+# 👨‍💻 Autores
 
----
-
-# 👨‍💻 Autor
-
-**Val, Jaime, Daniel, Gonzalo, Sergio y Fran **
+**Val, Jaime, Gonzalo, Manu, Sergio, Fran y Ángel**
 
 GitHub:
 
 https://github.com/Valexx55
-
----
-
-# 📄 Licencia
-
-Este proyecto ha sido desarrollado con fines educativos y de aprendizaje.
-
-Se puede utilizar como base para proyectos personales o académicos.

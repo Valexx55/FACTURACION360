@@ -1,5 +1,6 @@
 package edu.xtd.facturacion360.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -71,6 +72,18 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 		}
 
 		log.debug("buscar({}) devuelve {} facturas", busqueda, facturas.size());
+		return facturas;
+	}
+
+	@Override
+	public List<Factura> buscarPorTrimestre(LocalDate fechaInicio, LocalDate fechaFin) {
+		String sql = "SELECT " + COLUMNAS_FACTURA + " FROM facturas f "
+				+ "INNER JOIN clientes c ON f.idcliente = c.idcliente "
+				+ "WHERE f.fecha_emision >= ? AND f.fecha_emision < ? "
+				+ "ORDER BY f.fecha_emision, f.idfactura";
+
+		List<Factura> facturas = jdbcTemplate.query(sql, facturaRowMapper, fechaInicio, fechaFin);
+		log.debug("buscarPorTrimestre({}, {}) devuelve {} facturas", fechaInicio, fechaFin, facturas.size());
 		return facturas;
 	}
 

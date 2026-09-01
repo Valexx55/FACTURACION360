@@ -61,7 +61,6 @@ function pintarFilas(clientes) {
         mostrarMensaje("No hay clientes que mostrar.");
         return;
     }
-
 	
     for (const cliente of clientes) {
         // Clonamos el contenido del template (un <tr> completo con sus <td>).
@@ -119,77 +118,172 @@ btnRecientes.addEventListener("click", () => cargarClientes(paginaActual - 1));
 btnAntiguos.addEventListener("click", () => cargarClientes(paginaActual + 1));
 
 // --- Refresco automático tras crear/editar/eliminar ---
-// Cuando otro compañero cambie un cliente, avisa disparando este evento y recargamos la
-// página actual (así la tabla siempre refleja la BD, sin que su código conozca el nuestro).
-// Ellos solo hacen: document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
 document.addEventListener("clientes:cambiaron", () => cargarClientes(paginaActual));
 
 // Carga inicial: la primera página (los 10 más recientes).
 cargarClientes(0);
 
 
+// =========================================================================
+// INTEGRACIÓN DE ACCIONES (VER, EDITAR, ELIMINAR Y GUARDAR)
+// Utilizando delegación de eventos para que funcionen en elementos dinámicos
+// =========================================================================
+
 // 1. Botón VER
-document.querySelectorAll('.btn-ver').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id; 
+document.addEventListener('click', async (e) => {
+    const btnVer = e.target.closest('.btn-ver');
+    if (!btnVer) return;
+
+    const fila = btnVer.closest('tr');
+    const idCliente = fila.dataset.clienteId;
     
-    console.log('Ver cliente:', idCliente);
-    // Aquí ejecutas tu función, p. ej.: abrirModalVer(idCliente);
-  });
+    try {
+        const respuesta = await fetch(`/cliente/buscar/${idCliente}`);
+        if (!respuesta.ok) throw new Error("Error al obtener el cliente");
+        const cliente = await respuesta.json();
+        
+        alert(`Detalles del cliente:\nNombre: ${cliente.nombre}\nCIF: ${cliente.nifCif}\nEmail: ${cliente.email}\nTeléfono: ${cliente.telefono}`);
+    } catch (error) {
+        console.error("Error al ver cliente:", error);
+    }
 });
 
 // 2. Botón EDITAR
-document.querySelectorAll('.btn-editar').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id;
+document.addEventListener('click', async (e) => {
+    const btnEditar = e.target.closest('.btn-editar');
+    if (!btnEditar) return;
+
+    const fila = btnEditar.closest('tr');
+    const idCliente = fila.dataset.clienteId;
     
-    console.log('Editar cliente:', idCliente);
-    // Aquí ejecutas tu función, p. ej.: abrirModalEditar(idCliente);
-  });
+    try {
+        const respuesta = await fetch(`/cliente/buscar/${idCliente}`);
+        if (!respuesta.ok) throw new Error("Error al obtener el cliente para editar");
+        const cliente = await respuesta.json();
+        
+        // Rellenamos el formulario del modal con los datos actuales
+        document.getElementById("nombreCliente").value = cliente.nombre;
+        document.getElementById("cifCliente").value = cliente.nifCif;
+        document.getElementById("emailCliente").value = cliente.email;
+        document.getElementById("telefonoCliente").value = cliente.telefono;
+        
+        // Guardamos temporalmente el ID en el dataset del formulario para saber que es una edición
+        const formulario = document.getElementById("formCliente");
+        formulario.dataset.idClientEdit = idCliente;
+        
+        // Mostramos el modal usando Bootstrap
+        const modalElement = document.getElementById('clienteModal');
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } catch (error) {
+        console.error("Error al cargar cliente para editar:", error);
+    }
 });
 
 // 3. Botón ELIMINAR
-document.querySelectorAll('.btn-eliminar').forEach(boton => {
-  boton.addEventListener('click', (e) => {
-    const idCliente = e.currentTarget.dataset.id;
+document.addEventListener('click', async (e) => {
+    const btnEliminar = e.target.closest('.btn-eliminar');
+    if (!btnEliminar) return;
+
+    const fila = btnEliminar.closest('tr');
+    const idCliente = fila.dataset.clienteId;
     
     if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
-      console.log('Eliminar cliente:', idCliente);
-      // Aquí ejecutas tu llamada API o función: eliminarCliente(idCliente);
-    }
-  });
-});
-
-// Buscamos el botón "Añadir Cliente"
-const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
-
-botonAnadirCliente.addEventListener('click', () => {
-  console.log('Hiciste clic en Añadir Cliente');
-  
-  // Limpiamos el formulario dentro del modal
-  const formularioCliente = document.querySelector('#clienteModal form');
-  if (formularioCliente) {
-    formularioCliente.reset();
-  }
-});
-
-
-// Buscador
-const contenedorBuscador = document.querySelector('.buscador-clientes');
-const inputBuscador = document.getElementById('buscador-clientes');
-
-document.addEventListener('click', (evento) => {
-    // Verificamos si el clic ocurrió DENTRO del contenedor del buscador
-    if (contenedorBuscador.contains(evento.target)) {
-        // Expandimos y ponemos el cursor dentro
-        contenedorBuscador.classList.add('expandido');
-        inputBuscador.focus();
-    } else {
-        // Si hizo clic FUERA, verificamos si el input está vacío antes de cerrarlo
-        if (inputBuscador.value.trim() === '') {
-            contenedorBuscador.classList.remove('expandido');
+        try {
+            const respuesta = await fetch(`/cliente/eliminar/${idCliente}`, {
+                method: 'DELETE'
+            });
+            
+            if (!respuesta.ok) throw new Error("No se pudo eliminar el cliente");
+            
+            // Disparamos el evento para refrescar la tabla automáticamente
+            document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
+        } catch (error) {
+            console.error("Error al eliminar:", error);
+            alert("No se pudo eliminar el cliente.");
         }
     }
 });
 
+/**
+ * Función global llamada desde el botón "Guardar Cambios" del Modal en HTML.
+ * Gestiona de forma inteligente si se trata de una creación (POST) o actualización (PUT).
+ */
+async function guardarCliente() {
+    const formulario = document.getElementById("formCliente");
+    const idClienteEdit = formulario.dataset.idClientEdit;
 
+    const cliente = {
+        nombre: document.getElementById("nombreCliente").value,
+        nifCif: document.getElementById("cifCliente").value,
+        email: document.getElementById("emailCliente").value,
+        telefono: document.getElementById("telefonoCliente").value
+    };
+
+    // Validamos brevemente los campos nativos del form si es necesario
+    if (!formulario.checkValidity()) {
+        formulario.reportValidity();
+        return;
+    }
+
+	const metodo = idClienteEdit ? "PUT" : "POST";
+	    // Debe apuntar a "/cliente" en lugar de "/cliente/crear" para que coincida con tu @PostMapping
+	    const url = idClienteEdit ? `/cliente/${idClienteEdit}` : "/cliente";
+    try {
+        const respuesta = await fetch(url, {
+            method: metodo,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cliente)
+        });
+
+        if (!respuesta.ok) throw new Error("El servidor no pudo guardar los cambios.");
+
+        // Cerramos el modal de Bootstrap
+        const modalElement = document.getElementById('clienteModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) modal.hide();
+
+        // Limpiamos el formulario y el identificador de edición
+        formulario.reset();
+        delete formulario.dataset.idClientEdit;
+
+        // Disparamos el evento para recargar la tabla con los datos frescos
+        document.dispatchEvent(new CustomEvent('clientes:cambiaron'));
+
+    } catch (error) {
+        console.error("Error al guardar el cliente:", error);
+        alert("Hubo un error al procesar la solicitud.");
+    }
+}
+
+// Limpieza del formulario al hacer clic en "Añadir Cliente" (para que no arrastre datos o IDs de ediciones previas)
+const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
+if (botonAnadirCliente) {
+    botonAnadirCliente.addEventListener('click', () => {
+        const formularioCliente = document.getElementById('formCliente');
+        if (formularioCliente) {
+            formularioCliente.reset();
+            delete formularioCliente.dataset.idClientEdit; // Nos aseguramos de limpiar el ID de edición
+        }
+    });
+}
+
+
+// =========================================================================
+// BUSCADOR ANIMADO
+// =========================================================================
+const contenedorBuscador = document.querySelector('.buscador-clientes');
+const inputBuscador = document.getElementById('buscador-clientes');
+
+if (contenedorBuscador && inputBuscador) {
+    document.addEventListener('click', (evento) => {
+        if (contenedorBuscador.contains(evento.target)) {
+            contenedorBuscador.classList.add('expandido');
+            inputBuscador.focus();
+        } else {
+            if (inputBuscador.value.trim() === '') {
+                contenedorBuscador.classList.remove('expandido');
+            }
+        }
+    });
+}

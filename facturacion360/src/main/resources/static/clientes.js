@@ -1,96 +1,76 @@
 /*
  * clientes.js
  * -----------
- * Gestión completa de clientes:
+ * Gestión de clientes:
  * - Listado paginado
- * - Buscador
- * - Filtros provincia/población
+ * - Búsqueda
+ * - Filtros por provincia y población
  * - Ordenación
- * - Eliminación mediante DELETE
- *
- * Backend:
- * GET    /cliente/listar-pagina
- * DELETE /cliente/{idCliente}
+ * - Ver
+ * - Editar
+ * - Eliminar
  */
 
-
-// ===============================
-// CONSTANTES API
-// ===============================
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
 
 const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 const API_PROVINCIAS = "/cliente/provincias";
 const API_POBLACIONES = "/cliente/poblaciones";
 
 const TAMANO_PAGINA = 10;
-
 const ESPERA_TECLEO_MS = 300;
 
 
-// ===============================
-// REFERENCIAS DOM
-// ===============================
+// ============================================================
+// REFERENCIAS DEL DOM
+// ============================================================
 
 const cuerpoTabla = document.getElementById("tabla-clientes");
 const plantillaFila = document.getElementById("fila-cliente-template");
 
 const btnAnterior = document.getElementById("btn-anterior");
 const btnSiguiente = document.getElementById("btn-siguiente");
-
 const infoPagina = document.getElementById("info-pagina");
 
+const inputBuscador = document.getElementById("buscador-clientes");
+const selectProvincia = document.getElementById("filtro-provincia");
+const selectPoblacion = document.getElementById("filtro-poblacion");
 
-const inputBuscador =
-    document.getElementById("buscador-clientes");
+const selectOrdenarPor = document.getElementById("filtro-ordenar-por");
+const btnDireccion = document.getElementById("btn-direccion");
+const iconoDireccion = document.getElementById("icono-direccion");
+const etiquetaDireccion = document.getElementById("etiqueta-direccion");
 
-const selectProvincia =
-    document.getElementById("filtro-provincia");
-
-const selectPoblacion =
-    document.getElementById("filtro-poblacion");
-
-const selectOrdenarPor =
-    document.getElementById("filtro-ordenar-por");
-
-const btnDireccion =
-    document.getElementById("btn-direccion");
-
-const iconoDireccion =
-    document.getElementById("icono-direccion");
-
-const etiquetaDireccion =
-    document.getElementById("etiqueta-direccion");
-
-const btnLimpiar =
-    document.getElementById("btn-limpiar");
-
+const btnLimpiar = document.getElementById("btn-limpiar");
 
 const cabecerasOrdenables =
     document.querySelectorAll(".th-ordenable");
 
 
-// ===============================
-// ESTADO DE LA PANTALLA
-// ===============================
+// ============================================================
+// ESTADO
+// ============================================================
 
 const criterios = {
-
     busqueda: "",
     provincia: "",
     poblacion: "",
-
     ordenarPor: "fecha_alta",
     direccion: "desc"
-
 };
-
 
 let paginaActual = 0;
 
 
-// ===============================
-// CONFIGURACIÓN ORDENACIÓN
-// ===============================
+// Cliente que está pendiente de confirmación de eliminación
+let clientePendienteEliminar = null;
+
+
+// ============================================================
+// ORDENACIÓN
+// ============================================================
 
 const ETIQUETAS_ORDEN = {
 
@@ -113,9 +93,7 @@ const ETIQUETAS_ORDEN = {
         texto: "Z → A",
         icono: "fa-arrow-up-z-a"
     }
-
 };
-
 
 
 const DIRECCION_POR_DEFECTO = {
@@ -126,62 +104,40 @@ const DIRECCION_POR_DEFECTO = {
 };
 
 
-
-// ===============================
-// CONTROL PETICIONES
-// ===============================
+// ============================================================
+// PETICIONES EN VUELO
+// ============================================================
 
 const peticionesEnVuelo = {};
 
 
-
-// ===============================
-// FETCH GENERAL JSON
-// ===============================
-
+/**
+ * Realiza una petición GET y cancela la anterior del mismo canal.
+ */
 async function pedirJson(canal, url) {
-
 
     peticionesEnVuelo[canal]?.abort();
 
+    const controlador = new AbortController();
 
-    const controlador =
-        new AbortController();
+    peticionesEnVuelo[canal] = controlador;
 
-
-    peticionesEnVuelo[canal] =
-        controlador;
-
-
-
-    const respuesta =
-        await fetch(url, {
-
-            signal: controlador.signal
-
-        });
-
-
+    const respuesta = await fetch(url, {
+        signal: controlador.signal
+    });
 
     if (!respuesta.ok) {
-
-        throw new Error(
-            `Servidor respondió ${respuesta.status}`
-        );
-
+        throw new Error(`El servidor respondió ${respuesta.status}`);
     }
 
-
     return respuesta.json();
-
 }
 
 
-
-// ===============================
-// CONTROL CANCELACIONES
-// ===============================
-
+/**
+ * Comprueba si el error se produjo porque cancelamos
+ * intencionadamente una petición anterior.
+ */
 function esCancelacion(error) {
 
     return error.name === "AbortError";
@@ -189,32 +145,22 @@ function esCancelacion(error) {
 }
 
 
-
-// ===============================
+// ============================================================
 // CARGAR CLIENTES
-// ===============================
+// ============================================================
 
 async function cargarClientes(pagina) {
 
-
     try {
 
+        const parametros = new URLSearchParams({
 
-        const parametros =
-            new URLSearchParams({
+            pagina: pagina,
+            tamano: TAMANO_PAGINA,
+            ordenarPor: criterios.ordenarPor,
+            direccion: criterios.direccion
 
-                pagina: pagina,
-
-                tamano: TAMANO_PAGINA,
-
-                ordenarPor:
-                    criterios.ordenarPor,
-
-                direccion:
-                    criterios.direccion
-
-            });
-
+        });
 
 
         if (criterios.busqueda) {
@@ -247,120 +193,54 @@ async function cargarClientes(pagina) {
         }
 
 
-
-        const datos =
-            await pedirJson(
-                "listado",
-                `${API_LISTAR_PAGINA}?${parametros}`
-            );
-
-
-
-        paginaActual =
-            datos.paginaActual;
-
-
-
-        pintarFilas(
-            datos.contenido
+        const datos = await pedirJson(
+            "listado",
+            `${API_LISTAR_PAGINA}?${parametros}`
         );
 
+
+        paginaActual = datos.paginaActual;
+
+
+        pintarFilas(datos.contenido);
 
         pintarPaginacion(datos);
 
 
-
-    } catch(error) {
-
+    } catch (error) {
 
         if (esCancelacion(error)) {
-
             return;
-
         }
-
 
         mostrarError(error);
 
-
-    }
-
-
-}
-
-// ========================================
-// ELIMINAR CLIENTE
-// ========================================
-
-async function eliminarCliente(idCliente) {
-
-    const confirmar = confirm(
-        "¿Seguro que deseas eliminar este cliente? Esta acción no se puede deshacer."
-    );
-
-    if (!confirmar) {
-        return;
-    }
-
-    try {
-
-        const respuesta = await fetch(`/cliente/${idCliente}`, {
-            method: "DELETE"
-        });
-
-        const datos = await respuesta.json();
-
-        if (respuesta.ok) {
-
-			mostrarMensaje(datos.message, "success");
-
-            // Notificamos al resto del sistema
-            document.dispatchEvent(
-                new CustomEvent("clientes:cambiaron")
-            );
-
-        } else {
-
-			mostrarMensaje(datos.message, "danger");
-
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Error eliminando cliente:",
-            error
-        );
-
-        alert(
-            "Ha ocurrido un error al eliminar el cliente."
-        );
-
     }
 
 }
 
 
-
-// ========================================
+// ============================================================
 // PINTAR FILAS
-// ========================================
+// ============================================================
 
 function pintarFilas(clientes) {
 
     cuerpoTabla.replaceChildren();
 
 
-    if (!Array.isArray(clientes) ||
-        clientes.length === 0) {
+    if (!Array.isArray(clientes) || clientes.length === 0) {
 
         mostrarMensaje(
+
             hayCriteriosActivos()
                 ? "No hay clientes que coincidan con la búsqueda."
                 : "No hay clientes que mostrar."
+
         );
 
         return;
+
     }
 
 
@@ -370,129 +250,57 @@ function pintarFilas(clientes) {
             plantillaFila.content.cloneNode(true);
 
 
-        const tr =
-            fila.querySelector("tr");
-
-
-        // Guardamos ID
-        tr.dataset.clienteId =
-            cliente.idCliente;
-
-
-        // ==========================
-        // DATOS CLIENTE
-        // ==========================
-
         fila.querySelector(".cliente-nombre")
-            .textContent = cliente.nombre;
+            .textContent = cliente.nombre ?? "";
+
 
         fila.querySelector(".cliente-cif")
-            .textContent = cliente.nifCif;
+            .textContent = cliente.nifCif ?? "";
+
 
         fila.querySelector(".cliente-email")
-            .textContent = cliente.email;
+            .textContent = cliente.email ?? "";
+
 
         fila.querySelector(".cliente-telefono")
-            .textContent = cliente.telefono;
+            .textContent = cliente.telefono ?? "";
+
 
         fila.querySelector(".cliente-alta")
             .textContent =
-                formatearFecha(cliente.fechaAlta);
+            formatearFecha(cliente.fechaAlta);
 
 
-
-        // ==========================
-        // BOTÓN VER
-        // ==========================
-
-        const botonVer =
-            tr.querySelector(".btn-ver");
-
-        if (botonVer) {
-
-            botonVer.dataset.id =
-                cliente.idCliente;
-
-            botonVer.addEventListener(
-                "click",
-                () => {
-
-                    console.log(
-                        "Ver cliente:",
-                        cliente.idCliente
-                    );
-
-                    // abrirModalVer(cliente.idCliente);
-
-                }
-            );
-        }
+        const tr = fila.querySelector("tr");
 
 
-
-        // ==========================
-        // BOTÓN EDITAR
-        // ==========================
-
-        const botonEditar =
-            tr.querySelector(".btn-editar");
-
-        if (botonEditar) {
-
-            botonEditar.dataset.id =
-                cliente.idCliente;
-
-            botonEditar.addEventListener(
-                "click",
-                () => {
-
-                    console.log(
-                        "Editar cliente:",
-                        cliente.idCliente
-                    );
-
-                    // abrirModalEditar(cliente.idCliente);
-
-                }
-            );
-        }
+        // Guardamos el ID en la fila
+        tr.dataset.clienteId = cliente.idCliente;
 
 
-
-        // ==========================
-        // BOTÓN ELIMINAR
-        // ==========================
-
-        const botonEliminar =
-            tr.querySelector(".btn-eliminar");
+        // También lo guardamos en los botones
+        fila.querySelector(".btn-ver")
+            .dataset.id = cliente.idCliente;
 
 
-        if (botonEliminar) {
-
-            botonEliminar.dataset.id =
-                cliente.idCliente;
-
-            botonEliminar.addEventListener(
-                "click",
-                () => eliminarCliente(
-                    cliente.idCliente
-                )
-            );
-        }
+        fila.querySelector(".btn-editar")
+            .dataset.id = cliente.idCliente;
 
 
+        fila.querySelector(".btn-eliminar")
+            .dataset.id = cliente.idCliente;
 
-        cuerpoTabla.appendChild(tr);
+
+        cuerpoTabla.appendChild(fila);
 
     }
 
 }
 
 
-
-// ========================================
+// ============================================================
 // FORMATEAR FECHA
-// ========================================
+// ============================================================
 
 function formatearFecha(fechaIso) {
 
@@ -502,21 +310,22 @@ function formatearFecha(fechaIso) {
 
     }
 
+
     return new Date(fechaIso)
         .toLocaleDateString("es-ES");
 
 }
 
 
-
-// ========================================
+// ============================================================
 // PAGINACIÓN
-// ========================================
+// ============================================================
 
 function pintarPaginacion(datos) {
 
     btnAnterior.disabled =
         !datos.hayAnterior;
+
 
     btnSiguiente.disabled =
         !datos.haySiguiente;
@@ -524,86 +333,116 @@ function pintarPaginacion(datos) {
 
     infoPagina.textContent =
         datos.totalElementos === 0
+
             ? "Sin resultados"
+
             : `Página ${datos.paginaActual + 1} de ${datos.totalPaginas} · ${datos.totalElementos} clientes`;
 
 }
 
-// ============================================
+
+// ============================================================
 // CONTROLES DE ORDENACIÓN
-// ============================================
+// ============================================================
 
 function pintarControlesOrden() {
 
-    const { ordenarPor, direccion } = criterios;
+    const {
+        ordenarPor,
+        direccion
+    } = criterios;
+
 
     const etiqueta =
-        ETIQUETAS_ORDEN[`${ordenarPor}|${direccion}`];
+        ETIQUETAS_ORDEN[
+            `${ordenarPor}|${direccion}`
+        ];
 
-    selectOrdenarPor.value = ordenarPor;
 
-    etiquetaDireccion.textContent = etiqueta.texto;
+    selectOrdenarPor.value =
+        ordenarPor;
+
+
+    etiquetaDireccion.textContent =
+        etiqueta.texto;
+
 
     iconoDireccion.className =
         `fa-solid ${etiqueta.icono}`;
 
+
     btnDireccion.title =
         "Pulsa para invertir el orden";
 
-    cabecerasOrdenables.forEach((cabecera) => {
 
-        const activa =
-            cabecera.dataset.columna === ordenarPor;
+    cabecerasOrdenables.forEach(
+        (cabecera) => {
 
-        const caret =
-            cabecera.querySelector(".caret-orden");
+            const esColumnaActiva =
+                cabecera.dataset.columna === ordenarPor;
 
-        cabecera.classList.toggle("activa", activa);
 
-        if (activa) {
+            const caret =
+                cabecera.querySelector(
+                    ".caret-orden"
+                );
 
-            caret.className =
-                `fa-solid caret-orden ${
-                    direccion === "asc"
-                        ? "fa-arrow-up-long"
-                        : "fa-arrow-down-long"
-                }`;
 
-        } else {
-
-            caret.className =
-                "fa-solid fa-sort caret-orden";
-
-        }
-
-        cabecera
-            .closest("th")
-            .setAttribute(
-                "aria-sort",
-                activa
-                    ? (direccion === "asc"
-                        ? "ascending"
-                        : "descending")
-                    : "none"
+            cabecera.classList.toggle(
+                "activa",
+                esColumnaActiva
             );
 
-    });
+
+            if (esColumnaActiva) {
+
+                caret.className =
+                    `fa-solid caret-orden ${
+                        direccion === "asc"
+                            ? "fa-arrow-up-long"
+                            : "fa-arrow-down-long"
+                    }`;
+
+            } else {
+
+                caret.className =
+                    "fa-solid fa-sort caret-orden";
+
+            }
+
+
+            cabecera
+                .closest("th")
+                .setAttribute(
+                    "aria-sort",
+
+                    esColumnaActiva
+
+                        ? (
+                            direccion === "asc"
+                                ? "ascending"
+                                : "descending"
+                        )
+
+                        : "none"
+                );
+
+        }
+    );
 
 }
 
 
-// ============================================
-// UTILIDADES
-// ============================================
+// ============================================================
+// CRITERIOS
+// ============================================================
 
 function hayCriteriosActivos() {
 
     return Boolean(
 
         criterios.busqueda ||
-
         criterios.provincia ||
-
         criterios.poblacion
 
     );
@@ -620,10 +459,149 @@ function aplicarCriterios() {
 }
 
 
+// ============================================================
+// MENSAJES EN MODAL
+// ============================================================
 
-// ============================================
-// SELECTS
-// ============================================
+function mostrarMensaje(texto) {
+
+    const mensaje =
+        document.getElementById(
+            "mensaje-modal-texto"
+        );
+
+    mensaje.textContent = texto;
+
+
+    const modalElemento =
+        document.getElementById(
+            "mensajeModal"
+        );
+
+
+    const modal =
+        new bootstrap.Modal(
+            modalElemento
+        );
+
+
+    modal.show();
+
+}
+
+
+// ============================================================
+// ERROR
+// ============================================================
+
+function mostrarError(error) {
+
+    console.error(
+        "No se pudieron cargar los clientes:",
+        error
+    );
+
+
+    mostrarMensaje(
+        "No se pudieron cargar los clientes. Inténtalo de nuevo."
+    );
+
+
+    btnAnterior.disabled = true;
+
+    btnSiguiente.disabled = true;
+
+}
+
+
+// ============================================================
+// PROVINCIAS
+// ============================================================
+
+async function cargarProvincias() {
+
+    try {
+
+        const provincias =
+            await pedirJson(
+                "provincias",
+                API_PROVINCIAS
+            );
+
+
+        rellenarSelect(
+            selectProvincia,
+            provincias
+        );
+
+
+    } catch (error) {
+
+        if (esCancelacion(error)) {
+            return;
+        }
+
+
+        console.error(
+            "No se pudieron cargar las provincias:",
+            error
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// POBLACIONES
+// ============================================================
+
+async function cargarPoblaciones(provincia) {
+
+    try {
+
+        const url = provincia
+
+            ? `${API_POBLACIONES}?${new URLSearchParams({
+                provincia: provincia
+            })}`
+
+            : API_POBLACIONES;
+
+
+        const poblaciones =
+            await pedirJson(
+                "poblaciones",
+                url
+            );
+
+
+        rellenarSelect(
+            selectPoblacion,
+            poblaciones
+        );
+
+
+    } catch (error) {
+
+        if (esCancelacion(error)) {
+            return;
+        }
+
+
+        console.error(
+            "No se pudieron cargar las poblaciones:",
+            error
+        );
+
+    }
+
+}
+
+
+// ============================================================
+// RELLENAR SELECT
+// ============================================================
 
 function rellenarSelect(select, valores) {
 
@@ -633,14 +611,17 @@ function rellenarSelect(select, valores) {
 
     }
 
+
     for (const valor of valores) {
 
         const opcion =
             document.createElement("option");
 
+
         opcion.value = valor;
 
         opcion.textContent = valor;
+
 
         select.appendChild(opcion);
 
@@ -649,332 +630,611 @@ function rellenarSelect(select, valores) {
 }
 
 
-
-async function cargarProvincias() {
-
-    try {
-
-        rellenarSelect(
-
-            selectProvincia,
-
-            await pedirJson(
-                "provincias",
-                API_PROVINCIAS
-            )
-
-        );
-
-    } catch (error) {
-
-        if (esCancelacion(error)) return;
-
-        console.error(error);
-
-    }
-
-}
-
-
-
-async function cargarPoblaciones(provincia) {
-
-    try {
-
-        const url = provincia
-
-            ? `${API_POBLACIONES}?${new URLSearchParams({ provincia })}`
-
-            : API_POBLACIONES;
-
-
-        rellenarSelect(
-
-            selectPoblacion,
-
-            await pedirJson(
-                "poblaciones",
-                url
-            )
-
-        );
-
-    } catch (error) {
-
-        if (esCancelacion(error)) return;
-
-        console.error(error);
-
-    }
-
-}
-
-
-
-// ============================================
-// EVENTOS
-// ============================================
+// ============================================================
+// BUSCADOR
+// ============================================================
 
 let temporizadorBusqueda = null;
 
 
-inputBuscador.addEventListener("input", () => {
+inputBuscador.addEventListener(
+    "input",
+    () => {
 
-    clearTimeout(temporizadorBusqueda);
+        clearTimeout(
+            temporizadorBusqueda
+        );
 
-    temporizadorBusqueda = setTimeout(() => {
 
-        criterios.busqueda =
-            inputBuscador.value.trim();
+        temporizadorBusqueda =
+            setTimeout(() => {
+
+                criterios.busqueda =
+                    inputBuscador.value.trim();
+
+
+                aplicarCriterios();
+
+            }, ESPERA_TECLEO_MS);
+
+    }
+);
+
+
+// ============================================================
+// FILTRO PROVINCIA
+// ============================================================
+
+selectProvincia.addEventListener(
+    "change",
+    async () => {
+
+        criterios.provincia =
+            selectProvincia.value;
+
+
+        criterios.poblacion = "";
+
+        selectPoblacion.value = "";
+
+
+        await cargarPoblaciones(
+            criterios.provincia
+        );
+
 
         aplicarCriterios();
 
-    }, ESPERA_TECLEO_MS);
-
-});
-
+    }
+);
 
 
-selectProvincia.addEventListener("change", async () => {
+// ============================================================
+// FILTRO POBLACIÓN
+// ============================================================
 
-    criterios.provincia =
-        selectProvincia.value;
+selectPoblacion.addEventListener(
+    "change",
+    () => {
 
-    criterios.poblacion = "";
+        criterios.poblacion =
+            selectPoblacion.value;
 
-    selectPoblacion.value = "";
-
-    await cargarPoblaciones(
-        criterios.provincia
-    );
-
-    aplicarCriterios();
-
-});
-
-
-selectPoblacion.addEventListener("change", () => {
-
-    criterios.poblacion =
-        selectPoblacion.value;
-
-    aplicarCriterios();
-
-});
-
-
-selectOrdenarPor.addEventListener("change", () => {
-
-    criterios.ordenarPor =
-        selectOrdenarPor.value;
-
-    criterios.direccion =
-        DIRECCION_POR_DEFECTO[
-            criterios.ordenarPor
-        ];
-
-    aplicarCriterios();
-
-});
-
-
-btnDireccion.addEventListener("click", () => {
-
-    criterios.direccion =
-        criterios.direccion === "asc"
-            ? "desc"
-            : "asc";
-
-    aplicarCriterios();
-
-});
-
-
-cabecerasOrdenables.forEach((cabecera) => {
-
-    cabecera.addEventListener("click", () => {
-
-        const columna =
-            cabecera.dataset.columna;
-
-        if (criterios.ordenarPor === columna) {
-
-            criterios.direccion =
-                criterios.direccion === "asc"
-                    ? "desc"
-                    : "asc";
-
-        } else {
-
-            criterios.ordenarPor = columna;
-
-            criterios.direccion =
-                DIRECCION_POR_DEFECTO[columna];
-
-        }
 
         aplicarCriterios();
 
-    });
-
-});
-
+    }
+);
 
 
-btnLimpiar.addEventListener("click", async () => {
+// ============================================================
+// CAMBIAR ORDEN
+// ============================================================
 
-    criterios.busqueda = "";
+selectOrdenarPor.addEventListener(
+    "change",
+    () => {
 
-    criterios.provincia = "";
-
-    criterios.poblacion = "";
-
-    criterios.ordenarPor = "fecha_alta";
-
-    criterios.direccion = "desc";
-
-
-    inputBuscador.value = "";
-
-    selectProvincia.value = "";
-
-    selectPoblacion.value = "";
+        criterios.ordenarPor =
+            selectOrdenarPor.value;
 
 
-    await cargarPoblaciones("");
-
-    aplicarCriterios();
-
-});
-
+        criterios.direccion =
+            DIRECCION_POR_DEFECTO[
+                criterios.ordenarPor
+            ];
 
 
-// ============================================
+        aplicarCriterios();
+
+    }
+);
+
+
+// ============================================================
+// CAMBIAR DIRECCIÓN
+// ============================================================
+
+btnDireccion.addEventListener(
+    "click",
+    () => {
+
+        criterios.direccion =
+            criterios.direccion === "asc"
+                ? "desc"
+                : "asc";
+
+
+        aplicarCriterios();
+
+    }
+);
+
+
+// ============================================================
+// CABECERAS ORDENABLES
+// ============================================================
+
+cabecerasOrdenables.forEach(
+    (cabecera) => {
+
+        cabecera.addEventListener(
+            "click",
+            () => {
+
+                const columna =
+                    cabecera.dataset.columna;
+
+
+                if (
+                    criterios.ordenarPor ===
+                    columna
+                ) {
+
+                    criterios.direccion =
+                        criterios.direccion === "asc"
+                            ? "desc"
+                            : "asc";
+
+                } else {
+
+                    criterios.ordenarPor =
+                        columna;
+
+
+                    criterios.direccion =
+                        DIRECCION_POR_DEFECTO[
+                            columna
+                        ];
+
+                }
+
+
+                aplicarCriterios();
+
+            }
+        );
+
+    }
+);
+
+
+// ============================================================
+// LIMPIAR FILTROS
+// ============================================================
+
+btnLimpiar.addEventListener(
+    "click",
+    async () => {
+
+        criterios.busqueda = "";
+
+        criterios.provincia = "";
+
+        criterios.poblacion = "";
+
+        criterios.ordenarPor =
+            "fecha_alta";
+
+        criterios.direccion =
+            "desc";
+
+
+        inputBuscador.value = "";
+
+        selectProvincia.value = "";
+
+        selectPoblacion.value = "";
+
+
+        await cargarPoblaciones("");
+
+
+        aplicarCriterios();
+
+    }
+);
+
+
+// ============================================================
 // PAGINACIÓN
-// ============================================
+// ============================================================
 
 btnAnterior.addEventListener(
     "click",
-    () => cargarClientes(paginaActual - 1)
+    () => {
+
+        cargarClientes(
+            paginaActual - 1
+        );
+
+    }
 );
+
 
 btnSiguiente.addEventListener(
     "click",
-    () => cargarClientes(paginaActual + 1)
+    () => {
+
+        cargarClientes(
+            paginaActual + 1
+        );
+
+    }
 );
 
 
+// ============================================================
+// BOTÓN VER
+// ============================================================
 
-// ============================================
-// REFRESCO AUTOMÁTICO
-// ============================================
+document.addEventListener(
+    "click",
+    (evento) => {
+
+        const boton =
+            evento.target.closest(
+                ".btn-ver"
+            );
+
+
+        if (!boton) {
+            return;
+        }
+
+
+        const idCliente =
+            boton.dataset.id;
+
+
+        console.log(
+            "Ver cliente:",
+            idCliente
+        );
+
+
+        // Aquí puedes conectar tu modal de VER
+        mostrarMensaje(
+            `Has seleccionado el cliente ${idCliente}.`
+        );
+
+    }
+);
+
+
+// ============================================================
+// BOTÓN EDITAR
+// ============================================================
+
+document.addEventListener(
+    "click",
+    (evento) => {
+
+        const boton =
+            evento.target.closest(
+                ".btn-editar"
+            );
+
+
+        if (!boton) {
+            return;
+        }
+
+
+        const idCliente =
+            boton.dataset.id;
+
+
+        console.log(
+            "Editar cliente:",
+            idCliente
+        );
+
+
+        // Aquí puedes conectar tu función de editar
+        mostrarMensaje(
+            `Editar cliente ${idCliente}.`
+        );
+
+    }
+);
+
+
+// ============================================================
+// BOTÓN ELIMINAR
+// ============================================================
+
+document.addEventListener(
+    "click",
+    (evento) => {
+
+        const boton =
+            evento.target.closest(
+                ".btn-eliminar"
+            );
+
+
+        if (!boton) {
+            return;
+        }
+
+
+        const idCliente =
+            boton.dataset.id;
+
+
+        clientePendienteEliminar =
+            idCliente;
+
+
+        const modalElemento =
+            document.getElementById(
+                "confirmarEliminarModal"
+            );
+
+
+        const modal =
+            new bootstrap.Modal(
+                modalElemento
+            );
+
+
+        modal.show();
+
+    }
+);
+
+
+// ============================================================
+// CONFIRMAR ELIMINACIÓN
+// ============================================================
+
+document
+    .getElementById(
+        "btn-confirmar-eliminar"
+    )
+    .addEventListener(
+        "click",
+        async () => {
+
+            if (!clientePendienteEliminar) {
+                return;
+            }
+
+
+            const idCliente =
+                clientePendienteEliminar;
+
+
+            try {
+
+                const respuesta =
+                    await fetch(
+                        `/cliente/${idCliente}`,
+                        {
+                            method: "DELETE"
+                        }
+                    );
+
+
+                let datos = null;
+
+
+                try {
+
+                    datos =
+                        await respuesta.json();
+
+                } catch {
+
+                    datos = null;
+
+                }
+
+
+                // Error HTTP
+                if (!respuesta.ok) {
+
+                    throw new Error(
+                        datos?.message ||
+                        "No se pudo eliminar el cliente."
+                    );
+
+                }
+
+
+                // Cerramos modal de confirmación
+                cerrarModal(
+                    "confirmarEliminarModal"
+                );
+
+
+                clientePendienteEliminar =
+                    null;
+
+
+                // Mensaje de éxito
+				mostrarMensaje(
+				    datos?.message ||
+				    "Cliente eliminado correctamente"
+				);
+
+                // Recargamos tabla
+                cargarClientes(
+                    paginaActual
+                );
+
+
+                // Avisamos al resto
+                document.dispatchEvent(
+                    new CustomEvent(
+                        "clientes:cambiaron"
+                    )
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    "Error al eliminar cliente:",
+                    error
+                );
+
+
+                cerrarModal(
+                    "confirmarEliminarModal"
+                );
+
+
+                clientePendienteEliminar =
+                    null;
+
+
+                mostrarMensaje(
+                    error.message ||
+                    "No se pudo eliminar el cliente."
+                );
+
+            }
+
+        }
+    );
+
+
+// ============================================================
+// CERRAR MODAL
+// ============================================================
+
+function cerrarModal(idModal) {
+
+    const elemento =
+        document.getElementById(
+            idModal
+        );
+
+
+    if (!elemento) {
+        return;
+    }
+
+
+    const instancia =
+        bootstrap.Modal.getInstance(
+            elemento
+        );
+
+
+    if (instancia) {
+
+        instancia.hide();
+
+    }
+
+}
+
+
+// ============================================================
+// REFRESCO EXTERNO
+// ============================================================
 
 document.addEventListener(
     "clientes:cambiaron",
-    () => cargarClientes(paginaActual)
+    () => {
+
+        cargarClientes(
+            paginaActual
+        );
+
+    }
 );
 
 
-
-// ============================================
+// ============================================================
 // BOTÓN AÑADIR CLIENTE
-// ============================================
+// ============================================================
 
 const botonAnadirCliente =
     document.querySelector(
         '[data-bs-target="#clienteModal"]'
     );
 
+
 if (botonAnadirCliente) {
 
-    botonAnadirCliente.addEventListener("click", () => {
+    botonAnadirCliente.addEventListener(
+        "click",
+        () => {
 
-        const formulario =
-            document.querySelector(
-                "#clienteModal form"
-            );
+            const formularioCliente =
+                document.querySelector(
+                    "#clienteModal form"
+                );
 
-        if (formulario) {
 
-            formulario.reset();
+            if (formularioCliente) {
+
+                formularioCliente.reset();
+
+            }
 
         }
-
-    });
+    );
 
 }
 
 
-
-// ============================================
+// ============================================================
 // BUSCADOR EXPANDIBLE
-// ============================================
+// ============================================================
 
 const contenedorBuscador =
     document.querySelector(
         ".buscador-clientes"
     );
 
+
 if (contenedorBuscador) {
 
-    document.addEventListener("click", (evento) => {
-
-        if (
-            contenedorBuscador.contains(
-                evento.target
-            )
-        ) {
-
-            contenedorBuscador.classList.add(
-                "expandido"
-            );
-
-            inputBuscador.focus();
-
-        } else {
+    document.addEventListener(
+        "click",
+        (evento) => {
 
             if (
-                inputBuscador.value.trim() === ""
+                contenedorBuscador.contains(
+                    evento.target
+                )
             ) {
 
-                contenedorBuscador.classList.remove(
+                contenedorBuscador.classList.add(
                     "expandido"
                 );
+
+
+                inputBuscador.focus();
+
+            } else {
+
+                if (
+                    inputBuscador.value.trim() === ""
+                ) {
+
+                    contenedorBuscador.classList.remove(
+                        "expandido"
+                    );
+
+                }
 
             }
 
         }
-
-    });
+    );
 
 }
 
-function mostrarMensaje(texto, tipo = "success") {
 
-    const contenedor = document.getElementById("mensaje");
-
-    contenedor.innerHTML = `
-        <div class="alert alert-${tipo} alert-dismissible fade show" role="alert">
-            ${texto}
-            <button type="button"
-                    class="btn-close"
-                    data-bs-dismiss="alert"
-                    aria-label="Cerrar">
-            </button>
-        </div>
-    `;
-
-    setTimeout(() => {
-        contenedor.innerHTML = "";
-    }, 4000);
-}
-
-
-
-
-// ============================================
+// ============================================================
 // CARGA INICIAL
-// ============================================
+// ============================================================
 
 pintarControlesOrden();
 

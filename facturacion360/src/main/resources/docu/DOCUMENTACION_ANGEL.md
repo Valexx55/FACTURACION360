@@ -18,7 +18,7 @@ siguiendo la arquitectura por capas que subió Val a `master`.
 - **Ver el detalle**: `GET /cliente/{id}` → todos los datos de un cliente, incluidos los que la
   tabla no enseña (dirección, código postal, población y provincia).
 - **Editar**: `PUT /cliente/{id}` → guarda los cambios del formulario que se abre en la fila.
-- **Frontend**: `clientes.js` pide una página y pinta la tabla; arriba hay una barra con el
+- **Frontend**: el JavaScript (16 módulos en `static/js/`) pide una página y pinta la tabla; arriba hay una barra con el
   buscador, los dos desplegables y el control de orden, y debajo los botones
   **"Anterior" / "Siguiente"** para moverse entre páginas. Al pulsar una fila (o el botón del
   ojo) se despliega **debajo** una fila con el detalle; con el lápiz, con los campos
@@ -187,7 +187,7 @@ Navegador ←──── JSON ─── PaginaClienteResponse ←(Mapper)─ Cl
 5. **`ClienteController.listarUltimos(limite)`** — valida el `limite` (acotado 1–100), pide al
    service, mapea a `ClienteResponse`, **loguea** el resultado y lo devuelve. Va envuelto en
    `try/catch (DataAccessException)`: si la BD falla, lo registra en el log y devuelve `500`.
-6. **`clientes.js`** — pide una página, y por cada cliente clona el `<template>` de la tabla
+6. **`js/listado.js` y `js/tabla.js`** — piden una página y, por cada cliente, clonan el `<template>` de la tabla
    rellenándolo con `textContent` (seguro frente a `<`/`&`).
 
 ### Paginación (de N en N)
@@ -207,7 +207,7 @@ troceado lo hace MySQL. Las piezas:
 - **Service `listarPagina(...)`**: calcula `offset`, el total de páginas con
   `Math.ceil((double) total / tamano)`, los flags `hayAnterior/haySiguiente`, y mapea a `ClienteResponse`.
 - **Controller `listarPagina`**: mismo patrón (validación, logs, `try/catch`); devuelve el `PaginaClienteResponse`.
-- **`clientes.js`**: guarda la `paginaActual`, pide `/cliente/listar-pagina?...`, pinta
+- **`js/listado.js`**: guarda la `paginaActual`, pide `/cliente/listar-pagina?...`, pinta
   `datos.contenido` y **activa/desactiva** los botones "Anterior"/"Siguiente" según los flags.
 
 > **Ojo con el `offset`**: se calcula como `(long) pagina * tamano`, con el `(long)` en el **primer**
@@ -396,7 +396,7 @@ defecto. A partir de ahí ya nunca son `null`, así que se usan como si fueran `
 
 #### Frontend: un único estado
 
-`clientes.js` guarda **un solo objeto** `{ busqueda, provincia, poblacion, ordenarPor, direccion }`.
+`js/estado.js` guarda **un solo objeto** `{ busqueda, provincia, poblacion, ordenarPor, direccion }`.
 Es lo que impide que los controles se contradigan: se puede cambiar el orden desde el selector de
 la barra **o** pulsando las cabeceras "Nombre" y "Alta" de la tabla, y como los dos caminos escriben
 en el mismo sitio y luego se repinta todo desde ahí, no pueden acabar mostrando cosas distintas.
@@ -416,6 +416,55 @@ en el mismo sitio y luego se repinta todo desde ahí, no pueden acabar mostrando
   hubiera elegida (si no, quedaría un filtro "Valencia + Madrid" que no devuelve nada).
 - **Columna "Alta"** en la tabla: ordenar por fecha de alta sin ver la fecha no hay forma de
   comprobarlo.
+
+### Cómo está organizado el JavaScript
+
+El frontend son **16 módulos ES** en `static/js/`. La página carga uno solo —
+`<script type="module" src="js/main.js">`— y el resto se traen por sus `import`. Sin *bundler*,
+sin paso de compilación y sin tocar el `pom`: `type="module"` y ya.
+
+Están en **capas**, y la regla que las mantiene ordenadas es una sola: **un módulo solo importa
+de capas estrictamente inferiores**.
+
+| Capa | Módulos | Qué resuelven |
+|---|---|---|
+| 0 | `config` · `dom` · `estado` | Constantes, las referencias al HTML, y los criterios y paneles abiertos |
+| 1 | `api` · `avisos` · `foco` · `fila` · `formulario` | Transporte, anuncios, y las operaciones sobre una fila o un formulario sueltos |
+| 2 | `paneles` · `dialogo` | El contenido de un panel y la pregunta de descartar |
+| 3 | `despliegue` · `edicion` | Abrir, cerrar y conciliar; guardar |
+| 4 | `tabla` · `listado` | Pintar el listado; pedirlo |
+| 5 | `filtros` · `main` | Buscar y filtrar; los *listeners* y el arranque |
+
+**Por qué esa regla y no un reparto por temas.** El reparto obvio —red, avisos, tabla, filtros,
+despliegue, edición— da **cuatro dependencias circulares**, medidas sobre el grafo de llamadas
+real: `avisos ↔ tabla`, `filtros ↔ listado`, `despliegue ↔ tabla` y `despliegue ↔ edición`.
+Los módulos ES las toleran con funciones declaradas, pero es frágil: basta con que alguien llame
+a una importada mientras se evalúa el módulo para que le llegue `undefined`.
+
+Se resolvieron **moviendo cinco funciones**, no cambiando el diseño: `columnasVisibles` a `dom`
+(es una consulta al documento, no pintado), `hayCriteriosActivos` a `estado` (es un predicado
+sobre los criterios), las de una fila suelta a `fila`, `pintarPanelEdicion` a `paneles` (es
+pintado; la lógica del formulario se queda aparte) y `manejarClicPanel` a `main` (es un
+manejador de eventos).
+
+**Dos sitios rompen la línea recta a propósito**, y los dos con un evento en lugar de un
+`import`, porque un módulo de abajo necesita provocar algo de arriba:
+
+- `clientes:cambiaron` — lo dispara quien crea, edita o elimina un cliente, también desde el
+  código de los compañeros, y recarga la tabla.
+- `clientes:limpiar-filtros` — lo dispara el botón "Quitar los filtros" que pinta `tabla.js`
+  cuando una búsqueda no encuentra nada. La tabla no puede importar los filtros: los filtros ya
+  dependen de ella.
+
+**Lo único que hubo que adaptar del código.** En módulos ES, lo que se importa es de **solo
+lectura**: asignarle lanza `TypeError`. De las diez variables mutables del fichero original,
+nueve se escriben desde un único sitio y se quedaron con él. La única que cruzaba era
+`focoPendiente` —la apunta el guardado y la consume el repintado—, así que vive en `foco.js`
+junto a sus dos operaciones y `edicion` llama a `anotarFoco()`. Es la única función que no
+existía antes.
+
+`paginaActual` no necesitó nada: solo la escribe `cargarClientes`, y como las importaciones son
+**vistas vivas**, los *listeners* que la leen ven siempre el valor actual.
 
 ### Cómo está documentada esta parte (Javadoc)
 
@@ -486,7 +535,7 @@ Generar la documentación:
 ### Refresco automático tras cambios
 
 Cuando se crea, edita o elimina un cliente, la tabla debe reflejarlo. Lo resolvemos con un **evento
-personalizado**, para **desacoplar** nuestra parte de la de los compañeros: `clientes.js` **escucha**
+personalizado**, para **desacoplar** nuestra parte de la de los compañeros: `js/main.js` **escucha**
 el evento `clientes:cambiaron` y, al recibirlo, **recarga la página actual** (`cargarClientes(paginaActual)`),
 volviendo a pedir los datos a la BD. Así nuestra tabla siempre está al día sin conocer el código de
 quien hace el cambio (ellos solo tienen que **disparar** el evento — ver la última sección).
@@ -811,7 +860,7 @@ Lo que se ha corregido, y por qué cada cosa:
 - **La tabla tiene `<caption>`** (oculto visualmente) y el contenedor con scroll horizontal es
   un `role="region"` con `tabindex="0"`: una zona que se desplaza tiene que poder recorrerse
   con el teclado, o las columnas de la derecha son inalcanzables sin ratón. Ese `tabindex`
-  viene puesto en el HTML y lo **quita `clientes.js` cuando la tabla cabe entera**, vigilando
+  viene puesto en el HTML y lo **quita `js/main.js` cuando la tabla cabe entera**, vigilando
   el tamaño con un `ResizeObserver`: una parada del tabulador donde no hay nada que desplazar
   es una molestia para quien navega así. Se hace en ese sentido —puesto de serie y quitado
   después— para que un fallo del JS deje la versión accesible y no la contraria.
@@ -1050,7 +1099,7 @@ Dos detalles que explican por qué se escaparon:
   **Google Fonts se queda fuera** a propósito: devuelve un CSS distinto según el navegador, así
   que ninguna huella fija valdría para todos y la fuente dejaría de cargar. Solo está puesto en
   `clientes.html`, que es nuestra página; las demás siguen igual.
-- **Se ha quitado el `querySelectorAll('.btn-eliminar')` del final de `clientes.js`**: no
+- **Se ha quitado el `querySelectorAll('.btn-eliminar')` que había al final del JavaScript**: no
   enganchaba nada, porque al ejecutarse ese código los botones todavía viven dentro del
   `<template>`. En su sitio queda un comentario que explica que las acciones de la fila van por
   delegación en el `<tbody>`, que es donde quien implemente el borrado tiene que añadir su caso.
@@ -1243,7 +1292,7 @@ test verde ahí no probaría lo que parece. Queda para cuando se decida esa infr
 
 ## Limitaciones conocidas
 
-Seis cosas que se han mirado y se dejan como están, a propósito:
+Cinco cosas que se han mirado y se dejan como están, a propósito:
 
 - **El NIF/CIF y el código postal solo se validan por longitud, no por formato.** Un `????` de
   diez caracteres pasa como NIF, y `ABCDE` como código postal. Lo suyo sería un `@Pattern` en
@@ -1306,18 +1355,6 @@ Seis cosas que se han mirado y se dejan como están, a propósito:
   sesión. Es el precio de que un panel abierto sobreviva a buscar y a paginar: no hay forma de
   distinguir "este cliente ya no está en la página" de "ya no está en la base de datos" sin
   preguntar por él. Son unos pocos objetos pequeños y se van al recargar la página.
-
-- **`clientes.js` es un único fichero de 2.133 líneas, sin módulos ES.** Dentro conviven al
-  menos cinco responsabilidades que se podrían separar: la capa de red (`pedirJson`, los canales
-  con `AbortController`), el pintado desde los `<template>`, el despliegue de la fila, la
-  edición con su conciliación, y los anuncios de accesibilidad.
-
-  Partirlo es viable y limpio: **no hay ni un manejador `onclick` en el HTML** y el `<script>` ya
-  va con `defer`, así que nada de la página depende de que estas funciones estén en el ámbito
-  global; bastaría `type="module"` con `import`/`export`, sin *bundler* ni paso de compilación.
-  No entra aquí por una cuestión de orden: mover 2.133 líneas dentro de una rama que ya trae
-  decenas de *commits* de funcionalidad hace la revisión **más** difícil, no menos. Su sitio es
-  una rama propia, después de que esta se integre.
 
 - **La conciliación del formulario no tiene pruebas.** `conciliarFormulario` resuelve un
   *merge* a tres bandas —lo que se pintó, lo que hay ahora en la base de datos y lo que el
@@ -1744,7 +1781,7 @@ Dos cosas que ahorran un rato de depuración.
 y se crean y se destruyen en cada repintado, así que un `document.querySelectorAll('.btn-...')`
 al cargar la página **no encuentra ningún botón** y no engancha nada. (Había uno así para
 eliminar, y por eso no hacía nada.) Todo va por **delegación** en un único listener sobre el
-`<tbody>`; el sitio para añadir una acción nueva es este `if`, en `clientes.js`:
+`<tbody>`; el sitio para añadir una acción nueva es este `if`, en `js/main.js`:
 
 ```js
 const boton = evento.target.closest(".celda-acciones .btn");
@@ -1760,21 +1797,16 @@ El id del cliente está en `fila.dataset.clienteId`. Después de un `await` (una
 `fetch`), **no reutilicéis esa variable `fila`**: la tabla puede haberse repintado y ese `<tr>`
 ya no estar en el documento. Para eso están `filaViva(id)` y `formularioVivo(id)`.
 
-**2) `clientes.js` ocupa el ámbito global de la página.** Se carga con `<script defer>` y no con
-`type="module"`, así que todo lo que declara vive en `window`. No es una decisión, es cómo se
-quedó: hoy **el HTML no llama a ninguna función desde un `onclick`** —no queda ninguno en
-`clientes.html`—, así que pasarlo a módulos es viable y está anotado en
-[Limitaciones conocidas](#limitaciones-conocidas). Mientras siga siendo global, si añadís otro
-`<script>` a `clientes.html`, evitad estos nombres o se pisarán en silencio:
+**2) El JavaScript son módulos: nada vive en el ámbito global.** La página carga un único
+`<script type="module" src="js/main.js">` y el resto se trae solo por sus `import`. Si añadís
+otro `<script>` a `clientes.html` **no hay ningún nombre que evitar**: lo que declara un módulo
+no sale de él, así que no podéis pisar nada nuestro ni nosotros lo vuestro.
 
-| Tipo | Nombres ocupados |
-|---|---|
-| Estado | `criterios`, `paginaActual`, `filasDesplegadas`, `clientesEnPagina`, `peticionesEnVuelo`, `focoPendiente`, `listadosEnVuelo` |
-| Peticiones | `pedirJson`, `enviarJson`, `cerrarCanal`, `cargarClientes`, `cargarProvincias`, `cargarPoblaciones` |
-| Pintado | `pintarFilas`, `pintarCeldasFila`, `pintarPaginacion`, `pintarEnlace`, `mostrarMensaje`, `mostrarError` |
-| Despliegue | `abrirDespliegue`, `cerrarDespliegue`, `alternarDespliegue`, `marcarFila`, `nombrarPanel`, `filaViva`, `formularioVivo` |
-| Avisos | `anunciar`, `escribirPista`, `ocultarPistas`, `limpiarPistas` |
+Lo que sí conviene saber es **dónde está cada cosa**, que es lo que cuenta el mapa de la
+cabecera de `js/main.js`. En resumen: [Cómo está organizado el JavaScript](#cómo-está-organizado-el-javascript).
 
 El nombre **`guardarCliente` está libre a propósito**: es el que le corresponde al alta de
-clientes. La función que guarda la edición en la fila se llama `guardarEdicion` para no ocuparlo.
+clientes. La función que guarda la edición en la fila se llama `guardarEdicion` para no
+ocuparlo. Con módulos ya no puede haber choque real, pero que dos funciones de la misma pantalla
+se llamen igual sigue confundiendo a quien lee.
 

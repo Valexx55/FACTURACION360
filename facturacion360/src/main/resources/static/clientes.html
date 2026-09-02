@@ -19,9 +19,11 @@
           integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g"
           crossorigin="anonymous">
     <link rel="icon" href="./img/fav.ico" type="image/png">
-    <!-- defer: descarga en paralelo con el parseo del HTML y se ejecuta cuando el
-         DOM ya está listo, así que no hace falta DOMContentLoaded. -->
-    <script src="clientes.js" defer></script>
+    <!-- type="module" ya es diferido: descarga en paralelo con el parseo y se ejecuta con el
+         documento entero, así que no hace falta DOMContentLoaded (igual que hacía el defer que
+         había antes). Solo se carga este fichero: los otros quince módulos se traen solos por
+         sus import. El mapa completo y la regla de capas están en la cabecera de js/main.js. -->
+    <script type="module" src="js/main.js"></script>
 </head>
 <body>
 
@@ -57,7 +59,7 @@
 
       
         <!-- Barra de criterios: buscador + filtros + ordenación. Todos escriben en el
-             mismo objeto de estado de clientes.js, así que se combinan entre sí: la
+             mismo objeto de estado (js/estado.js), así que se combinan entre sí: la
              ordenación se aplica sobre lo que haya dejado el filtro, no sobre todo. -->
         <!-- <search> es el elemento propio de una zona de búsqueda y filtrado, y aporta
              role="search" sin ARIA a mano. El role explícito es para los navegadores
@@ -125,7 +127,7 @@
         </search>
 
         <!-- La zona por la que se entera de las cosas quien no ve la pantalla. Está SIEMPRE en
-             el documento y vacía, y clientes.js solo le cambia el texto: una región que se crea
+             el documento y vacía, y js/avisos.js solo le cambia el texto: una región que se crea
              (o que se destapa) con el mensaje ya dentro no se anuncia, porque el lector de
              pantalla vigila los cambios de una región que ya estaba ahí (criterio 4.1.3).
              Es la única del listado, así que nada se anuncia dos veces, y al ser invisible
@@ -150,13 +152,13 @@
         <!-- role="region" + tabindex="0": table-responsive desplaza en horizontal, y una zona
              que se desplaza tiene que poder recorrerse con el teclado (criterio 2.1.1 de WCAG).
              Sin el tabindex, quien no usa ratón no puede llegar a las columnas de la derecha.
-             Viene puesto de serie y clientes.js lo quita cuando la tabla cabe entera y no hay
+             Viene puesto de serie y js/main.js lo quita cuando la tabla cabe entera y no hay
              nada que desplazar; así, si el JS fallara, se queda la versión accesible. -->
         <div class="table-responsive" role="region" tabindex="0"
              aria-labelledby="titulo-tabla-clientes">
             <!-- Sin table-striped: Bootstrap raya por nth-of-type y, al insertar las filas de
                  detalle, la alternancia se descoloca a partir de cada panel abierto. Las filas
-                 las pinta clientes.js, así que marca él mismo la paridad por cliente. -->
+                 las pinta js/tabla.js, así que marca él mismo la paridad por cliente. -->
             <table class="table table-hover align-middle tabla-clientes">
                 <caption id="titulo-tabla-clientes" class="visually-hidden">
                     Clientes registrados, con su CIF, email, teléfono y fecha de alta
@@ -166,7 +168,7 @@
                         <!-- Cabeceras pulsables: es el gesto que todo el mundo prueba
                              primero en una tabla. Van dentro de un <button> real para
                              que se puedan usar con el teclado. aria-sort lo anuncia a
-                             los lectores de pantalla; clientes.js lo mantiene al día. -->
+                             los lectores de pantalla; js/filtros.js lo mantiene al día. -->
                         <th scope="col" aria-sort="none">
                             <button type="button" class="cabecera-ordenable" data-columna="nombre">
                                 Nombre <i class="fa-solid fa-sort flecha-orden" aria-hidden="true"></i>
@@ -187,12 +189,12 @@
                     </tr>
                 </thead>
 
-                <!-- El cuerpo empieza vacío; clientes.js lo rellena clonando el template -->
+                <!-- El cuerpo empieza vacío; js/tabla.js lo rellena clonando el template -->
                 <tbody id="tabla-clientes"></tbody>
             </table>
         </div>
 
-        <!-- Paginación: clientes.js activa/desactiva los botones según la página.
+        <!-- Paginación: js/tabla.js activa/desactiva los botones según la página.
              aria-live="polite" hace que un lector de pantalla anuncie el cambio. -->
         <nav aria-label="Paginación de clientes"
              class="d-flex justify-content-between align-items-center mt-3">
@@ -226,7 +228,7 @@
                 <td class="cliente-alta"></td>
                 <!-- celda-acciones marca la zona que NO despliega la fila al pulsarla y en la
                      que no sale el aviso de "Ver detalles": cada botón explica lo suyo.
-                     Los nombres accesibles los completa clientes.js con el nombre del cliente;
+                     Los nombres accesibles los completa js/despliegue.js con el nombre del cliente;
                      si no, listar los botones de la página da veinte veces "Editar cliente"
                      sin saber de cuál. -->
                 <td class="text-end celda-acciones">
@@ -252,7 +254,7 @@
              nunca puede tener los dos a la vez contándose cosas distintas. -->
         <template id="fila-despliegue-template">
             <tr class="fila-despliegue">
-                <!-- El colspan lo pone clientes.js contando las cabeceras de la tabla: escrito
+                <!-- El colspan lo pone js/despliegue.js contando las cabeceras de la tabla: escrito
                      aquí a mano, añadir una columna obligaría a acordarse de cambiarlo. -->
                 <td>
                     <div class="despliegue-envoltorio">
@@ -269,7 +271,7 @@
              vez, y estando la fila del cliente ya por encima, sin esto no hay forma de saber
              de quién son los datos que se están leyendo. El nombre sale del texto que YA se
              ve, así que no hay dos cadenas que puedan acabar diciendo cosas distintas.
-             El id lo pone clientes.js con el del cliente: puede haber varios paneles en la
+             El id lo pone js/despliegue.js con el del cliente: puede haber varios paneles en la
              página y dos elementos no pueden compartir id. -->
         <template id="panel-detalle-template">
           <div class="panel-cliente" role="group">
@@ -342,7 +344,7 @@
                     <span class="texto-estado">Editando</span>
                 </p>
 
-                <!-- Los id llevan el sufijo PLANTILLA a propósito: clientes.js los sustituye
+                <!-- Los id llevan el sufijo PLANTILLA a propósito: js/paneles.js los sustituye
                      por el id del cliente al pintar, porque puede haber varios formularios
                      abiertos a la vez y dos elementos no pueden compartir id. Si alguno se
                      quedara sin sustituir, el sufijo canta a la vista en el inspector.
@@ -524,10 +526,10 @@
                          edición que ya existe. Si eliges el modal, quita el disabled y añade los
                          tres campos que faltan; si eliges la tabla, este modal sobra entero y se
                          puede borrar con su botón de arriba y el listener que lo vacía al abrir,
-                         al final de clientes.js.
+                         al final de js/main.js.
 
                          Vaya por donde vaya, dos cosas valen igual: los botones de la fila se
-                         enganchan por delegación en el <tbody> (está explicado en clientes.js,
+                         enganchan por delegación en el <tbody> (está explicado en js/main.js,
                          donde se resuelven ver y editar), y hay que disparar
                          document.dispatchEvent(new CustomEvent('clientes:cambiaron')) al recibir
                          el 201 para que la tabla se refresque sola. -->

@@ -661,6 +661,12 @@ function pintarEstadoFiltros() {
  *        sale vacía por un filtro, la salida tiene que estar donde se ve el problema
  */
 function mostrarMensaje(texto, { conLimpiar = false } = {}) {
+    // Este es el OTRO sitio que vacía la tabla, además de pintarFilas, y la limpieza tiene que
+    // estar en los dos. Sin esto, el error de carga se lleva por delante las filas y deja
+    // flotando sobre el mensaje el globo que hubiera abierto: como detrás no queda ninguna
+    // fila que pulsar, no hay manera de provocar la limpieza y se queda hasta la siguiente
+    // búsqueda. La segunda pasada cuando viene de pintarFilas no molesta: es idempotente.
+    limpiarPistas();
     cuerpoTabla.replaceChildren();
     const fila = document.createElement("tr");
     const celda = document.createElement("td");

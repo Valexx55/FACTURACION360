@@ -500,6 +500,17 @@
                     </form>
                 </div>
                 <div class="modal-footer">
+                    <!-- La explicación va escrita y no en un aviso emergente. Antes era un
+                         data-bs-title en el botón, que no salía nunca: los dos avisos delegados
+                         cuelgan del <tbody> y de la barra de filtros, y este modal no está en
+                         ninguno de los dos; y aunque lo estuviera, un control deshabilitado no
+                         emite eventos de ratón. Escrito se ve siempre, también en el móvil y
+                         sin ratón, que es lo que necesita algo que explica por qué no se puede
+                         usar la pantalla. me-auto lo manda a la izquierda del pie y deja los
+                         botones a la derecha. -->
+                    <p id="alta-no-disponible" class="text-muted small mb-0 me-auto">
+                        El alta de clientes todavía no está disponible.
+                    </p>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <!-- Inhabilitado a propósito: el alta de clientes todavía no tiene lógica de
                          frontend. La función guardarCliente() que llamaba este botón no existe en
@@ -520,8 +531,11 @@
                          donde se resuelven ver y editar), y hay que disparar
                          document.dispatchEvent(new CustomEvent('clientes:cambiaron')) al recibir
                          el 201 para que la tabla se refresque sola. -->
+                    <!-- aria-describedby ata el botón a su explicación: los botones
+                         deshabilitados siguen en el árbol de accesibilidad, así que un lector
+                         de pantalla lee el porqué junto al nombre del botón. -->
                     <button type="button" class="btn btn-primary-custom" disabled
-                            data-bs-title="El alta de clientes todavía no está disponible">
+                            aria-describedby="alta-no-disponible">
                         Guardar Cambios
                     </button>
                 </div>

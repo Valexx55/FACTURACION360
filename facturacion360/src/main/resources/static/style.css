@@ -37,10 +37,14 @@
        contraste. Si algún día se vuelven a fundir en una sola variable, el que se rompe es
        el texto, no el borde.
 
-       Los del texto, medidos sobre el fondo del panel abierto (#e7efff): el morado da
-       7.55:1, el verde 5.09:1 y el ámbar 6.14:1. De referencia de lo justo que va esto: el
-       ámbar anterior (#b45309) se quedaba en 4.35:1, o sea que valía como borde pero NO
-       como texto. */
+       Los del texto, medidos sobre --fila-abierta (#dbe6ff), que es el fondo del panel
+       abierto: el morado da 6.91:1, el verde 4.69:1 y el ámbar 5.66:1. De referencia de lo
+       justo que va esto: el ámbar anterior (#b45309) se quedaba en 4.35:1, o sea que valía
+       como borde pero NO como texto.
+
+       OJO al medir: durante un tiempo estas cuentas se hicieron contra #e7efff, que fue el
+       valor de --fila-abierta hasta que los tres tonos de fila se reajustaron. El fondo bueno
+       es el de la variable, no un número escrito a mano que se queda viejo en silencio. */
     --borde-detalle: #a855f7;
     --borde-edicion: #fb923c;
     --borde-alta: #22c55e;
@@ -832,7 +836,8 @@ footer {
    de la lista. Mismo aspecto para el <dt> del detalle y el <label> de la edición. */
 /* El gris es el más claro que se puede usar aquí: a 0.75rem y en negrita esto NO cuenta como
    texto grande, así que necesita 4.5:1 (criterio 1.4.3), y sobre el fondo del panel abierto
-   (#e7efff) el #64748b que había antes se quedaba en 4.12:1. Con #475569 sube a 6.56:1. */
+   (--fila-abierta, #dbe6ff) el #64748b que había antes se quedaba en 4.12:1. Con #475569
+   sube a 6.56:1. */
 .datos-cliente dt,
 .campo-edicion label {
     display: block;

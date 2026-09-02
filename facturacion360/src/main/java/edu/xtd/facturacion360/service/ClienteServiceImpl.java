@@ -1,6 +1,7 @@
 package edu.xtd.facturacion360.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,10 +122,16 @@ public class ClienteServiceImpl implements ClienteService {
 		return poblaciones;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
 	@Override
-	public Cliente obtenerPorId(int id) {
-		// TODO Auto-generated method stub
-		return null;
+	public Optional<Cliente> obtenerPorId(int id) {
+		Optional<Cliente> cliente = clienteRepository.findById(id);
+		log.info("obtenerPorId({}) -> {}", id, cliente.isPresent() ? "encontrado" : "no existe");
+		return cliente;
 	}
 
 	/**
@@ -145,23 +152,48 @@ public class ClienteServiceImpl implements ClienteService {
 		return clienteNuevo;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @autor AngelDanielC0des
+	 */
+	// Leer y escribir dentro de la MISMA transacción: entre la comprobación de que el cliente
+	// existe y el UPDATE no puede colarse un borrado de otro usuario y dejarnos devolviendo un
+	// cliente que ya no está en la tabla.
+	@Transactional
 	@Override
-	public Cliente actualizar(int id, Cliente cliente) {
+	public Optional<Cliente> actualizar(int id, Cliente cliente) {
 
-		// Creamos un nuevo objeto Cliente con el id recibido en la URL
-		Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
-				cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(), cliente.email(),
-				cliente.fechaAlta());
+		// Se comprueba ANTES si existe, en vez de deducirlo del número de filas que devuelve el
+		// UPDATE. Ese número no distingue "el cliente no existe" de "existe pero se ha guardado
+		// sin cambiar nada", y con la segunda lectura el usuario recibiría un 404 al pulsar
+		// Guardar sin haber tocado ningún campo.
+		Optional<Cliente> existente = clienteRepository.findById(id);
+		Optional<Cliente> resultado;
 
-		// Llamamos al repositorio para actualizar el cliente en la base de datos
-		boolean updateOK = clienteRepository.update(clienteActualizado);
+		if (existente.isEmpty()) {
+			log.warn("actualizar({}) -> el cliente no existe", id);
+			resultado = Optional.empty();
+		} else {
+			// La fecha de alta no se edita: el UPDATE no toca esa columna, así que aquí
+			// conservamos la que ya está en la BD. Si se copiara la del cliente recibido,
+			// viajaría a null (el mapper la deja así al no venir en el ClienteRequest) y la
+			// respuesta borraría la columna "Alta" de la fila en cuanto el frontend la
+			// repintara.
+			Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
+					cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(),
+					cliente.email(), existente.get().fechaAlta());
 
-		if (!updateOK) {
-			clienteActualizado = null;
+			// El boolean de update() se ignora a propósito: MySQL devuelve 0 filas afectadas
+			// cuando la sentencia no cambia ningún valor, así que un false NO significa "no
+			// existe". Eso ya lo ha resuelto el findById de arriba, en esta misma transacción.
+			clienteRepository.update(clienteActualizado);
+
+			log.info("actualizar({}) -> cliente actualizado", id);
+			resultado = Optional.of(clienteActualizado);
 		}
 
-		// Devolvemos el cliente actualizado
-		return clienteActualizado;
+		return resultado;
 	}
 	
 	

@@ -19,6 +19,10 @@
  * nombre con < o & no pueda inyectar HTML.
  */
 
+// --- Gestión de la Pantalla de Carga ---
+const pantallaCarga = document.getElementById("pantalla-carga");
+let peticionesActivas = 0;
+
 // Rutas relativas: el HTML lo sirve el propio Spring Boot, mismo origen (sin CORS).
 const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 const API_PROVINCIAS = "/cliente/provincias";
@@ -108,13 +112,21 @@ async function pedirJson(canal, url) {
     const controlador = new AbortController();
     peticionesEnVuelo[canal] = controlador;
 
-    const respuesta = await fetch(url, { signal: controlador.signal });
-
-    // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
-    if (!respuesta.ok) {
-        throw new Error(`El servidor respondió ${respuesta.status}`);
+    // Dibuja la imagen de espera
+    mostrarCarga();
+    
+    try {
+        const respuesta = await fetch(url, { signal: controlador.signal });
+        
+        // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
+        if (!respuesta.ok) {
+            throw new Error(`El servidor respondió ${respuesta.status}`);
+        }
+        return await respuesta.json();
+    } finally {
+        // Elimina la imagen de espera siempre, falle o no
+       ocultarCarga();
     }
-    return respuesta.json();
 }
 
 /**
@@ -501,3 +513,22 @@ document.addEventListener('click', (evento) => {
         }
     }
 });
+
+
+
+function mostrarCarga() {
+    peticionesActivas++;
+    if (pantallaCarga) {
+        pantallaCarga.classList.remove("d-none");
+    }
+}
+
+function ocultarCarga() {
+    peticionesActivas--;
+    if (peticionesActivas <= 0) {
+        peticionesActivas = 0; // Prevenir números negativos
+        if (pantallaCarga) {
+            pantallaCarga.classList.add("d-none");
+        }
+    }
+}

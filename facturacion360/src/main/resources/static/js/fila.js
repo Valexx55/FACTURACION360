@@ -53,9 +53,9 @@ export function pintarCeldasFila(fila, cliente) {
  * @param {Element} celda la celda de la tabla
  * @param {string|null} valor el dato del cliente
  * @param {Function} construirHref función que arma el href a partir del valor
- * @param {string} pista qué dice el aviso emergente al pasar el ratón. El enlace lleva el
- *        suyo porque, si no, heredaría el de la celda ("Ver detalles") y estaría anunciando
- *        algo distinto de lo que hace al pulsarlo
+ * @param {string} pista qué dice el aviso emergente al pasar el ratón. Es el único que hay en
+ *        esta celda —el de la fila vive en la del nombre— y explica lo que hace el enlace, que
+ *        no es desplegar el detalle sino escribir un correo o llamar por teléfono
  */
 function pintarEnlace(celda, valor, construirHref, pista) {
     const texto = (valor ?? "").trim();

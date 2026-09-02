@@ -9,6 +9,7 @@
  * @author AngelDanielC0des
  * @see main.js — el mapa de módulos y la regla de capas
  */
+import { pantallaCarga } from "./dom.js";
 
 /*
  * Petición en vuelo de cada "canal" (listado, provincias, poblaciones). Al lanzar una
@@ -19,6 +20,36 @@
  * cada una abortaría a la otra.
  */
 export const peticionesEnVuelo = {};
+
+/*
+ * Peticiones que hay ahora mismo en el aire, para el velo de carga. Es un contador y no un
+ * booleano porque se solapan: la que termina apagaría el velo de las que siguen vivas.
+ *
+ * El velo vive en esta capa y no en avisos.js, aunque sea cosa de la interfaz, porque lo que
+ * cuenta son PETICIONES y aquí es donde empiezan y acaban todas. Ponerlo en avisos.js
+ * obligaría a que api importara de su misma capa, y la regla es importar solo de capas
+ * estrictamente inferiores (dom, que es la capa 0, sí vale).
+ */
+let peticionesActivas = 0;
+
+/** Suma una petición en vuelo y destapa el velo si es la primera. */
+function mostrarCarga() {
+    peticionesActivas++;
+    if (pantallaCarga) {
+        pantallaCarga.classList.remove("d-none");
+    }
+}
+
+/** Resta una petición y tapa el velo cuando ya no queda ninguna. */
+function ocultarCarga() {
+    peticionesActivas--;
+    if (peticionesActivas <= 0) {
+        peticionesActivas = 0; // Prevenir números negativos
+        if (pantallaCarga) {
+            pantallaCarga.classList.add("d-none");
+        }
+    }
+}
 
 /**
  * Pide un JSON al backend cancelando la petición anterior del mismo canal.
@@ -39,6 +70,8 @@ export async function pedirJson(canal, url) {
     const controlador = new AbortController();
     peticionesEnVuelo[canal] = controlador;
 
+    mostrarCarga();
+
     try {
         const respuesta = await fetch(url, { signal: controlador.signal });
 
@@ -55,6 +88,7 @@ export async function pedirJson(canal, url) {
         return await respuesta.json();
     } finally {
         cerrarCanal(canal, controlador);
+        ocultarCarga();
     }
 }
 

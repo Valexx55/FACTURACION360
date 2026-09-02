@@ -21,7 +21,7 @@
  * @see main.js — el mapa de módulos y la regla de capas
  */
 import { esCancelacion, pedirJson, peticionesEnVuelo } from "./api.js";
-import { anunciar, escribirPista, limpiarPistas, ocultarPistas } from "./avisos.js";
+import { anunciar, escribirPista, limpiarPistas } from "./avisos.js";
 import {
     API_CLIENTE, CAMPOS_CLIENTE, CAMPOS_EDITABLES, DURACION_PLEGADO_MS,
     EVENTO_CLIENTES_CAMBIARON,
@@ -149,8 +149,8 @@ export function cerrarDespliegue(fila) {
 export async function alternarDespliegue(fila, modo) {
     const modoActual = modoDe(fila);
 
-    // El aviso emergente se queda flotando con el texto de antes si no se esconde al pulsar.
-    ocultarPistas(fila);
+    // El aviso emergente se queda flotando con el texto de antes si no se derriba al pulsar.
+    limpiarPistas(fila);
 
     if (modoActual === null) {
         abrirDespliegue(fila, modo);
@@ -258,7 +258,7 @@ export function marcarFila(fila, modo) {
     const accionDetalle = modo === "detalle" ? "Ocultar detalles" : "Ver detalles";
     const accionEditar = modo === "edicion" ? "Cancelar la edición" : "Editar cliente";
 
-    escribirPista(fila.querySelectorAll("th, td:not(.celda-acciones)"), accionDetalle);
+    escribirPista([fila.querySelector("th.cliente-nombre")], accionDetalle);
     nombrarAccion(botonVer, accionDetalle, `${accionDetalle} de`);
     nombrarAccion(botonEditar, accionEditar,
         modo === "edicion" ? "Cancelar la edición de" : "Editar cliente");

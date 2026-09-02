@@ -39,6 +39,7 @@ export const avisoClientes = document.getElementById("aviso-clientes");
 export const contenedorTabla = cuerpoTabla.closest(".table-responsive");
 export const dialogoDescartar = document.getElementById("modal-descartar");
 export const btnDescartar = document.getElementById("btn-descartar");
+export const pantallaCarga = document.getElementById("pantalla-carga");
 
 // Las cabeceras de la tabla. Se cuentan para saber cuántas columnas tiene que ocupar la fila
 // de mensajes y la del despliegue, en vez de escribir un 6 que habría que acordarse de cambiar

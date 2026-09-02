@@ -59,6 +59,11 @@ export function anunciar(texto, { visible = false, esError = false } = {}) {
 /** Escribe el texto del aviso en cada elemento y descarta el globo que ya tuviera. */
 export function escribirPista(elementos, texto) {
     for (const elemento of elementos) {
+        // Repintar una fila casi nunca cambia la palabra. Sin esta salida, cada repaso
+        // destruye y recrea una instancia que estaba bien, peleándose con los temporizadores
+        // de apertura que hubiera en vuelo.
+        if (elemento.dataset.bsTitle === texto) continue;
+
         elemento.dataset.bsTitle = texto;
 
         // El globo se crea en el primer hover y se queda con el texto que hubiera entonces.
@@ -67,29 +72,39 @@ export function escribirPista(elementos, texto) {
     }
 }
 
-/** Esconde los globos de una fila (al pulsarla diría lo contrario de lo que va a pasar). */
-export function ocultarPistas(fila) {
-    for (const elemento of fila.querySelectorAll("[data-bs-title]")) {
-        window.bootstrap?.Tooltip.getInstance(elemento)?.hide();
-    }
-}
-
 /**
- * Destruye los globos de una zona antes de tirar los elementos que los tienen.
+ * Destruye los globos de una zona y barre los que hayan quedado sueltos.
  *
- * @param {Element} raiz la tabla entera al repintarla, o una sola fila si solo se rehacen sus
- *        celdas
+ * Destruye y no esconde: hide() no sirve aquí. Bootstrap se salta el cierre mientras quede
+ * ALGÚN disparador activo, y al pulsar un botón ese botón se queda con el foco, así que el
+ * globo sobreviviría al hide() y al mouseleave y se quedaría flotando. dispose() derriba el
+ * globo pase lo que pase, y la raíz delegada vuelve a crear la instancia en el siguiente
+ * hover, así que no se pierde nada.
+ *
+ * @param {Element} raiz la tabla entera al repintarla, una sola fila si solo se rehacen sus
+ *        celdas, o la fila que se acaba de pulsar
  */
 export function limpiarPistas(raiz = cuerpoTabla) {
     for (const elemento of raiz.querySelectorAll("[data-bs-title]")) {
         window.bootstrap?.Tooltip.getInstance(elemento)?.dispose();
     }
+
+    // Y lo que haya quedado suelto. Con container: "body" el globo cuelga del <body>, no del
+    // elemento, así que si su dueño desapareció sin pasar por aquí nadie lo cierra nunca y se
+    // van acumulando. Un globo vivo siempre lo apunta el aria-describedby de su elemento; el
+    // que no, es basura. El selector es ~= y no =: aria-describedby admite varios ids
+    // separados por espacios.
+    for (const globo of document.body.querySelectorAll(".tooltip")) {
+        if (!globo.id || !document.querySelector(`[aria-describedby~="${globo.id}"]`)) {
+            globo.remove();
+        }
+    }
 }
 
 /*
  * Los dos avisos emergentes de la pantalla se crean AQUÍ, al cargar el módulo, y no en main.js:
- * este fichero es el dueño de su ciclo de vida entero —escribirPista los escribe, ocultarPistas
- * los oculta y limpiarPistas los destruye—, y crearlos en otro sitio dejaría a limpiarPistas
+ * este fichero es el dueño de su ciclo de vida entero —escribirPista los escribe y
+ * limpiarPistas los destruye—, y crearlos en otro sitio dejaría a limpiarPistas
  * destruyendo instancias que no ha creado nadie de por aquí.
  *
  * Un único aviso delegado en el <tbody>, no uno por celda: así vale también para las filas
@@ -114,10 +129,13 @@ if (window.bootstrap) {
     new bootstrap.Tooltip(cuerpoTabla, {
         ...OPCIONES_PISTA,
 
-        // El del enlace va el primero por claridad, pero el orden da igual: Bootstrap se
-        // queda con el elemento coincidente MÁS INTERNO, así que el aviso del correo gana al
-        // de su celda.
-        selector: ".enlace-celda, .fila-cliente th, .fila-cliente td:not(.celda-acciones), .celda-acciones .btn[data-bs-title]",
+        // UNA sola celda por fila lleva el aviso de la fila, la del nombre. Antes lo llevaban
+        // las cinco, y recorrer una fila con el ratón encendía cinco instancias con sus cinco
+        // temporizadores para decir todas lo mismo. Que el resto de la fila también despliega
+        // ya lo cuenta el cursor de mano que .fila-cliente pone en style.css.
+        // El enlace del correo o del teléfono conserva el suyo, que dice algo distinto, y
+        // Bootstrap se queda con el elemento coincidente MÁS INTERNO.
+        selector: ".enlace-celda, .fila-cliente th.cliente-nombre, .celda-acciones .btn[data-bs-title]",
     });
 
     // Y otro para la barra de filtros, que es donde estaba el title del navegador que ponía el

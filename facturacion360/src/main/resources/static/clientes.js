@@ -76,6 +76,7 @@ const avisoClientes = document.getElementById("aviso-clientes");
 const contenedorTabla = cuerpoTabla.closest(".table-responsive");
 const dialogoDescartar = document.getElementById("modal-descartar");
 const btnDescartar = document.getElementById("btn-descartar");
+const pantallaCarga = document.getElementById("pantalla-carga");
 
 // El diálogo de descartar: se construye la primera vez que hace falta y se reutiliza.
 let modalDescartar = null;
@@ -121,6 +122,13 @@ let paginaActual = 0;
 // porque una petición cancelada termina DESPUÉS de que arranque la que la sustituye: con un
 // booleano, la que muere apagaría el "cargando" de la que sigue viva.
 let listadosEnVuelo = 0;
+
+// Y este cuenta TODAS las peticiones, no solo los listados: es el del velo de carga.
+// Son dos contadores a propósito y no hay que unificarlos: listadosEnVuelo marca el aria-busy
+// de la tabla, así que solo puede contar lo que de verdad la deja a medias; peticionesActivas
+// tapa la pantalla entera, así que cuenta también las de los desplegables y las de los paneles.
+// Con uno solo, rellenar un desplegable dejaría la tabla anunciada como ocupada sin serlo.
+let peticionesActivas = 0;
 
 // Temporizador que borra el aviso de la zona de estado pasado un rato.
 let temporizadorAviso = null;
@@ -220,6 +228,8 @@ async function pedirJson(canal, url) {
     const controlador = new AbortController();
     peticionesEnVuelo[canal] = controlador;
 
+    mostrarCarga();
+
     try {
         const respuesta = await fetch(url, { signal: controlador.signal });
 
@@ -236,6 +246,7 @@ async function pedirJson(canal, url) {
         return await respuesta.json();
     } finally {
         cerrarCanal(canal, controlador);
+        ocultarCarga();
     }
 }
 
@@ -2117,6 +2128,27 @@ contenedorBuscador.addEventListener("focusout", () => {
         contenedorBuscador.classList.remove("expandido");
     }
 });
+
+// --- Pantalla de carga ---
+
+/** Suma una petición en vuelo y destapa el velo si es la primera. */
+function mostrarCarga() {
+    peticionesActivas++;
+    if (pantallaCarga) {
+        pantallaCarga.classList.remove("d-none");
+    }
+}
+
+/** Resta una petición y tapa el velo cuando ya no queda ninguna. */
+function ocultarCarga() {
+    peticionesActivas--;
+    if (peticionesActivas <= 0) {
+        peticionesActivas = 0; // Prevenir números negativos
+        if (pantallaCarga) {
+            pantallaCarga.classList.add("d-none");
+        }
+    }
+}
 
 // --- Carga inicial ---
 //

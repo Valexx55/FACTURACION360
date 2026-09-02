@@ -434,3 +434,31 @@ footer {
         margin-left: 0;
     }
 }
+
+/* ==========================================
+   PANTALLA DE CARGA
+   ========================================== */
+.pantalla-carga {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(255, 255, 255, 0.7); /* Fondo blanco semitransparente */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Asegura que quede por encima de modales y navbars */
+}
+
+/* Forzar la ocultación cuando tenga la clase d-none */
+.pantalla-carga.d-none {
+    display: none !important;
+}
+
+/* Ajusta el tamaño de tu GIF aquí */
+.spinner-carga {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+}

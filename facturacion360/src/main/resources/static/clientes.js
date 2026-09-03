@@ -11,9 +11,17 @@
  * - Eliminar
  */
 
+
 // ============================================================
 // CONFIGURACIÓN
 // ============================================================
+
+
+// --- Gestión de la Pantalla de Carga ---
+const pantallaCarga = document.getElementById("pantalla-carga");
+let peticionesActivas = 0;
+
+// Rutas relativas: el HTML lo sirve el propio Spring Boot, mismo origen (sin CORS).
 
 const API_LISTAR_PAGINA = "/cliente/listar-pagina";
 const API_PROVINCIAS = "/cliente/provincias";
@@ -122,15 +130,23 @@ async function pedirJson(canal, url) {
 
     peticionesEnVuelo[canal] = controlador;
 
-    const respuesta = await fetch(url, {
-        signal: controlador.signal
-    });
 
-    if (!respuesta.ok) {
-        throw new Error(`El servidor respondió ${respuesta.status}`);
+    // Dibuja la imagen de espera
+    mostrarCarga();
+    
+    try {
+        const respuesta = await fetch(url, { signal: controlador.signal });
+        
+        // fetch NO lanza error con códigos 4xx/5xx: hay que comprobarlo a mano.
+        if (!respuesta.ok) {
+            throw new Error(`El servidor respondió ${respuesta.status}`);
+        }
+        return await respuesta.json();
+    } finally {
+        // Elimina la imagen de espera siempre, falle o no
+       ocultarCarga();
     }
 
-    return respuesta.json();
 }
 
 
@@ -1152,7 +1168,7 @@ document.addEventListener(
 // ============================================================
 // BOTÓN AÑADIR CLIENTE
 // ============================================================
-
+/*
 const botonAnadirCliente =
     document.querySelector(
         '[data-bs-target="#clienteModal"]'
@@ -1180,13 +1196,13 @@ if (botonAnadirCliente) {
         }
     );
 
-}
+}*/
 
 
 // ============================================================
 // BUSCADOR EXPANDIBLE
 // ============================================================
-
+/*
 const contenedorBuscador =
     document.querySelector(
         ".buscador-clientes"
@@ -1230,7 +1246,7 @@ if (contenedorBuscador) {
     );
 
 }
-
+*/
 
 // ============================================================
 // CARGA INICIAL
@@ -1242,4 +1258,89 @@ cargarProvincias();
 
 cargarPoblaciones("");
 
+
 cargarClientes(0);
+
+
+// 1. Botón VER
+document.querySelectorAll('.btn-ver').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id;
+
+    console.log('Ver cliente:', idCliente);
+    // Aquí ejecutas tu función, p. ej.: abrirModalVer(idCliente);
+  });
+});
+
+// 2. Botón EDITAR
+document.querySelectorAll('.btn-editar').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id;
+
+    console.log('Editar cliente:', idCliente);
+    // Aquí ejecutas tu función, p. ej.: abrirModalEditar(idCliente);
+  });
+});
+
+// 3. Botón ELIMINAR
+document.querySelectorAll('.btn-eliminar').forEach(boton => {
+  boton.addEventListener('click', (e) => {
+    const idCliente = e.currentTarget.dataset.id;
+
+    if (confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
+      console.log('Eliminar cliente:', idCliente);
+      // Aquí ejecutas tu llamada API o función: eliminarCliente(idCliente);
+    }
+  });
+});
+
+// Buscamos el botón "Añadir Cliente"
+const botonAnadirCliente = document.querySelector('[data-bs-target="#clienteModal"]');
+
+botonAnadirCliente.addEventListener('click', () => {
+  console.log('Hiciste clic en Añadir Cliente');
+
+  // Limpiamos el formulario dentro del modal
+  const formularioCliente = document.querySelector('#clienteModal form');
+  if (formularioCliente) {
+    formularioCliente.reset();
+  }
+});
+
+
+// Buscador: se despliega al pulsar en él y se recoge al salir, si está vacío.
+const contenedorBuscador = document.querySelector('.buscador-clientes');
+
+document.addEventListener('click', (evento) => {
+    // Verificamos si el clic ocurrió DENTRO del contenedor del buscador
+    if (contenedorBuscador.contains(evento.target)) {
+        // Expandimos y ponemos el cursor dentro
+        contenedorBuscador.classList.add('expandido');
+        inputBuscador.focus();
+    } else {
+        // Si hizo clic FUERA, verificamos si el input está vacío antes de cerrarlo
+        if (inputBuscador.value.trim() === '') {
+            contenedorBuscador.classList.remove('expandido');
+        }
+    }
+});
+
+
+
+function mostrarCarga() {
+    peticionesActivas++;
+    if (pantallaCarga) {
+        pantallaCarga.classList.remove("d-none");
+    }
+}
+
+function ocultarCarga() {
+    peticionesActivas--;
+    if (peticionesActivas <= 0) {
+        peticionesActivas = 0; // Prevenir números negativos
+        if (pantallaCarga) {
+            pantallaCarga.classList.add("d-none");
+        }
+    }
+}
+

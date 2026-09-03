@@ -200,10 +200,15 @@ Navegador ←──── JSON ─── PaginaClienteResponse ←(Mapper)─ Cl
 > simple, pero **el camino bueno es `listar-pagina`**: hace lo mismo y además admite búsqueda,
 > filtros y ordenación, y devuelve los metadatos de paginación.
 >
-> **Obsoleto no es lo mismo que roto**: sigue funcionando, con sus dos pruebas, y no se borra
-> porque lo consume `cors/inicio.js`. Lo que se ha añadido es `deprecated = true` en su
-> `@Operation`, para que Swagger lo pinte tachado: hasta ahora, quien lo encontrara ahí no
-> tenía ninguna forma de saber que no era el camino a seguir.
+> **Obsoleto no es lo mismo que roto**: sigue funcionando y con sus dos pruebas. Se mantiene
+> porque es el endpoint con el que se montó el listado y sirve de ejemplo del caso simple —el
+> que solo trae N filas, sin criterios ni metadatos—, y porque borrarlo sería romper el
+> contrato a cualquiera que ya lo estuviera llamando. Lo que se ha añadido es
+> `deprecated = true` en su `@Operation`, para que Swagger lo pinte tachado: hasta ahora,
+> quien lo encontrara ahí no tenía ninguna forma de saber que no era el camino a seguir.
+>
+> Hasta hace poco lo consumía además `cors/inicio.js`, la demostración de CORS y JSONP del
+> profesor. Esa demo ya no está en el proyecto, así que **hoy no lo llama nadie**.
 
 1. **`ClienteRepositoryJdbcImpl.findUltimos(limite)`** — ejecuta con `JdbcTemplate`:
    ```sql

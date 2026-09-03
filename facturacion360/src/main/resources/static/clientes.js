@@ -1967,11 +1967,20 @@ function formularioAlta() {
 function abrirAlta() {
     // Pulsar dos veces no puede dejar dos formularios: el segundo se llevaría el sufijo de los
     // id del primero y los <label for> apuntarían al que no es.
-    const abierta = formularioAlta();
-    if (abierta) {
-        abierta.elements.nombre.focus();
+    //
+    // Se pregunta por el ESTADO y no por si el formulario está en el documento, y esa es la
+    // diferencia que importa: al cerrar, la fila se queda 250 ms plegándose, así que hay una
+    // ventana en la que el formulario sigue ahí pero el alta ya no está abierta. Mirando el
+    // documento, ese caso se confundía con "ya hay una abierta", el botón llevaba el foco a un
+    // formulario que estaba desapareciendo y el usuario se quedaba sin nada.
+    if (altaAbierta) {
+        formularioAlta()?.elements.nombre.focus();
         return;
     }
+
+    // Y si quedaba una plegándose, se retira YA: dos filas de alta a la vez repetirían los id
+    // de los campos durante ese cuarto de segundo.
+    retirarFilaAlta();
 
     altaAbierta = { borrador: null };
     insertarFilaAlta(null, { animar: true, enfocar: true });
@@ -2030,11 +2039,32 @@ function cerrarAlta({ devolverElFoco = true } = {}) {
     if (!fila) return;
 
     fila.classList.remove("abierto");
-    setTimeout(() => fila.remove(), DURACION_PLEGADO_MS);
+
+    // El identificador se guarda en la propia fila para poder cancelarlo: si se vuelve a pulsar
+    // "Añadir Cliente" antes de que termine el plegado, hay que retirarla en ese momento y no
+    // dejar que el temporizador la borre después, cuando ya habría otra en su sitio. Es lo
+    // mismo que hace obtenerPanel con el panel de una fila.
+    fila.dataset.temporizadorCierre = setTimeout(() => fila.remove(), DURACION_PLEGADO_MS);
 
     if (devolverElFoco) {
         btnAnadirCliente.focus();
     }
+}
+
+/**
+ * Retira del documento la fila del alta que estuviera plegándose, cancelando su borrado
+ * programado.
+ *
+ * Sin cancelar el temporizador no basta con quitarla: el que quedó pendiente se dispararía
+ * 250 ms después sobre un nodo que ya no está, y aunque eso no da error, deja el código
+ * dependiendo de que ese remove() no encuentre nada.
+ */
+function retirarFilaAlta() {
+    const fila = filaAlta();
+    if (!fila) return;
+
+    clearTimeout(Number(fila.dataset.temporizadorCierre));
+    fila.remove();
 }
 
 /**

@@ -123,10 +123,21 @@ public class ClienteServiceImpl implements ClienteService {
 
 	@Override
 	public Cliente obtenerPorId(int id) {
-		// TODO Auto-generated method stub
-		return null;
-	}
 
+	    log.info("Buscando cliente con ID {}", id);
+
+	    return clienteRepository.findById(id)
+	            .orElseThrow(() -> {
+
+	                log.warn("No existe ningún cliente con ID {}", id);
+
+	                return new ResponseStatusException(
+	                        HttpStatus.NOT_FOUND,
+	                        "No existe ningún cliente con ID " + id
+	                );
+	            });
+	}
+	
 	/**
 	 * Crea un cliente delegando la persistencia en el repositorio.
 	 *
@@ -148,34 +159,56 @@ public class ClienteServiceImpl implements ClienteService {
 	@Override
 	public Cliente actualizar(int id, Cliente cliente) {
 
-		// Creamos un nuevo objeto Cliente con el id recibido en la URL
-		Cliente clienteActualizado = new Cliente(id, cliente.nombre(), cliente.nifCif(), cliente.direccion(),
-				cliente.codigoPostal(), cliente.poblacion(), cliente.provincia(), cliente.telefono(), cliente.email(),
-				cliente.fechaAlta());
+	    obtenerPorId(id);
 
-		// Llamamos al repositorio para actualizar el cliente en la base de datos
-		boolean updateOK = clienteRepository.update(clienteActualizado);
+	    Cliente clienteActualizado = new Cliente(
+	            id,
+	            cliente.nombre(),
+	            cliente.nifCif(),
+	            cliente.direccion(),
+	            cliente.codigoPostal(),
+	            cliente.poblacion(),
+	            cliente.provincia(),
+	            cliente.telefono(),
+	            cliente.email(),
+	            cliente.fechaAlta()
+	    );
 
-		if (!updateOK) {
-			clienteActualizado = null;
-		}
+	    boolean actualizado = clienteRepository.update(clienteActualizado);
 
-		// Devolvemos el cliente actualizado
-		return clienteActualizado;
+	    if (!actualizado) {
+	        throw new ResponseStatusException(
+	                HttpStatus.INTERNAL_SERVER_ERROR,
+	                "No se pudo actualizar el cliente."
+	        );
+	    }
+
+	    log.info("Cliente {} actualizado correctamente.", id);
+
+	    return clienteActualizado;
 	}
 	
 	
 	@Override
 	public void eliminar(int id) {
 
+	    log.info("Intentando eliminar el cliente con ID {}", id);
 
-		boolean borrado = this.clienteRepository.deleteById(id);
-		if (!borrado) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Error, No se encontró el cliente");
-		}
+	    boolean eliminado = clienteRepository.deleteById(id);
 
+	    if (!eliminado) {
+
+	        log.error("No se pudo eliminar el cliente con ID {}", id);
+
+	        throw new ResponseStatusException(
+	                HttpStatus.INTERNAL_SERVER_ERROR,
+	                "No se pudo eliminar el cliente."
+	        );
+	    }
+
+	    log.info("Cliente {} eliminado correctamente.", id);
 	}
-
+	
 	// TODO: valorar la programación del método privado validarCifUnico mirar el
 	// Diagrama de Clases
 }

@@ -1,18 +1,27 @@
-# Clientes — Listar últimos
+# Clientes — Listado, buscador, filtros y ordenación
 
-Muestra en la tabla de `clientes.html` **los últimos clientes**
-dados de alta, pidiéndolos al backend por `fetch`.
+Muestra en la tabla de `clientes.html` **los clientes** dados de alta, con **buscador**,
+**filtros** por provincia y población y **ordenación**, pidiéndolos al backend por `fetch`.
 Está hecha con **JDBC Template + MySQL**,
 siguiendo la arquitectura por capas que subió Val a `master`.
 
 ## Qué hace
 
-- **Listar paginado**: `GET /cliente/listar-pagina?pagina=0&tamano=10` → devuelve una **página**
-  de clientes (los más recientes primero) + metadatos de paginación, como JSON.
+- **Listar paginado, buscar, filtrar y ordenar** — todo en el mismo endpoint:
+  `GET /cliente/listar-pagina?pagina=0&tamano=10&busqueda=&provincia=&poblacion=&ordenarPor=&direccion=`
+  → devuelve una **página** de clientes + metadatos de paginación, como JSON.
+- **Desplegables de filtro**: `GET /cliente/provincias` y `GET /cliente/poblaciones?provincia=`
+  → las provincias y poblaciones que existen en la tabla, para rellenarlos.
 - **Listar últimos** (endpoint del profe, se mantiene): `GET /cliente/listar-ultimos` → los **10
   más recientes** en una lista simple.
-- **Frontend**: `clientes.js` pide una página y pinta la tabla; los botones **"Más recientes" /
-  "Más antiguos"** permiten moverse entre páginas.
+- **Frontend**: `clientes.js` pide una página y pinta la tabla; arriba hay una barra con el
+  buscador, los dos desplegables y el control de orden, y debajo los botones
+  **"Anterior" / "Siguiente"** para moverse entre páginas.
+
+**¿Por qué buscar NO tiene endpoint propio?** Porque buscar es "listar con un filtro de texto
+más". Si `/cliente/buscar` fuera aparte, habría que darle su propia paginación, sus propios
+metadatos y su propio manejo de errores —y el frontend tendría dos caminos distintos según
+hubiera texto escrito o no—. Compartiendo endpoint, la búsqueda hereda todo eso gratis.
 
 ## Arquitectura por capas
 
@@ -61,8 +70,7 @@ Navegador ←──────── JSON ─── ClienteResponse ←(Mapper)
    service, mapea a `ClienteResponse`, **loguea** el resultado y lo devuelve. Va envuelto en
    `try/catch (DataAccessException)`: si la BD falla, lo registra en el log y devuelve `500`.
 6. **`clientes.js`** — pide una página, y por cada cliente clona el `<template>` de la tabla
-   rellenándolo con `textContent` (seguro frente a `<`/`&`). El **buscador** de arriba se ve pero
-   **aún no funciona** (su lógica es de otro compañero).
+   rellenándolo con `textContent` (seguro frente a `<`/`&`).
 
 ### Paginación (de N en N)
 
@@ -71,15 +79,239 @@ Además de `listar-ultimos`, añadimos un **endpoint nuevo** `GET /cliente/lista
 páginas de 10: página 0 → `OFFSET 0`, página 1 → `OFFSET 10`… (`offset = pagina * tamano`); el
 troceado lo hace MySQL. Las piezas:
 
-- **Repositorio**: `findPagina(tamano, offset)` (`... ORDER BY idcliente DESC LIMIT ? OFFSET ?`) y
-  `contarTotal()` (`SELECT COUNT(*)` con `queryForObject`, que devuelve un único valor).
+- **Repositorio**: `findPagina(tamano, offset, busqueda, provincia, poblacion, ordenarPor, direccion)`
+  (`... WHERE ... ORDER BY ... LIMIT ? OFFSET ?`) y `contarTotal(busqueda, provincia, poblacion)`
+  (`SELECT COUNT(*)` con `queryForObject`, que devuelve un único valor).
 - **DTO `PaginaClienteResponse`**: la lista de la página + metadatos (`paginaActual`, `totalPaginas`,
   `totalElementos`, `hayAnterior`, `haySiguiente`) para que el frontend sepa dónde está.
-- **Service `listarPagina(pagina, tamano)`**: calcula `offset`, el total de páginas con
+- **Service `listarPagina(...)`**: calcula `offset`, el total de páginas con
   `Math.ceil((double) total / tamano)`, los flags `hayAnterior/haySiguiente`, y mapea a `ClienteResponse`.
 - **Controller `listarPagina`**: mismo patrón (validación, logs, `try/catch`); devuelve el `PaginaClienteResponse`.
-- **`clientes.js`**: guarda la `paginaActual`, pide `/cliente/listar-pagina?pagina=&tamano=10`, pinta
-  `datos.contenido` y **activa/desactiva** los botones "Más recientes"/"Más antiguos" según los flags.
+- **`clientes.js`**: guarda la `paginaActual`, pide `/cliente/listar-pagina?...`, pinta
+  `datos.contenido` y **activa/desactiva** los botones "Anterior"/"Siguiente" según los flags.
+
+> **Ojo con el `offset`**: se calcula como `(long) pagina * tamano`, con el `(long)` en el **primer**
+> operando. Si se multiplicara en `int` y se ampliara después, una página muy alta (`?pagina=30000000`)
+> **desbordaría** el `int` antes de convertirse, daría un offset **negativo** y MySQL fallaría con un
+> error de sintaxis. Un `500` que cualquiera puede provocar desde la barra de direcciones.
+
+### Buscador, filtros y ordenación
+
+Los tres se resuelven en la **misma consulta**: se monta un `WHERE` con lo que llegue informado y
+se le pega el `ORDER BY` y el `LIMIT/OFFSET`.
+
+#### Un solo constructor de `WHERE` (`anadirFiltros`)
+
+`findPagina` (las filas) y `contarTotal` (cuántas hay) llaman **al mismo método**. Es importante:
+si cada uno montara su propio `WHERE`, bastaría con que alguien tocara uno y se olvidara del otro
+para que el número de páginas dejara de cuadrar con lo que se ve en pantalla.
+
+Las condiciones se van metiendo en una lista y al final se unen con `AND`. Así no hay que ir
+preguntando en cada `if` "¿soy la primera, pongo `WHERE` o `AND`?".
+
+#### Búsqueda: los comodines de `LIKE` hay que escaparlos
+
+La búsqueda usa `LIKE` con comodines alrededor del término:
+
+```sql
+WHERE (nombre LIKE ? ESCAPE '\' OR nif_cif LIKE ? ESCAPE '\')
+```
+
+- **Los paréntesis del `OR` son obligatorios**: sin ellos, los `AND` de los filtros solo se
+  aplicarían a la parte del `nif_cif`, porque `AND` tiene **prioridad** sobre `OR`.
+- **`%` y `_` son metacaracteres de `LIKE`** (`%` = "cualquier cosa", `_` = "un carácter
+  cualquiera"). Si el término del usuario se mete tal cual, buscar `%` produce el patrón `%%%`,
+  que casa con **TODAS** las filas: el buscador deja de filtrar y devuelve la tabla entera. Por eso
+  `escaparComodines()` los neutraliza antes de envolver el término. **No es inyección SQL** (el
+  valor sigue viajando como `?`), pero sí una forma de saltarse el filtro.
+- **El orden de escapado importa**: la barra invertida va **primero**. Si se escapara la última,
+  volvería a escapar las barras que acabamos de introducir para `%` y `_`.
+- **Sin `LOWER()`**: la tabla es `utf8mb4_0900_ai_ci`, y ese `ai_ci` significa *accent insensitive,
+  case insensitive*: ya compara ignorando mayúsculas **y** acentos, así que `garcia` encuentra
+  `García`. Envolver la columna en `LOWER()` no cambiaría el resultado y además la volvería
+  **no-sargable** (con una función encima, ningún índice puede usarse).
+
+#### Ordenación: por qué hace falta una lista blanca
+
+El `ORDER BY` **no admite `?`**. No es un capricho: un `?` es un *valor*, y el nombre de una
+columna es *parte de la instrucción*. Así que, o se traduce, o habría que concatenar el texto del
+usuario dentro del SQL — y eso **sí** sería inyección SQL de manual.
+
+La solución son dos parámetros y dos traducciones:
+
+```java
+ordenarPor  →  se busca como CLAVE en el mapa COLUMNAS_ORDEN → nombre real de columna
+direccion   →  "asc".equalsIgnoreCase(direccion) ? "ASC" : "DESC"
+```
+
+Fíjate en que el texto del usuario **nunca se concatena**: solo se usa como clave de búsqueda. Si
+pide una columna que no está en el mapa (o intenta colar `nombre; DROP TABLE clientes`), no se
+encuentra y cae en el valor por defecto. La dirección solo puede acabar valiendo `ASC` o `DESC`.
+
+Ventaja de tenerlo en dos parámetros en vez de un único string tipo `nombre_az`: **permitir ordenar
+por una columna más es añadir una línea al mapa**, y funciona en ambos sentidos automáticamente.
+Con el string opaco harían falta dos valores nuevos por cada columna.
+
+El `ORDER BY` que sale es:
+
+```sql
+ORDER BY fecha_alta IS NULL, fecha_alta DESC, idcliente DESC
+```
+
+- **`columna IS NULL` primero**: `fecha_alta` admite `NULL`, y MySQL coloca los nulos al principio
+  en `ASC` y al final en `DESC`. Sin esto, los clientes sin fecha **saltarían de un extremo al otro**
+  de la lista al invertir el orden. Con esto quedan siempre al final.
+- **`idcliente` de desempate**: sin él, dos clientes con la misma fecha (o el mismo nombre) pueden
+  salir en orden distinto en cada consulta y, al paginar, verse **repetidos** en una página y
+  **desaparecer** de la siguiente.
+
+**La ordenación se aplica sobre lo ya filtrado sin trabajo extra**: en SQL el `ORDER BY` se evalúa
+*después* del `WHERE`. Si filtras por Madrid y ordenas alfabéticamente, ordena los de Madrid.
+
+#### La página y el total, en la misma transacción
+
+`listarPagina` hace **dos** consultas: una trae las filas de la página y otra cuenta el total para
+saber cuántas páginas hay. Si cada una va por su cuenta y alguien da de alta o borra un cliente
+justo entre las dos, verían estados distintos de la tabla: el total diría "12 clientes" mientras se
+muestran 10 filas, y la paginación no cuadraría.
+
+Por eso el método lleva:
+
+```java
+@Transactional(readOnly = true)
+```
+
+Con la transacción abierta, MySQL (InnoDB, aislamiento `REPEATABLE READ`) sirve **las dos consultas
+desde la misma foto** de la tabla. El `readOnly = true` avisa además al driver de que no vamos a
+escribir, con lo que puede optimizar.
+
+**Los demás métodos de lectura NO la llevan, y es intencionado**: `listarUltimos`,
+`listarProvincias` y `listarPoblaciones` hacen **una sola** consulta, así que no hay dos lecturas
+que puedan discrepar entre sí y una transacción solo añadiría un `BEGIN`/`COMMIT` sin ganar nada.
+Anotar por costumbre allí donde no hace falta es ruido.
+
+#### Los criterios viajan juntos: el record `CriteriosCliente`
+
+Los siete datos que definen una consulta (`pagina`, `tamano`, `busqueda`, `provincia`, `poblacion`,
+`ordenarPor`, `direccion`) **no se pasan sueltos**, sino agrupados en un `record`.
+
+El motivo: esa firma de siete parámetros aparecía en **cinco sitios** (controller, interfaz e
+implementación del service, e interfaz e implementación del repository). Añadir un filtro nuevo
+obligaba a tocar los cinco y a no equivocarse de orden en ninguno. Con el record se añade un
+componente y ya está. Es el *code smell* clásico de "lista larga de parámetros".
+
+Spring lo rellena solo desde la URL con `@ModelAttribute`, emparejando cada parámetro con el
+componente que se llama igual:
+
+```java
+@GetMapping("/listar-pagina")
+public ResponseEntity<PaginaClienteResponse> listarPagina(
+        @Valid @ModelAttribute CriteriosCliente criterios) { ... }
+```
+
+**Toda la normalización vive en su constructor compacto**, y eso es lo importante: antes estaba
+repartida —el acotado de la página en el controller, la limpieza del término en el service—, así que
+había dos sitios donde se decidía qué es un valor válido. Ahora hay uno solo, y da igual si el
+record lo construye Spring desde la URL o alguien a mano.
+
+```java
+public CriteriosCliente {
+    pagina = (pagina == null || pagina < 0) ? 0 : pagina;
+    tamano = (tamano == null || tamano <= 0) ? TAMANO_DEFECTO : Math.min(TAMANO_MAX, tamano);
+    busqueda = normalizar(busqueda);   // "" y "   " -> null
+    ...
+}
+```
+
+**¿Por qué `Integer` y no `int` en `pagina` y `tamano`?** Es la parte menos evidente y conviene no
+tocarla sin saber por qué está. Cuando un parámetro **no viene en la URL**, Spring intenta enlazar
+`null` — y `null` no se puede convertir a un primitivo. Con `int` la aplicación respondía `400` a
+**todas** las peticiones, incluidas las correctas:
+
+```
+Failed to convert value of type 'null' to required type 'int'
+```
+
+Con `Integer`, el `null` llega sin problema y es el constructor compacto quien decide el valor por
+defecto. A partir de ahí ya nunca son `null`, así que se usan como si fueran `int`.
+
+> Detalle a recordar: esto **compilaba perfectamente**. Solo se ve arrancando la aplicación y
+> haciendo una petición. Que un refactor compile no significa que funcione.
+
+#### Frontend: un único estado
+
+`clientes.js` guarda **un solo objeto** `{ busqueda, provincia, poblacion, ordenarPor, direccion }`.
+Es lo que impide que los controles se contradigan: se puede cambiar el orden desde el selector de
+la barra **o** pulsando las cabeceras "Nombre" y "Alta" de la tabla, y como los dos caminos escriben
+en el mismo sitio y luego se repinta todo desde ahí, no pueden acabar mostrando cosas distintas.
+
+- **Al cambiar cualquier criterio se vuelve a la página 0.** Si estás en la página 7 y filtras por
+  una provincia con 12 clientes, esa página ya no existe y verías una tabla vacía sin saber por qué.
+- **Debounce de 300 ms** en el buscador: se reinicia un temporizador en cada tecla y solo se consulta
+  cuando el usuario para de escribir. Sin él, teclear "garcia" lanzaría 6 consultas a la BD.
+- **`AbortController`**: el debounce reduce las peticiones, pero no evita que **dos respuestas se
+  crucen**. Si escribes "gar", sale la petición, sigues hasta "garcia" y la respuesta de "gar" llega
+  la última, pintaría la tabla con resultados que no son los del texto del buscador. El helper
+  `pedirJson(canal, url)` cancela la petición anterior **del mismo canal** antes de lanzar la nueva.
+  Se usan canales separados (`listado`, `provincias`, `poblaciones`) porque al cambiar de provincia
+  se piden a la vez las poblaciones y el listado: con un único controlador compartido, cada una
+  abortaría a la otra.
+- **Cascada de desplegables**: al elegir provincia se recargan sus poblaciones y se limpia la que
+  hubiera elegida (si no, quedaría un filtro "Valencia + Madrid" que no devuelve nada).
+- **Columna "Alta"** en la tabla: ordenar por fecha de alta sin ver la fecha no hay forma de
+  comprobarlo.
+
+### Cómo está documentada esta parte (Javadoc)
+
+Los contratos se documentan **en las interfaces**, `ClienteRepository` y `ClienteService`, con
+`@param`, `@return` y `@throws`. Las implementaciones no repiten ese Javadoc: duplicarlo obliga a
+mantener dos textos que acaban diciendo cosas distintas. Lo que sí llevan las implementaciones son
+comentarios `//` que explican **cómo** y **por qué** se hace algo, no **qué** hace.
+
+Se documenta también `@throws DataAccessException`, porque forma parte real del contrato: el
+controller la captura para responder un `500` en vez de dejar escapar el error.
+
+#### Las etiquetas `@author` y `@autor`
+
+Conviven dos, y no es una errata:
+
+| Etiqueta | Dónde | Por qué |
+|---|---|---|
+| `@author` | Clases y records | Es la estándar de Javadoc |
+| `@autor` | Métodos sueltos | La estándar **no se admite** en métodos |
+
+El `@author` estándar solo vale en *overview*, *package* y *class/interface*. Ponerlo sobre un
+método no es que se ignore: con doclint activo **falla la generación** del Javadoc. Para poder
+firmar métodos concretos se declara una etiqueta propia en el `pom.xml`:
+
+```xml
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-javadoc-plugin</artifactId>
+    <configuration>
+        <tags>
+            <tag>
+                <name>autor</name>
+                <placement>tm</placement>
+                <head>Autor:</head>
+            </tag>
+        </tags>
+    </configuration>
+</plugin>
+```
+
+`placement` indica dónde vale la etiqueta: `t` tipos, `m` métodos, `f` campos, `c` constructores,
+`p` paquetes, `a` todas. Con `tm` se admite en clases y en métodos.
+
+> **Importante:** esa configuración y las etiquetas `@autor` van juntas. Si se quita del `pom.xml`,
+> javadoc pasa a considerarlas desconocidas y la generación falla. Para retirarla hay que borrar
+> antes las etiquetas del código.
+
+Generar la documentación:
+
+```bash
+./mvnw javadoc:javadoc      # sale en target/reports/apidocs/index.html
+```
 
 ### Refresco automático tras cambios
 
@@ -129,23 +361,46 @@ tuvimos, `bd_facturacion.sql`, se retiró porque usaba nombres antiguos.)*
    Probar los límites: `?limite=3` → 3; `?limite=500` → 100 (acotado); `?limite=0` → 1.
 4. **Paginación**: `GET http://localhost:8080/cliente/listar-pagina?pagina=0&tamano=10` → `200` con
    `contenido` + metadatos (`paginaActual`, `totalPaginas`, `hayAnterior`, `haySiguiente`).
-5. **Frontend**: abrir `http://localhost:8080/clientes.html` → la tabla se rellena y los botones
-   **"Más recientes" / "Más antiguos"** cambian de página; el texto muestra "Página X de Y".
-6. **Refresco automático**: en la consola del navegador ejecutar
-   `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → la tabla se recarga sola.
-7. **Logs y errores**: mira la consola (`GET /cliente/...`, `listarUltimos(...) -> N`); si paras
-   MySQL y repites, la respuesta es `500` y aparece un `log.error`.
+5. **Buscador**: `?busqueda=garcia` → encuentra "María López García" y "Juanita Pérez García";
+   `?busqueda=GARCIA` → lo mismo (la collation ignora mayúsculas); `?busqueda=12345678` → encuentra
+   por NIF; `?busqueda=zzzznoexiste` → `200` con `contenido: []` (**no** un 204: un 204 no lleva
+   cuerpo y rompería el `respuesta.json()` del frontend).
+6. **Comodines escapados** (la comprobación importante): `?busqueda=%25` (que es `%` codificado) y
+   `?busqueda=_` → deben devolver `contenido: []`. Si devolvieran la tabla entera, el escapado
+   estaría roto.
+7. **Filtros**: `?provincia=Madrid`; `?provincia=Madrid&poblacion=Parla`. Y los desplegables:
+   `GET /cliente/provincias`, `GET /cliente/poblaciones?provincia=Madrid` → `["Madrid","Parla"]`.
+8. **Ordenación**: `?ordenarPor=nombre&direccion=asc` → alfabético; `...&direccion=desc` → el orden
+   exactamente inverso; `?ordenarPor=fecha_alta&direccion=asc` → empieza por la fecha más antigua.
+9. **Lista blanca**: `?ordenarPor=;DROP TABLE&direccion=x` → cae al orden por defecto, **sin error**.
+10. **Offset desbordado**: `?pagina=30000000&tamano=100` → página vacía, **no** un `500`.
+11. **Frontend**: abrir `http://localhost:8080/clientes.html` → la tabla se rellena y los botones
+    **"Anterior" / "Siguiente"** cambian de página; el texto muestra "Página X de Y". Escribir en el
+    buscador filtra tras la pausa; elegir provincia recarga las poblaciones en cascada; pulsar la
+    cabecera "Nombre" ordena alfabéticamente y actualiza también el selector y el botón de la barra.
+12. **AbortController**: con la pestaña Network abierta, teclear "garcia" deprisa → las peticiones
+    intermedias aparecen como `canceled` y la tabla acaba mostrando lo que pone el input.
+13. **Refresco automático**: en la consola del navegador ejecutar
+    `document.dispatchEvent(new CustomEvent('clientes:cambiaron'))` → la tabla se recarga sola.
+14. **Logs y errores**: mira la consola (`GET /cliente/...`, `listarUltimos(...) -> N`); si paras
+    MySQL y repites, la respuesta es `500` y aparece un `log.error`.
 
 ## ⚠️ Si en la BD real la tabla o las columnas se llaman distinto
 
 Los nombres de tabla/columnas están escritos "a mano" en el SQL, así que **deben coincidir en
-2 sitios a la vez**. Si el esquema cambiara, hay que ajustar los dos:
+varios sitios a la vez**. Si el esquema cambiara, hay que ajustarlos todos:
 
-1. El `SELECT ... FROM clientes ...` de **`ClienteRepositoryJdbcImpl.findUltimos`**.
-2. Los `rs.getXxx("nombre_columna")` de **`ClienteRowMapper.mapRow`**.
+1. La constante **`COLUMNAS_CLIENTE`** de `ClienteRepositoryJdbcImpl` (la lista de columnas que
+   comparten `findPagina` y las demás consultas; por eso está extraída, para no repetirla).
+2. El `SELECT ... FROM clientes ...` de **`findUltimos`**.
+3. Las condiciones de **`anadirFiltros`** (`nombre`, `nif_cif`, `provincia`, `poblacion`) y las
+   consultas de **`findProvincias`** / **`findPoblaciones`**.
+4. El mapa **`COLUMNAS_ORDEN`**, cuyos *valores* son nombres reales de columna (las *claves* son lo
+   que manda el frontend y pueden quedarse como están).
+5. Los `rs.getXxx("nombre_columna")` de **`ClienteRowMapper.mapRow`**.
 
-Ejemplo: si la columna pasara a llamarse `id` en vez de `idcliente`, habría que ajustar el
-`SELECT idcliente`, el `ORDER BY idcliente DESC` y el `rs.getInt("idcliente")`.
+Ejemplo: si la columna pasara a llamarse `id` en vez de `idcliente`, habría que ajustar
+`COLUMNAS_CLIENTE`, el `ORDER BY ... idcliente` de `sqlOrden` y el `rs.getInt("idcliente")`.
 
 > **Nota:** al principio seguimos el `ESQUEMA ER.png` (que usa `nombre_razon_social` y `pais`),
 > pero el profe fijó como buenos los nombres **reales de la BD**: tabla `clientes`, columnas
@@ -266,6 +521,37 @@ git push -u origin Angel_listar_ultimos
 # 3. Borrar la rama vieja del remoto (solo si no hay una PR abierta sobre ella)
 git push origin --delete Angel
 ```
+
+### F. Índices de base de datos para los filtros y la ordenación (pendiente)
+
+La tabla `clientes` solo tiene `PRIMARY KEY (idcliente)` y `UNIQUE KEY (nif_cif)`. Los filtros que
+añadimos comparan por **igualdad** (`WHERE provincia = ?`, `WHERE poblacion = ?`) y la ordenación
+usa `nombre` y `fecha_alta`: **ninguna de esas cuatro columnas tiene índice**, así que MySQL recorre
+la tabla entera para resolverlas.
+
+Un índice es como el índice alfabético de un libro: permite saltar a lo que buscas sin leer todas
+las páginas. Pero solo sirve si la condición se puede "buscar por orden".
+
+**Aquí está el matiz importante**: al **buscador** un índice **no** le serviría. Usa
+`LIKE '%texto%'`, y ese `%` **inicial** significa "que contenga", no "que empiece por" — como no
+sabes por qué letra empieza, el orden alfabético no te ayuda y hay que mirar fila por fila igual.
+Por eso el índice **no** arregla la búsqueda; arregla los **filtros** y la **ordenación**, que sí
+son condiciones ordenables.
+
+```sql
+ALTER TABLE clientes ADD INDEX idx_provincia_poblacion (provincia, poblacion);
+ALTER TABLE clientes ADD INDEX idx_nombre (nombre);
+```
+
+El índice compuesto `(provincia, poblacion)` sirve para las dos combinaciones que usa el frontend:
+filtrar solo por provincia, y filtrar por provincia + población. El orden de las columnas importa:
+un índice compuesto se puede usar "de izquierda a derecha", así que `(provincia, poblacion)` vale
+para `WHERE provincia = ?` pero **no** para `WHERE poblacion = ?` a solas.
+
+**Por qué está pendiente y no hecho:** con las 7 filas actuales no se nota absolutamente nada —es
+una mejora pensada para cuando la tabla crezca—, y sobre todo **toca `backupFacturacion360.sql`,
+que es un script compartido por todo el equipo**. Conviene comentarlo con Val antes de meterlo en
+ninguna rama, para no pisar el esquema de los demás.
 
 ---
 

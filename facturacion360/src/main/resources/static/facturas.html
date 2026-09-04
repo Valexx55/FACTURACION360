@@ -3,47 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facturación 360 | Soluciones Financieras Inteligentes</title>
+    <title>Facturación 360 | Editor de Facturas</title>
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Estilos personalizados -->
     <link rel="stylesheet" href="style.css">
-    <link rel="icon" href="./img/fav.ico" type="image/png">
+    <!-- Favicon -->
+    <link rel="icon" href="./img/fav.ico" type="image/x-icon">
 </head>
 <body>
 
-<nav class="navbar">
-  <div class="container"> <a class="navbar-brand" href="index.html">
-      <img src="./img/finanzas.png" alt="Logo de Facturación 360" class="logo me-2">
-      Facturación 360
-    </a>
+    <!-- Navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container"> 
+            <a class="navbar-brand d-flex align-items-center" href="index.html">
+                <img src="./img/finanzas.png" alt="Logo" class="logo me-2" style="max-height: 30px;">
+                Facturación 360
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="perfil.html">Inicio</a>
+                <a class="nav-link" href="clientes.html">Clientes</a>
+                <a class="nav-link active" href="facturas.html">Facturas</a>
+            </div>
+        </div>
+    </nav>
 
-    <ul class="navbar-nav">
-      <li><a class="nav-link " href="index.html">Inicio</a></li>
-      <li><a class="nav-link" href="clientes.html">Clientes</a></li>
-      <li><a class="nav-link active" href="facturas.html">Facturas</a></li>
-    </ul>
+    <!-- Contenido Principal -->
+    <main class="container main-wrapper py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                
+                <!-- Barra de Acciones -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3 class="fw-bold text-primary mb-0">
+                        <i class="fas fa-file-invoice-dollar me-2"></i>Edición de Factura
+                    </h3>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-success" id="btnDescargarFactura">
+                            <i class="fas fa-download me-1"></i> Descargar PDF
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" id="btnLimpiarCampos">
+                            <i class="fas fa-eraser me-1"></i> Limpiar
+                        </button>
+                    </div>
+                </div>
 
-  </div>
-</nav>
+                <!-- ÁREA DE FACTURA EDITABLE -->
+                <div class="p-4 border border-primary rounded-3 bg-white shadow-sm" id="areaFacturaDescargable">
+                    <form id="formFacturaEditable">
+                        
+                        <!-- Cabecera de la Factura -->
+                        <div class="row mb-4 pb-3 border-bottom">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label class="form-label text-primary fw-bold mb-1">Nº Factura:</label>
+                                <input type="text" class="form-control fw-bold" id="inputNumFactura" value="FAC-2026-001">
+                                
+                                <label class="form-label text-muted fw-bold mt-2 mb-1">Nº Pedido:</label>
+                                <input type="text" class="form-control" id="inputNumPedido" value="PED-8832">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted fw-bold mb-1">Fecha de Emisión:</label>
+                                <input type="date" class="form-control mb-2" id="inputFecha" value="2026-09-02">
+                                
+                                <label class="form-label text-danger fw-bold mb-1">Fecha Vencida:</label>
+                                <input type="date" class="form-control" id="inputFechaVencida" value="2026-10-02">
+                            </div>
+                        </div>
 
-    <header class="hero">
-      
-    </header>
-
-<main class="container main-wrapper">
-    <div class="feature-card-coming-soon ">
-        <h3> <i class="fas fa-file-invoice-dollar"></i> Módulo de Facturas</h3>
-        <p>Esta sección estará disponible próximamente para gestionar tus facturas.</p>
+                       <!-- Participantes -->
+<div class="row mb-4">
+    <div class="col-md-6 mb-3 mb-md-0">
+        <h6 class="text-uppercase text-muted fw-bold mb-2"><i class="fas fa-building me-2"></i>Emisor</h6>
+        <input type="text" class="form-control fw-semibold mb-2" id="inputEmisor" value="FUNDACIÓN ONCE">
     </div>
-</main>
 
-   <footer class="bg-dark text-white py-4 mt-5">
+    <div class="col-md-6">
+        <h6 class="text-uppercase text-muted fw-bold mb-2"><i class="fas fa-user me-2"></i>Receptor (Cliente)</h6>
+        
+        <!-- Selector para cargar un cliente registrado de la base de datos -->
+        <select class="form-select mb-2 fw-semibold text-primary" id="selectCliente">
+            <option value="">-- Seleccionar cliente registrado --</option>
+            <!-- Opciones cargadas dinámicamente desde la BD -->
+        </select>
+
+        <input type="text" class="form-control mb-2" id="inputReceptorCif" placeholder="NIF/CIF">
+        <input type="text" class="form-control mb-2" id="inputReceptorDir" placeholder="Dirección">
+        <input type="text" class="form-control" id="inputReceptorPoblacion" placeholder="Población / Provincia">
+    </div>
+</div>
+
+                        <!-- Tabla de Conceptos Editable -->
+                        <div class="table-responsive mb-4">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col" class="text-center" style="width: 12%;">CANT.</th>
+                                        <th scope="col" style="width: 48%;">DESCRIPCIÓN</th>
+                                        <th scope="col" class="text-center" style="width: 20%;">PRECIO UNITARIO (€)</th>
+                                        <th scope="col" class="text-end" style="width: 20%;">IMPORTE (€)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <input type="number" class="form-control text-center" id="inputCantidad" value="1" min="1" step="1">
+                                        </td>
+                                        <td>
+                                            <textarea class="form-control" id="inputDescripcion" rows="2">Servicios de consultoría informática y desarrollo web correspondientes al mes en curso.</textarea>
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control text-end" id="inputPrecioUnitario" value="100.00" min="0" step="0.01">
+                                        </td>
+                                        <td class="text-end fw-bold align-middle fs-6" id="displayImporte">
+                                            100.00 €
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Totales -->
+                        <div class="row justify-content-end">
+                            <div class="col-md-5 col-lg-4">
+                                <div class="border-top pt-2">
+                                    <div class="d-flex justify-content-between mb-1 text-muted">
+                                        <span>Subtotal:</span>
+                                        <span id="displaySubtotal" class="fw-semibold">100.00 €</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2 text-muted">
+                                        <span>IVA (21%):</span>
+                                        <span id="displayIva" class="fw-semibold">21.00 €</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between fw-bold fs-5 text-primary border-top pt-2">
+                                        <span>TOTAL:</span>
+                                        <span id="displayTotal">121.00 €</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Pie de página -->
+    <footer class="bg-dark text-white py-4 mt-auto">
         <div class="container text-center">
-            <p>&copy; 2026 Facturación 360. Todos los derechos reservados.</p>
+            <p class="mb-0">&copy; 2026 Facturación 360. Todos los derechos reservados.</p>
         </div>
     </footer>
 
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Librería html2pdf -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- JS Principal -->
+    <script src="perfil.js"></script>
+<!-- Code injected by live-server -->
 </body>
 </html>

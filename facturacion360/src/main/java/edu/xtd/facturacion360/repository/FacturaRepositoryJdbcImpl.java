@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import edu.xtd.facturacion360.dto.ClienteFactura;
+import edu.xtd.facturacion360.dto.ConceptoFactura;
 import edu.xtd.facturacion360.dto.Factura;
 
 /**
@@ -27,6 +29,12 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 
 	@Autowired
 	FacturaRowMapper facturaRowMapper;
+
+	@Autowired
+	ClienteFacturaRowMapper clienteFacturaRowMapper;
+
+	@Autowired
+	ConceptoFacturaRowMapper conceptoFacturaRowMapper;
 
 	@Override
 	public Factura insertar(Factura factura) {
@@ -72,6 +80,40 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 
 		log.debug("buscar({}) devuelve {} facturas", busqueda, facturas.size());
 		return facturas;
+	}
+
+	@Override
+	public Factura buscarPorId(int idFactura) {
+		String sql = "SELECT " + COLUMNAS_FACTURA + " FROM facturas f "
+				+ "INNER JOIN clientes c ON f.idcliente = c.idcliente WHERE f.idfactura = ?";
+		List<Factura> facturas = jdbcTemplate.query(sql, facturaRowMapper, idFactura);
+
+		Factura factura = null;
+		if (!facturas.isEmpty()) {
+			factura = facturas.get(0);
+		}
+		return factura;
+	}
+
+	@Override
+	public ClienteFactura buscarCliente(int idCliente) {
+		String sql = "SELECT idcliente, nombre, nif_cif, direccion, codigopostal, poblacion, "
+				+ "provincia, telefono, email FROM clientes WHERE idcliente = ?";
+		List<ClienteFactura> clientes = jdbcTemplate.query(sql, clienteFacturaRowMapper, idCliente);
+
+		ClienteFactura cliente = null;
+		if (!clientes.isEmpty()) {
+			cliente = clientes.get(0);
+		}
+		return cliente;
+	}
+
+	@Override
+	public List<ConceptoFactura> buscarConceptos(int idFactura) {
+		String sql = "SELECT idconcepto, descripcion, cantidad, precio_unitario, descuento, "
+				+ "porcentaje_iva, importe_iva, base_imponible, total FROM conceptos "
+				+ "WHERE idfactura = ? ORDER BY idconcepto";
+		return jdbcTemplate.query(sql, conceptoFacturaRowMapper, idFactura);
 	}
 
 	/** Evita que los caracteres propios de LIKE cambien el significado de la búsqueda. */

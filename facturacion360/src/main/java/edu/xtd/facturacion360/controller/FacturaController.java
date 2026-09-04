@@ -9,12 +9,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import edu.xtd.facturacion360.dto.DetalleFactura;
 import edu.xtd.facturacion360.dto.Factura;
 import edu.xtd.facturacion360.dto.FacturaRequest;
 import edu.xtd.facturacion360.service.FacturaService;
@@ -56,4 +58,9 @@ public class FacturaController {
 		return respuesta;
 	}
 
+	@GetMapping("/{idFactura}/detalle")
+	public ResponseEntity<DetalleFactura> obtenerDetalle(@PathVariable int idFactura) {
+		DetalleFactura detalle = facturaService.obtenerDetalle(idFactura);
+		return ResponseEntity.ok(detalle);
+	}
 }

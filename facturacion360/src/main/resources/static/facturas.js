@@ -38,7 +38,7 @@ function mostrarFacturas(facturas) {
     if (facturas.length == 0) {
         const fila = document.createElement("tr");
         const celda = document.createElement("td");
-        celda.colSpan = 7;
+        celda.colSpan = 8;
         celda.className = "text-center text-muted py-4";
         celda.textContent = "No se han encontrado facturas.";
         fila.appendChild(celda);
@@ -53,9 +53,29 @@ function mostrarFacturas(facturas) {
             agregarCelda(fila, formatearImporte(factura.subtotal), "text-end");
             agregarCelda(fila, formatearImporte(factura.importeIva), "text-end");
             agregarCelda(fila, formatearImporte(factura.total), "text-end fw-bold");
+            agregarAccionVisor(fila, factura.idFactura);
             tablaFacturas.appendChild(fila);
         }
     }
+}
+
+/** Añade a la fila el botón que abre la factura preparada para imprimir. */
+function agregarAccionVisor(fila, idFactura) {
+    const celda = document.createElement("td");
+    celda.className = "text-end";
+
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "btn btn-sm btn-outline-primary";
+    boton.title = "Ver e imprimir factura";
+    boton.setAttribute("aria-label", "Ver e imprimir factura");
+    boton.textContent = "Ver / PDF";
+    boton.addEventListener("click", function () {
+        window.open("factura-imprimir.html?idFactura=" + idFactura, "_blank");
+    });
+
+    celda.appendChild(boton);
+    fila.appendChild(celda);
 }
 
 /** Añade una celda de texto a una fila. */

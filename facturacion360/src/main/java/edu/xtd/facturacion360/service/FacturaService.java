@@ -2,6 +2,7 @@ package edu.xtd.facturacion360.service;
 
 import java.util.List;
 
+import edu.xtd.facturacion360.dto.DetalleFactura;
 import edu.xtd.facturacion360.dto.Factura;
 import edu.xtd.facturacion360.dto.FacturaRequest;
 
@@ -14,4 +15,5 @@ public interface FacturaService {
 
 	public List<Factura> buscar(String busqueda);
 
+	public DetalleFactura obtenerDetalle(int idFactura);
 }

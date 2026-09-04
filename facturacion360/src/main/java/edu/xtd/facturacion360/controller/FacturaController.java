@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import edu.xtd.facturacion360.dto.Factura;
 import edu.xtd.facturacion360.dto.FacturaRequest;
+import edu.xtd.facturacion360.dto.ResumenTrimestralFactura;
 import edu.xtd.facturacion360.service.FacturaService;
 import jakarta.validation.Valid;
 
@@ -54,6 +55,14 @@ public class FacturaController {
 		List<Factura> facturas = facturaService.buscar(busqueda);
 		ResponseEntity<List<Factura>> respuesta = ResponseEntity.ok(facturas);
 		return respuesta;
+	}
+
+	@GetMapping("/trimestral")
+	public ResponseEntity<ResumenTrimestralFactura> listarTrimestre(
+			@RequestParam int anio,
+			@RequestParam int trimestre) {
+		ResumenTrimestralFactura resumen = facturaService.listarTrimestre(anio, trimestre);
+		return ResponseEntity.ok(resumen);
 	}
 
 }

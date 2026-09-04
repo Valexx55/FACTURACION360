@@ -1,0 +1,83 @@
+package edu.xtd.facturacion360.repository;
+
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import edu.xtd.facturacion360.dto.Factura;
+
+/**
+ * Acceso a la tabla facturas mediante JdbcTemplate.
+ */
+@Repository
+public class FacturaRepositoryJdbcImpl implements FacturaRepository {
+
+	private static final Logger log = LoggerFactory.getLogger(FacturaRepositoryJdbcImpl.class);
+
+	private static final String COLUMNAS_FACTURA = "f.idfactura, f.idcliente, c.nombre AS nombre_cliente, "
+			+ "f.num_factura, f.fecha_emision, f.estado, f.observaciones, "
+			+ "f.subtotal, f.importe_iva, f.total";
+
+	@Autowired
+	JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	FacturaRowMapper facturaRowMapper;
+
+	@Override
+	public Factura insertar(Factura factura) {
+		String sqlInsertar = "INSERT INTO facturas "
+				+ "(idcliente, num_factura, fecha_emision, estado, observaciones, subtotal, importe_iva, total, "
+				+ "fecha_creacion, fecha_actualizacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+
+		int filasInsertadas = jdbcTemplate.update(sqlInsertar,
+				factura.idCliente(),
+				factura.numeroFactura(),
+				factura.fechaEmision(),
+				factura.estado(),
+				factura.observaciones(),
+				factura.subtotal(),
+				factura.importeIva(),
+				factura.total());
+
+		Factura facturaInsertada = null;
+		if (filasInsertadas == 1) {
+			String sqlBuscar = "SELECT " + COLUMNAS_FACTURA + " FROM facturas f "
+					+ "INNER JOIN clientes c ON f.idcliente = c.idcliente WHERE f.num_factura = ?";
+			facturaInsertada = jdbcTemplate.queryForObject(sqlBuscar, facturaRowMapper, factura.numeroFactura());
+		}
+
+		return facturaInsertada;
+	}
+
+	@Override
+	public List<Factura> buscar(String busqueda) {
+		String sql = "SELECT " + COLUMNAS_FACTURA + " FROM facturas f "
+				+ "INNER JOIN clientes c ON f.idcliente = c.idcliente";
+		List<Factura> facturas;
+
+		if (busqueda == null || busqueda.isBlank()) {
+			sql = sql + " ORDER BY f.fecha_emision DESC, f.idfactura DESC";
+			facturas = jdbcTemplate.query(sql, facturaRowMapper);
+		} else {
+			sql = sql + " WHERE f.num_factura LIKE ? ESCAPE '\\\\' OR c.nombre LIKE ? ESCAPE '\\\\' "
+					+ "ORDER BY f.fecha_emision DESC, f.idfactura DESC";
+			String textoBuscado = "%" + escaparComodines(busqueda.trim()) + "%";
+			facturas = jdbcTemplate.query(sql, facturaRowMapper, textoBuscado, textoBuscado);
+		}
+
+		log.debug("buscar({}) devuelve {} facturas", busqueda, facturas.size());
+		return facturas;
+	}
+
+	/** Evita que los caracteres propios de LIKE cambien el significado de la búsqueda. */
+	private String escaparComodines(String texto) {
+		return texto.replace("\\", "\\\\")
+				.replace("%", "\\%")
+				.replace("_", "\\_");
+	}
+}

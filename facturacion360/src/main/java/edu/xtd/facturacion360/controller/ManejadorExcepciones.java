@@ -13,7 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Esta clase se encarga de manejar las excepciones que se pueden producir
- * cuando trabajamos con los clientes.
+ * cuando trabajamos con los clientes y las facturas.
  *
  * En vez de repetir los bloques try/catch en cada método del controlador,
  * aquí indicamos qué respuesta HTTP se devuelve para cada tipo de error.
@@ -24,21 +24,21 @@ public class ManejadorExcepciones {
 	private static final Logger log = LoggerFactory.getLogger(ManejadorExcepciones.class);
 
 	/**
-	 * Gestiona el error que se produce cuando intentamos guardar un cliente con un
-	 * NIF/CIF que ya existe.
+	 * Gestiona el error que se produce cuando intentamos guardar un dato que ya
+	 * existe.
 	 *
-	 * @param excepcion excepción producida por tener un NIF/CIF duplicado
-	 * @return respuesta 409 indicando que el cliente ya existe
+	 * @param excepcion excepción producida por tener un dato duplicado
+	 * @return respuesta 409 indicando que el registro ya existe
 	 */
 	@ExceptionHandler(DuplicateKeyException.class)
-	public ResponseEntity<String> gestionarNifDuplicado(DuplicateKeyException excepcion) {
-		log.error("Ya existe un cliente con el mismo NIF/CIF", excepcion);
-		return ResponseEntity.status(HttpStatus.CONFLICT).body("Ya existe un cliente con ese NIF/CIF");
+	public ResponseEntity<String> gestionarDatoDuplicado(DuplicateKeyException excepcion) {
+		log.error("Se ha intentado guardar un dato que ya existe", excepcion);
+		return ResponseEntity.status(HttpStatus.CONFLICT).body("Ya existe un registro con ese dato");
 	}
 
 	/**
 	 * Gestiona el error que se produce cuando no se puede borrar un cliente porque
-	 * tiene otros datos relacionados, por ejemplo facturas.
+	 * tiene otros datos relacionados.
 	 *
 	 * @param excepcion excepción producida por la relación entre los datos
 	 * @return respuesta 409 indicando que no se puede realizar la operación
@@ -47,7 +47,7 @@ public class ManejadorExcepciones {
 	public ResponseEntity<String> gestionarIntegridadDatos(DataIntegrityViolationException excepcion) {
 		log.error("La operación incumple una relación de la base de datos", excepcion);
 		return ResponseEntity.status(HttpStatus.CONFLICT)
-				.body("No se puede realizar la operación porque el cliente tiene datos relacionados");
+				.body("No se puede realizar la operación porque hay datos relacionados");
 	}
 
 	/**

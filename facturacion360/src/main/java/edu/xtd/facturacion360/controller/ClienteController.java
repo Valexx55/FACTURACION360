@@ -1,19 +1,16 @@
 package edu.xtd.facturacion360.controller;
 
-import java.sql.SQLIntegrityConstraintViolationException;
-
-// Aqui hay exceso de codigo, pero funciona
 
 import java.util.List;
+import java.sql.SQLIntegrityConstraintViolationException;
 import edu.xtd.facturacion360.dto.ApiResponseDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.TransactionException;
 import org.springframework.validation.BindingResult;
@@ -46,7 +43,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.Hidden;
-import edu.xtd.facturacion360.dto.ApiResponseDto;
+
 /**
  * 
  * 
@@ -98,28 +95,17 @@ public class ClienteController {
 	public ResponseEntity<List<ClienteResponse>> listarUltimos(
 			@Parameter(description = "Número de clientes listados.", example = "10") @RequestParam(defaultValue = "10") int limite) {
 
-		// Declaramos la respuesta al inicio y hacemos UN solo return al final: así la
-		// rellenamos en el try (éxito) o en el catch (error) según cómo vaya la
-		// operación.
-		ResponseEntity<List<ClienteResponse>> respuestaHttp = null;
-
 		// 0) Validación: acotamos el valor pedido a [1, 100] para no saturar la BD
 		// (si no mandan 'limite', llega 10 por el defaultValue).
 		int limiteSeguro = Math.max(LIMITE_MIN, Math.min(LIMITE_MAX, limite));
 		log.info("GET /cliente/listar-ultimos?limite={} (acotado a {})", limite, limiteSeguro);
 
-		try {
-			List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
+		List<Cliente> ultimos = clienteService.listarUltimos(limiteSeguro);
 
-			List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
+		List<ClienteResponse> respuesta = ultimos.stream().map(clienteMapper::toResponse).toList();
 
-			log.info("listar-ultimos devuelve {} clientes", respuesta.size());
-			respuestaHttp = ResponseEntity.ok(respuesta);
-		} catch (DataAccessException e) {
-
-			log.error("Error al listar los ultimos clientes", e);
-			respuestaHttp = ResponseEntity.internalServerError().build();
-		}
+		log.info("listar-ultimos devuelve {} clientes", respuesta.size());
+		ResponseEntity<List<ClienteResponse>> respuestaHttp = ResponseEntity.ok(respuesta);
 
 		return respuestaHttp;
 	}
@@ -280,12 +266,14 @@ public class ClienteController {
 	        @Parameter(description = "Identificador del cliente", example = "1")
 	        @PathVariable int id) {
 
+
 	    log.info("Petición DELETE recibida para eliminar el cliente con ID {}", id);
 
 	    try {
 
 	        // Delegamos la lógica de negocio al Service
 	        clienteService.eliminar(id);
+
 
 	        log.info("Cliente con ID {} eliminado correctamente.", id);
 
@@ -359,6 +347,8 @@ public class ClienteController {
 
 		return respuesta;
 	}
+
+
 
 
 }

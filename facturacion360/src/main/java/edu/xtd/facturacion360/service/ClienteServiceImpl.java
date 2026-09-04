@@ -150,7 +150,7 @@ public class ClienteServiceImpl implements ClienteService {
 
 		clienteNuevo = clienteRepository.insert(cliente);
 		if (clienteNuevo == null) {
-			throw new RuntimeException("Error al insertar cliente " + cliente);
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error al insertar el cliente");
 		}
 
 		return clienteNuevo;
@@ -193,8 +193,6 @@ public class ClienteServiceImpl implements ClienteService {
 	public void eliminar(int id) {
 
 	    log.info("Intentando eliminar el cliente con ID {}", id);
-
-	    obtenerPorId(id);
 
 	    boolean eliminado = clienteRepository.deleteById(id);
 

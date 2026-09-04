@@ -1,12 +1,15 @@
 package edu.xtd.facturacion360.controller;
 
-import java.util.List;
 
+import java.util.List;
+import java.sql.SQLIntegrityConstraintViolationException;
+import edu.xtd.facturacion360.dto.ApiResponseDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.TransactionException;
@@ -23,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import edu.xtd.facturacion360.dto.Cliente;
 import edu.xtd.facturacion360.dto.ClienteMapper;
@@ -230,44 +234,92 @@ public class ClienteController {
 	}
 
 	/**
-	 * Crea un cliente a partir de los datos recibidos. ClienteResponse contiene los
-	 * datos que se devuelven en la respuesta HTTP.
+	 * Elimina un cliente identificado por su ID.
 	 *
-	 * @Valid indica que se debe validar el objeto recibido según las anotaciones de
-	 *        validación definidas en la clase ClienteRequest.
-	 * @RequestBody indica que el objeto ClienteRequest se debe obtener del cuerpo
-	 *              de la petición HTTP. ClienteRequest contiene los datos recibidos
-	 *              en la petición HTTP. BindingResult contiene el resultado de la
-	 *              validación, incluyendo errores si los hubiera.
+	 * Si el cliente existe y no tiene restricciones de integridad (por ejemplo,
+	 * facturas asociadas), se elimina correctamente y se devuelve un HTTP 200.
 	 *
-	 *              Devuelve 201 si se crea el cliente, 400 si hay errores de
-	 *              validación y 500 si no se consigue guardar.
+	 * Si el cliente no existe se devuelve un HTTP 404.
+	 *
+	 * Si el cliente tiene registros asociados que impiden su eliminación,
+	 * se devuelve un HTTP 409 (Conflict).
+	 *
+	 * Si ocurre cualquier otro error inesperado,
+	 * se devuelve un HTTP 500.
+	 *
+	 * @param id identificador del cliente a eliminar.
+	 * @return respuesta HTTP con el resultado de la operación.
 	 */
-	@Operation(summary = "Crea un cliente", description = "Registra un cliente a partir de los datos recibidos")
-	@ApiResponses({ @ApiResponse(responseCode = "201", description = "Cliente creado correctamente"),
-			@ApiResponse(responseCode = "400", description = "Datos de entrada no válidos"),
-			@ApiResponse(responseCode = "409", description = "Ya existe un cliente con ese NIF/CIF"),
-			@ApiResponse(responseCode = "500", description = "Error interno al crear el cliente") })
-	@PostMapping
-	public ResponseEntity<ClienteResponse> crear(@Valid @RequestBody ClienteRequest clienteRequest,
-			BindingResult bindingResult) {
-		ResponseEntity<ClienteResponse> respuesta;
-		ClienteResponse clienteResponse = null;
+	@Operation(
+	        summary = "Elimina un cliente",
+	        description = "Elimina el cliente identificado por su ID."
+	)
+	@ApiResponses({
+	        @ApiResponse(responseCode = "200", description = "Cliente eliminado correctamente"),
+	        @ApiResponse(responseCode = "404", description = "Cliente no encontrado"),
+	        @ApiResponse(responseCode = "409", description = "El cliente tiene facturas asociadas"),
+	        @ApiResponse(responseCode = "500", description = "Error interno del servidor")
+	})
+	
+	@DeleteMapping("/{id}")
+	public ResponseEntity<ApiResponseDto> eliminar(
+	        @Parameter(description = "Identificador del cliente", example = "1")
+	        @PathVariable int id) {
 
-		if (bindingResult.hasErrors()) {
-			log.error("Cliente recibido con errores");
-			respuesta = ResponseEntity.badRequest().build();
-		} else {
-			log.debug("Cliente sin errores de validación");
-			Cliente cliente = clienteMapper.toDomain(clienteRequest);
-			Cliente clienteNuevo = clienteService.crear(cliente);
 
-			log.debug("Cliente creado correctamente " + clienteNuevo);
-			clienteResponse = clienteMapper.toResponse(clienteNuevo);
-			respuesta = ResponseEntity.status(HttpStatus.CREATED).body(clienteResponse);
-		}
+	    log.info("Petición DELETE recibida para eliminar el cliente con ID {}", id);
 
-		return respuesta;
+	    try {
+
+	        // Delegamos la lógica de negocio al Service
+	        clienteService.eliminar(id);
+
+
+	        log.info("Cliente con ID {} eliminado correctamente.", id);
+
+	        return ResponseEntity.ok(
+	                new ApiResponseDto(
+	                        true,
+	                        "Cliente eliminado correctamente"
+	                )
+	        );
+
+	    } catch (DataIntegrityViolationException e) {
+
+	        log.error("No se puede eliminar el cliente {} porque tiene datos relacionados.", id, e);
+
+	        return ResponseEntity.status(HttpStatus.CONFLICT)
+	                .body(
+	                        new ApiResponseDto(
+	                                false,
+	                                "No se puede eliminar el cliente porque tiene facturas asociadas."
+	                        )
+	                );
+
+	    } catch (ResponseStatusException e) {
+
+	        log.warn("No existe el cliente con ID {}.", id);
+
+	        return ResponseEntity.status(e.getStatusCode())
+	                .body(
+	                        new ApiResponseDto(
+	                                false,
+	                                e.getReason()
+	                        )
+	                );
+
+	    } catch (Exception e) {
+
+	        log.error("Error inesperado eliminando el cliente {}.", id, e);
+
+	        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+	                .body(
+	                        new ApiResponseDto(
+	                                false,
+	                                "No se pudo eliminar el cliente."
+	                        )
+	                );
+	    }
 	}
 
 	@PutMapping("/{id}")
@@ -296,26 +348,7 @@ public class ClienteController {
 		return respuesta;
 	}
 
-	@Operation(summary = "Elimina un cliente", description = "Elimina el cliente identificado por su ID")
-	@ApiResponse(responseCode = "200", description = "Cliente eliminado correctamente")
-	@DeleteMapping("/{id}")
-	public ResponseEntity<Void> eliminar(
-			@Parameter(description = "Identificador del cliente", example = "1") @PathVariable int id) {
-		ResponseEntity<Void> respuesta = null;
-		this.clienteService.eliminar(id);
-		respuesta = ResponseEntity.ok(null);
 
-		return respuesta;
 
-		/**
-		 * Endpoint para manejar las peticiones HTTP DELETE (ej: DELETE /clientes/5). Se
-		 * encarga de solicitar el borrado. Si ocurre una excepción, la clase
-		 * ManejadorExcepciones la traduce al código HTTP correspondiente.
-		 *
-		 * @param id El ID que viene en la URL de la petición.
-		 * @return Una respuesta HTTP (ResponseEntity) indicando el éxito o el tipo de
-		 *         error.
-		 */
-	}
 
 }

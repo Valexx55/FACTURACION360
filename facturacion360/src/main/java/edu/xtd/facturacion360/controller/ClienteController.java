@@ -165,6 +165,7 @@ public class ClienteController {
 		return respuestaHttp;
 	}
 
+
 	/**
 	 * Devuelve las provincias distintas que existen en la tabla, para rellenar el
 	 * desplegable de filtro del frontend. Ejemplo de uso:
@@ -270,6 +271,7 @@ public class ClienteController {
 	    log.info("Petición DELETE recibida para eliminar el cliente con ID {}", id);
 
 	    try {
+
 
 	        // Delegamos la lógica de negocio al Service
 	        clienteService.eliminar(id);

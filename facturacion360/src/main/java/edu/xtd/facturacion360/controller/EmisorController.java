@@ -14,7 +14,7 @@ import edu.xtd.facturacion360.service.EmisorService;
 @RequestMapping("/emisor")
 public class EmisorController {
 
-	 EmisorService emisorService;
+	EmisorService emisorService;
 
     public EmisorController(EmisorService emisorService) {
         this.emisorService = emisorService;

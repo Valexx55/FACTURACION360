@@ -13,6 +13,7 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -288,10 +289,30 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 
 	@Override
 	public Optional<Cliente> findById(int id) {
-		// TODO Auto-generated method stub
-		return Optional.empty();
-	}
 
+	    final String sql = """
+	        SELECT *
+	        FROM clientes
+	        WHERE idcliente = ?
+	        """;
+
+	    try {
+
+	        Cliente cliente = jdbcTemplate.queryForObject(
+	                sql,
+	                clienteRowMapper,
+	                id
+	        );
+
+	        return Optional.ofNullable(cliente);
+
+	    } catch (EmptyResultDataAccessException e) {
+
+	        return Optional.empty();
+
+	    }
+	}
+	
 	/**
 	 * Inserta un cliente en base de datos.
 	 * @throws SQLException 

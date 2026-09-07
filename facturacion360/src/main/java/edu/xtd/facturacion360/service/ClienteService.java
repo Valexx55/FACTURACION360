@@ -1,6 +1,16 @@
 package edu.xtd.facturacion360.service;
 
 import java.util.List;
+<<<<<<< HEAD
+
+import org.springframework.dao.DataAccessException;
+
+import edu.xtd.facturacion360.dto.Cliente;
+import edu.xtd.facturacion360.dto.CriteriosCliente;
+import edu.xtd.facturacion360.dto.PaginaClienteResponse;
+import edu.xtd.facturacion360.repository.ClienteRepository;
+=======
+>>>>>>> origin/master
 
 import org.springframework.dao.DataAccessException;
 
@@ -9,14 +19,16 @@ import edu.xtd.facturacion360.dto.CriteriosCliente;
 import edu.xtd.facturacion360.dto.PaginaClienteResponse;
 import edu.xtd.facturacion360.repository.ClienteRepository;
 
-
 /**
- * Definimos las operaciones que se pueden realizar con Clientes
- * en nuestra app
+ * Define las operaciones de negocio disponibles para la gestión de clientes.
+ *
+ * El Service actúa como intermediario entre el Controller y el Repository,
+ * aplicando la lógica de negocio necesaria antes de acceder a la base de datos.
  */
 public interface ClienteService {
 
 	/**
+<<<<<<< HEAD
 	 * Los últimos clientes dados de alta (los de id más alto primero). Listado simple, sin
 	 * búsqueda ni filtros: para eso está {@link #listarPagina(CriteriosCliente)}.
 	 *
@@ -26,10 +38,18 @@ public interface ClienteService {
 	 * @autor AngelDanielC0des
 	 * @see #listarPagina(CriteriosCliente)
 	 * @see ClienteRepository#findUltimos(int)
+=======
+	 * Devuelve los últimos clientes dados de alta.
+	 *
+	 * @param limite número máximo de clientes a devolver.
+	 * @return lista de clientes.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+>>>>>>> origin/master
 	 */
-	public List<Cliente> listarUltimos(int limite);
+	List<Cliente> listarUltimos(int limite);
 
 	/**
+<<<<<<< HEAD
 	 * Una página de clientes junto con sus metadatos de paginación, aplicando la búsqueda,
 	 * los filtros y la ordenación pedidos.
 	 *
@@ -80,17 +100,71 @@ public interface ClienteService {
 	public List<String> listarPoblaciones(String provincia);
 
 	public Cliente obtenerPorId(int id);
+=======
+	 * Devuelve una página de clientes aplicando búsqueda, filtros y ordenación.
+	 *
+	 * @param criterios criterios de búsqueda y paginación.
+	 * @return página de clientes con metadatos.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	PaginaClienteResponse listarPagina(CriteriosCliente criterios);
+>>>>>>> origin/master
 
 	/**
-	 * Crea un cliente nuevo en el sistema.
+	 * Obtiene todas las provincias disponibles.
 	 *
-	 * @param cliente datos del cliente que se va a crear
-	 * @return true si el cliente se crea correctamente; false en caso contrario
+	 * @return lista de provincias.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
 	 */
-	public Cliente crear(Cliente cliente);
+	List<String> listarProvincias();
 
-	public Cliente actualizar(int id, Cliente cliente);
+	/**
+	 * Obtiene todas las poblaciones de una provincia.
+	 *
+	 * @param provincia provincia de la que se desean obtener las poblaciones.
+	 * @return lista de poblaciones.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	List<String> listarPoblaciones(String provincia);
 
-	public void eliminar(int id);
+	/**
+	 * Obtiene un cliente por su identificador.
+	 *
+	 * @param id identificador del cliente.
+	 * @return cliente encontrado.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	Cliente obtenerPorId(int id);
+
+	/**
+	 * Crea un nuevo cliente.
+	 *
+	 * @param cliente cliente a crear.
+	 * @return cliente creado.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	Cliente crear(Cliente cliente);
+
+	/**
+	 * Actualiza un cliente existente.
+	 *
+	 * @param id identificador del cliente.
+	 * @param cliente datos actualizados.
+	 * @return cliente actualizado.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	Cliente actualizar(int id, Cliente cliente);
+
+	/**
+	 * Elimina un cliente por su identificador.
+	 *
+	 * Antes de eliminarlo, la implementación comprobará que el cliente exista.
+	 * Si no existe, lanzará la excepción correspondiente para que el Controller
+	 * pueda devolver un HTTP 404.
+	 *
+	 * @param id identificador del cliente.
+	 * @throws DataAccessException si ocurre un error al acceder a la base de datos.
+	 */
+	void eliminar(int id);
 
 }

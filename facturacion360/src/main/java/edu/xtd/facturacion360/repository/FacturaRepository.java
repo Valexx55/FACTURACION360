@@ -1,5 +1,6 @@
 package edu.xtd.facturacion360.repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import edu.xtd.facturacion360.dto.ClienteFactura;
@@ -20,4 +21,7 @@ public interface FacturaRepository {
 	public ClienteFactura buscarCliente(int idCliente);
 
 	public List<ConceptoFactura> buscarConceptos(int idFactura);
+
+	public List<Factura> buscarPorTrimestre(LocalDate fechaInicio, LocalDate fechaFin);
+
 }

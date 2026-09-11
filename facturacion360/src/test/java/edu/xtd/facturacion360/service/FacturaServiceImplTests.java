@@ -2,6 +2,7 @@ package edu.xtd.facturacion360.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -58,6 +59,11 @@ class FacturaServiceImplTests {
 
 		@Override
 		public List<ConceptoFactura> buscarConceptos(int idFactura) {
+			return List.of();
+		}
+
+		@Override
+		public List<Factura> buscarPorTrimestre(LocalDate fechaInicio, LocalDate fechaFin) {
 			return List.of();
 		}
 	}

@@ -539,13 +539,7 @@
 
             <div class="modal-header">
 
-                <h5
-                    class="modal-title"
-                    id="clienteModalLabel">
-
-                    Gestionar Cliente
-
-                </h5>
+                <h5 class="modal-title" id="clienteModalLabel">Gestionar Cliente</h5>
 
 
                 <button
@@ -565,80 +559,42 @@
 
                     <div class="mb-3">
 
-                        <label
-                            for="nombreCliente"
-                            class="form-label">
-
-                            Nombre o Empresa
-
-                        </label>
+                        <label for="nombreCliente" class="form-label"> Nombre o Empresa*</label>
 
 
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="nombreCliente"
-                            required>
-
+                        <input placeholder="Empresa S.L" type="text" class="form-control" id="nombreCliente" required>
+						
                     </div>
 
 
                     <div class="mb-3">
 
                         <label
-                            for="cifCliente"
-                            class="form-label">
-
-                            CIF
-
-                        </label>
-
-
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="cifCliente"
-                            required>
-
+                            for="cifCliente" class="form-label"> CIF/DNI*</label>
+                        <input type="text" class="form-control" id="cifCliente" placeholder="00000000D" maxlength="8" required>
                     </div>
 
 
                     <div class="mb-3">
 
-                        <label
-                            for="emailCliente"
-                            class="form-label">
+                        <label for="emailCliente" class="form-label" placeholder="correo@dominio.es"> Email*</label>
+                        <input type="email" class="form-control" id="emailCliente" placeholder="correo@dominio.es" autocomplete="email"  maxlength="50" required>
 
-                            Email
-
-                        </label>
-
-
-                        <input
-                            type="email"
-                            class="form-control"
-                            id="emailCliente"
-                            required>
-
-                    </div>
+						   <div class="invalid-feedback">
+						       Introduce un correo electrónico válido.
+						   </div>
+                    
+					   </div>
+					
 
 
                     <div class="mb-3">
 
-                        <label
-                            for="telefonoCliente"
-                            class="form-label">
-
-                            Teléfono
-
-                        </label>
+                        <label for="telefonoCliente" class="form-label"> Teléfono*</label>
 
 
                         <input
-                            type="tel"
-                            class="form-control"
-                            id="telefonoCliente"
-                            required>
+                            type="tel" class="form-control" id="telefonoCliente" placeholder="666 66 66 66" required>
 
                     </div>
 

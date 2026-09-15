@@ -70,49 +70,345 @@
         </div>
     </main>
  
-    <!-- MODAL: EDITAR / MODIFICAR INFORMACIÓN -->
-    <div class="modal fade" id="modalEditarEmisor" tabindex="-1" aria-labelledby="modalEditarEmisorLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalEditarEmisorLabel"><i class="fas fa-edit me-2"></i>Editar Datos de la Empresa</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form id="formEditarEmisor">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="inputNombre" class="form-label font-weight-bold">Nombre o Razón Social*</label>
-                            <input type="text" class="form-control" id="inputNombre" placeholder="Empresa S.L.U" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="inputCif" class="form-label">NIF / CIF*</label>
-                            <input type="text" class="form-control" id="inputCif" placeholder="Z00000000" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="inputDireccion" class="form-label">Dirección Fiscal*</label>
-                            <input type="text" class="form-control" id="inputDireccion" placeholder="Calle Mayor 15, 28015, Madrid" required>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="inputEmail" class="form-label">Correo Electrónico*</label>
-                                <input type="email" class="form-control" id="inputEmail" placeholder="email@dominio.es"  required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="inputTelefono" class="form-label">Teléfono*</label>
-                                <input type="tel" class="form-control" id="inputTelefono"  placeholder="600000000" required>
-                            </div>
-                        </div>
-						Los Campos marcados con un * Son Obligatorios
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary" onclick="actualizarEmisor(event)">Guardar Cambios</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-   
+
+		<!-- MODAL: EDITAR / MODIFICAR INFORMACIÓN -->
+	<div class="modal fade" id="modalEditarEmisor" tabindex="-1"
+	     aria-labelledby="modalEditarEmisorLabel" aria-hidden="true">
+
+	    <div class="modal-dialog modal-dialog-centered">
+	        <div class="modal-content">
+
+	            <div class="modal-header">
+	                <h5 class="modal-title" id="modalEditarEmisorLabel">
+	                    <i class="fas fa-edit me-2"></i>Editar Datos de la Empresa
+	                </h5>
+
+	                <button type="button" class="btn-close"
+	                        data-bs-dismiss="modal" aria-label="Close"></button>
+	            </div>
+
+	            <form id="formEditarEmisor" novalidate>
+
+	                <div class="modal-body">
+
+	                    <!-- Nombre -->
+	                    <div class="mb-3">
+	                        <label for="inputNombre" class="form-label fw-bold">
+	                            Nombre o Razón Social*
+	                        </label>
+
+	                        <input type="text"
+	                               class="form-control"
+	                               id="inputNombre"
+	                               placeholder="Empresa S.L.U"
+	                               minlength="2"
+	                               maxlength="150"
+	                               required>
+
+	                        <div class="invalid-feedback">
+	                            Introduce el nombre o razón social.
+	                        </div>
+	                    </div>
+
+	                    <!-- CIF -->
+	                    <div class="mb-3">
+	                        <label for="inputCif" class="form-label">
+	                            NIF / CIF*
+	                        </label>
+
+	                        <input type="text"
+	                               class="form-control"
+	                               id="inputCif"
+	                               placeholder="B12345678"
+	                               maxlength="9"
+	                               required>
+
+	                        <div class="invalid-feedback">
+	                            Introduce un NIF/CIF válido.
+	                        </div>
+	                    </div>
+
+	                    <!-- Dirección -->
+	                    <div class="mb-3">
+	                        <label for="inputDireccion" class="form-label">
+	                            Dirección Fiscal*
+	                        </label>
+
+	                        <input type="text"
+	                               class="form-control"
+	                               id="inputDireccion"
+	                               placeholder="Calle Mayor 15, 28015, Madrid"
+	                               minlength="5"
+	                               maxlength="250"
+	                               required>
+
+	                        <div class="invalid-feedback">
+	                            Introduce una dirección fiscal válida.
+	                        </div>
+	                    </div>
+
+	                    <div class="row">
+
+	                        <!-- Email -->
+	                        <div class="col-md-6 mb-3">
+	                            <label for="inputEmail" class="form-label">
+	                                Correo Electrónico*
+	                            </label>
+
+	                            <input type="email"
+	                                   class="form-control"
+	                                   id="inputEmail"
+	                                   placeholder="email@dominio.es"
+	                                   maxlength="150"
+	                                   required>
+
+	                            <div class="invalid-feedback">
+	                                Introduce un correo electrónico válido.
+	                            </div>
+	                        </div>
+
+	                        <!-- Teléfono -->
+	                        <div class="col-md-6 mb-3">
+	                            <label for="inputTelefono" class="form-label">
+	                                Teléfono*
+	                            </label>
+
+	                            <input type="tel"
+	                                   class="form-control"
+	                                   id="inputTelefono"
+	                                   placeholder="600000000"
+	                                   maxlength="15"
+	                                   required>
+
+	                            <div class="invalid-feedback">
+	                                Introduce un teléfono válido.
+	                            </div>
+	                        </div>
+
+	                    </div>
+
+	                    <small class="text-muted">
+	                        Los campos marcados con un * son obligatorios.
+	                    </small>
+
+	                </div>
+
+	                <div class="modal-footer">
+
+	                    <button type="button"
+	                            class="btn btn-secondary"
+	                            data-bs-dismiss="modal">
+	                        Cancelar
+	                    </button>
+
+	                    <button type="submit"
+	                            class="btn btn-primary">
+	                        Guardar Cambios
+	                    </button>
+
+	                </div>
+
+	            </form>
+	        </div>
+	    </div>
+	</div>
+
+ <!-- Codigo JS Para Añadir validacion al formulario Emisor y Dar feedback al usuario   -->
+	<script>
+
+	document.addEventListener("DOMContentLoaded", function () {
+
+	    const formulario = document.getElementById("formEditarEmisor");
+
+	    const nombre = document.getElementById("inputNombre");
+	    const cif = document.getElementById("inputCif");
+	    const direccion = document.getElementById("inputDireccion");
+	    const email = document.getElementById("inputEmail");
+	    const telefono = document.getElementById("inputTelefono");
+
+
+	    // =====================================================
+	    // VALIDAR NIF / CIF ESPAÑOL
+	    // =====================================================
+
+	    function validarNifCif(valor) {
+
+	        valor = valor.toUpperCase().trim();
+
+	        // NIF
+	        const nifRegex = /^[0-9]{8}[A-Z]$/;
+
+	        // CIF
+	        const cifRegex = /^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/;
+
+	        if (!nifRegex.test(valor) && !cifRegex.test(valor)) {
+	            return false;
+	        }
+
+	        // Validación básica del NIF
+	        if (nifRegex.test(valor)) {
+
+	            const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
+	            const numero = parseInt(valor.substring(0, 8), 10);
+	            const letra = valor.charAt(8);
+
+	            return letras[numero % 23] === letra;
+	        }
+
+	        // CIF: validación de estructura
+	        return true;
+	    }
+
+
+	    // =====================================================
+	    // VALIDAR TELÉFONO
+	    // =====================================================
+
+	    function validarTelefono(valor) {
+
+	        // Permite números españoles con o sin +34
+	        const telefonoRegex = /^(?:\+34\s?)?[6789]\d{8}$/;
+
+	        return telefonoRegex.test(valor.replace(/\s/g, ""));
+	    }
+
+
+	    // =====================================================
+	    // VALIDACIÓN AL ENVIAR
+	    // =====================================================
+
+	    formulario.addEventListener("submit", function (event) {
+
+	        event.preventDefault();
+	        event.stopPropagation();
+
+	        let formularioValido = true;
+
+
+	        // Limpiar estados anteriores
+	        document.querySelectorAll("#formEditarEmisor .form-control")
+	            .forEach(function (campo) {
+	                campo.classList.remove("is-valid", "is-invalid");
+	            });
+
+
+	        // ---------------------------------------------
+	        // NOMBRE
+	        // ---------------------------------------------
+
+	        if (nombre.value.trim().length < 2) {
+
+	            nombre.classList.add("is-invalid");
+	            formularioValido = false;
+
+	        } else {
+
+	            nombre.classList.add("is-valid");
+	        }
+
+
+	        // ---------------------------------------------
+	        // CIF / NIF
+	        // ---------------------------------------------
+
+	        cif.value = cif.value.toUpperCase().trim();
+
+	        if (!validarNifCif(cif.value)) {
+
+	            cif.classList.add("is-invalid");
+	            formularioValido = false;
+
+	        } else {
+
+	            cif.classList.add("is-valid");
+	        }
+
+
+	        // ---------------------------------------------
+	        // DIRECCIÓN
+	        // ---------------------------------------------
+
+	        if (direccion.value.trim().length < 5) {
+
+	            direccion.classList.add("is-invalid");
+	            formularioValido = false;
+
+	        } else {
+
+	            direccion.classList.add("is-valid");
+	        }
+
+
+	        // ---------------------------------------------
+	        // EMAIL
+	        // ---------------------------------------------
+
+	        const emailRegex =
+	            /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+	        if (!emailRegex.test(email.value.trim())) {
+
+	            email.classList.add("is-invalid");
+	            formularioValido = false;
+
+	        } else {
+
+	            email.classList.add("is-valid");
+	        }
+
+
+	        // ---------------------------------------------
+	        // TELÉFONO
+	        // ---------------------------------------------
+
+	        if (!validarTelefono(telefono.value.trim())) {
+
+	            telefono.classList.add("is-invalid");
+	            formularioValido = false;
+
+	        } else {
+
+	            telefono.classList.add("is-valid");
+	        }
+
+
+	        // ---------------------------------------------
+	        // SI TODO ES CORRECTO
+	        // ---------------------------------------------
+
+	        if (formularioValido) {
+
+	            // Aquí llamamos a tu función
+	            actualizarEmisor(event);
+
+	        }
+
+	    });
+
+
+	    // =====================================================
+	    // VALIDACIÓN EN TIEMPO REAL
+	    // =====================================================
+
+	    [nombre, cif, direccion, email, telefono].forEach(function (campo) {
+
+	        campo.addEventListener("input", function () {
+
+	            campo.classList.remove("is-invalid", "is-valid");
+
+	        });
+
+	    });
+
+
+	    // Convertir CIF a mayúsculas
+	    cif.addEventListener("input", function () {
+	        this.value = this.value.toUpperCase();
+	    });
+
+	});
+
+	</script>
  
     <!-- Pie de página -->
     <footer class="bg-dark text-white py-4">

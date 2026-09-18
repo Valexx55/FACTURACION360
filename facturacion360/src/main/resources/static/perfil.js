@@ -1,313 +1,541 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
 
-    cargarEmisor();
+    const formEditarEmisor = document.getElementById("formEditarEmisor");
+    const inputFoto = document.getElementById("inputFoto");
+    const logoPreview = document.getElementById("logoPreview");
 
-    const formulario = document.getElementById('formEditarEmisor');
+    const displayNombre = document.getElementById("displayNombre");
+    const displayCif = document.getElementById("displayCif");
+    const displayDireccion = document.getElementById("displayDireccion");
+    const displayEmail = document.getElementById("displayEmail");
+    const displayTelefono = document.getElementById("displayTelefono");
 
-    if (formulario) {
-        formulario.addEventListener('submit', actualizarEmisor);
+    const inputNombre = document.getElementById("inputNombre");
+    const inputCif = document.getElementById("inputCif");
+    const inputDireccion = document.getElementById("inputDireccion");
+    const inputEmail = document.getElementById("inputEmail");
+    const inputTelefono = document.getElementById("inputTelefono");
+
+    const avisoEmisor = document.getElementById("aviso-emisor");
+    const anuncios = document.getElementById("anuncios");
+
+
+    /*
+     * URL base del recurso del emisor.
+     */
+    const EMISOR_URL = "/emisor";
+
+
+    /*
+     * Carga los datos actuales del emisor.
+     */
+    async function cargarEmisor() {
+
+        try {
+
+            const response = await fetch(EMISOR_URL, {
+                method: "GET"
+            });
+
+            if (!response.ok) {
+                throw new Error("No se han podido obtener los datos del emisor.");
+            }
+
+            const emisor = await response.json();
+
+            mostrarEmisor(emisor);
+
+        } catch (error) {
+
+            console.error("Error cargando el emisor:", error);
+
+            mostrarAviso(
+                "No se han podido cargar los datos del emisor.",
+                true
+            );
+        }
     }
 
-});
 
+    /*
+     * Muestra los datos del emisor en la página
+     * y los coloca también en el formulario de edición.
+     */
+    function mostrarEmisor(emisor) {
 
-/**
- * Carga los datos actuales del emisor desde el backend.
- */
-async function cargarEmisor() {
-
-    try {
-
-        const response = await fetch('/emisor');
-
-        // Si todavía no existe ningún emisor,
-        // simplemente dejamos el formulario preparado para crear uno.
-        if (response.status === 404) {
-
-            limpiarDatosEmisor();
-
+        if (!emisor) {
             return;
         }
 
-        if (!response.ok) {
+        const nombre = emisor.nombre ?? "";
+        const cif = emisor.cif ?? "";
+        const direccion = emisor.direccion ?? "";
+        const email = emisor.email ?? "";
+        const telefono = emisor.telefono ?? "";
 
-            throw new Error(
-                'No se pudo cargar el emisor. Código HTTP: ' +
-                response.status
-            );
+        /*
+         * Datos visibles.
+         */
+        if (displayNombre) {
+            displayNombre.textContent = nombre;
         }
 
-        const emisor = await response.json();
+        if (displayCif) {
+            displayCif.textContent = cif;
+        }
 
-        mostrarEmisor(emisor);
+        if (displayDireccion) {
+            displayDireccion.textContent = direccion;
+        }
 
-    } catch (error) {
+        if (displayEmail) {
+            displayEmail.textContent = email;
+        }
 
-        console.error('Error al cargar el emisor:', error);
+        if (displayTelefono) {
+            displayTelefono.textContent = telefono;
+        }
 
-        mostrarMensaje(
-            'No se han podido cargar los datos del emisor.',
-            'danger'
-        );
+
+        /*
+         * Datos del formulario.
+         */
+        if (inputNombre) {
+            inputNombre.value = nombre;
+        }
+
+        if (inputCif) {
+            inputCif.value = cif;
+        }
+
+        if (inputDireccion) {
+            inputDireccion.value = direccion;
+        }
+
+        if (inputEmail) {
+            inputEmail.value = email;
+        }
+
+        if (inputTelefono) {
+            inputTelefono.value = telefono;
+        }
+
+
+        /*
+         * El logo se obtiene mediante el endpoint existente.
+         *
+         * Si existe, se muestra.
+         * Si no existe, se muestra el placeholder.
+         */
+        cargarLogo();
     }
-}
 
 
-/**
- * Envía los datos del formulario al backend.
- *
- * PUT /emisor
- *
- * El backend decide si debe hacer INSERT o UPDATE.
- */
-async function actualizarEmisor(event) {
+    /*
+     * Carga el logo actual del emisor.
+     */
+    function cargarLogo() {
 
-    event.preventDefault();
+        if (!logoPreview) {
+            return;
+        }
 
-    const formulario = document.getElementById('formEditarEmisor');
+        /*
+         * Se añade un timestamp para evitar que el navegador
+         * mantenga en caché una versión anterior después de
+         * cambiar el logo.
+         */
+        logoPreview.src = EMISOR_URL + "/logo?t=" + Date.now();
 
-    if (!formulario.checkValidity()) {
+        logoPreview.onerror = () => {
 
-        formulario.reportValidity();
+            logoPreview.onerror = null;
 
-        return;
+            logoPreview.src = "./img/sinfotoperfil.webp";
+        };
     }
 
-    const emisor = {
 
-        nombre: document
-            .getElementById('inputNombre')
-            .value
-            .trim(),
+    /*
+     * Previsualización de la imagen seleccionada.
+     */
+    if (inputFoto && logoPreview) {
 
-        cif: document
-            .getElementById('inputCif')
-            .value
-            .trim(),
+        inputFoto.addEventListener("change", () => {
 
-        direccion: document
-            .getElementById('inputDireccion')
-            .value
-            .trim(),
+            const archivo = inputFoto.files[0];
 
-        email: document
-            .getElementById('inputEmail')
-            .value
-            .trim(),
-
-        telefono: document
-            .getElementById('inputTelefono')
-            .value
-            .trim()
-    };
-
-
-    try {
-
-        const response = await fetch('/emisor', {
-
-            method: 'PUT',
-
-            headers: {
-                'Content-Type': 'application/json'
-            },
-
-            body: JSON.stringify(emisor)
-        });
-
-
-        if (!response.ok) {
-
-            let mensaje = 'No se han podido guardar los cambios.';
-
-            try {
-
-                const textoError = await response.text();
-
-                if (textoError) {
-                    mensaje += ' ' + textoError;
-                }
-
-            } catch (error) {
-                console.error(error);
+            if (!archivo) {
+                cargarLogo();
+                return;
             }
 
-            throw new Error(mensaje);
+
+            /*
+             * Comprobamos que sea una imagen.
+             */
+            if (!archivo.type || !archivo.type.startsWith("image/")) {
+
+                inputFoto.value = "";
+
+                mostrarAviso(
+                    "El archivo seleccionado debe ser una imagen.",
+                    true
+                );
+
+                cargarLogo();
+
+                return;
+            }
+
+
+            /*
+             * Creamos una URL temporal para mostrar
+             * la imagen antes de guardarla.
+             */
+            const urlImagen = URL.createObjectURL(archivo);
+
+            logoPreview.src = urlImagen;
+
+            logoPreview.onload = () => {
+                URL.revokeObjectURL(urlImagen);
+            };
+
+        });
+    }
+
+
+    /*
+     * Validación del formulario.
+     */
+    function validarFormulario() {
+
+        if (!formEditarEmisor) {
+            return false;
+        }
+
+        if (!formEditarEmisor.checkValidity()) {
+
+            formEditarEmisor.classList.add("was-validated");
+
+            return false;
         }
 
 
-        const texto = await response.text();
+        /*
+         * Validación de la imagen.
+         */
+        if (inputFoto && inputFoto.files.length > 0) {
 
-        if (!texto) {
-            throw new Error(
-                'El servidor no ha devuelto los datos del emisor.'
+            const archivo = inputFoto.files[0];
+
+            if (!archivo.type || !archivo.type.startsWith("image/")) {
+
+                mostrarAviso(
+                    "El archivo seleccionado debe ser una imagen.",
+                    true
+                );
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+    /*
+     * Guarda los datos del emisor.
+     */
+    async function guardarEmisor() {
+
+        if (!validarFormulario()) {
+            return;
+        }
+
+
+        /*
+         * Creamos FormData porque el endpoint admite
+         * multipart/form-data.
+         */
+        const formData = new FormData();
+
+
+        /*
+         * Datos normales del emisor.
+         *
+         * Estos nombres deben coincidir con las propiedades
+         * del objeto Emisor del backend.
+         */
+        formData.append(
+            "nombre",
+            inputNombre.value.trim()
+        );
+
+        formData.append(
+            "cif",
+            inputCif.value.trim()
+        );
+
+        formData.append(
+            "direccion",
+            inputDireccion.value.trim()
+        );
+
+        formData.append(
+            "email",
+            inputEmail.value.trim()
+        );
+
+        formData.append(
+            "telefono",
+            inputTelefono.value.trim()
+        );
+
+
+        /*
+         * Imagen.
+         *
+         * MUY IMPORTANTE:
+         * si el usuario no ha seleccionado una imagen nueva,
+         * NO añadimos "foto" al FormData.
+         *
+         * El backend se encargará de conservar el logo existente.
+         */
+        if (inputFoto && inputFoto.files.length > 0) {
+
+            const archivo = inputFoto.files[0];
+
+            formData.append("foto", archivo);
+        }
+
+
+        try {
+
+            /*
+             * Deshabilitamos el botón mientras se procesa
+             * la petición para evitar envíos duplicados.
+             */
+            const botonGuardar =
+                formEditarEmisor.querySelector(
+                    'button[type="submit"]'
+                );
+
+            if (botonGuardar) {
+                botonGuardar.disabled = true;
+            }
+
+
+            /*
+             * PUT al endpoint que admite la imagen.
+             *
+             * NO establecemos Content-Type manualmente.
+             *
+             * El navegador lo genera automáticamente incluyendo
+             * el boundary necesario para multipart/form-data.
+             */
+            const response = await fetch(
+                EMISOR_URL + "/con-imagen",
+                {
+                    method: "PUT",
+                    body: formData
+                }
             );
+
+
+            if (!response.ok) {
+
+                let mensaje = "No se han podido guardar los datos del emisor.";
+
+                try {
+
+                    const errorResponse = await response.json();
+
+                    if (errorResponse && errorResponse.message) {
+                        mensaje = errorResponse.message;
+                    }
+
+                } catch (e) {
+                    /*
+                     * La respuesta de error puede no ser JSON.
+                     */
+                }
+
+                throw new Error(mensaje);
+            }
+
+
+            /*
+             * Obtenemos el emisor actualizado.
+             */
+            const emisorActualizado = await response.json();
+
+
+            /*
+             * Actualizamos la información mostrada.
+             */
+            mostrarEmisor(emisorActualizado);
+
+
+            /*
+             * Limpiamos el selector.
+             */
+            if (inputFoto) {
+                inputFoto.value = "";
+            }
+
+
+            /*
+             * Eliminamos el estado de validación.
+             */
+            formEditarEmisor.classList.remove("was-validated");
+
+
+            /*
+             * Cerramos el modal.
+             */
+            const modalElement =
+                document.getElementById("modalEditarEmisor");
+
+            if (modalElement && typeof bootstrap !== "undefined") {
+
+                const modal =
+                    bootstrap.Modal.getInstance(modalElement);
+
+                if (modal) {
+                    modal.hide();
+                }
+            }
+
+
+            mostrarAviso(
+                "Los datos del emisor se han actualizado correctamente.",
+                false
+            );
+
+
+            anunciar(
+                "Los datos del emisor se han actualizado correctamente."
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Error actualizando el emisor:",
+                error
+            );
+
+            mostrarAviso(
+                error.message ||
+                "No se han podido actualizar los datos del emisor.",
+                true
+            );
+
+
+            anunciar(
+                "Se ha producido un error al actualizar los datos del emisor."
+            );
+
+
+        } finally {
+
+            const botonGuardar =
+                formEditarEmisor.querySelector(
+                    'button[type="submit"]'
+                );
+
+            if (botonGuardar) {
+                botonGuardar.disabled = false;
+            }
         }
-
-
-        const emisorGuardado = JSON.parse(texto);
-
-        mostrarEmisor(emisorGuardado);
-
-
-        // Cerrar el modal después de guardar correctamente.
-        const modalEl = document.getElementById('modalEditarEmisor');
-
-        const modal = bootstrap.Modal.getInstance(modalEl);
-
-        if (modal) {
-            modal.hide();
-        }
-
-
-        // Mostrar mensaje de éxito.
-        mostrarMensaje(
-            'Los datos del emisor se han guardado correctamente.',
-            'success'
-        );
-
-
-    } catch (error) {
-
-        console.error('Error al guardar el emisor:', error);
-
-        mostrarMensaje(
-            error.message ||
-            'Ha ocurrido un error al guardar los cambios.',
-            'danger'
-        );
-    }
-}
-
-
-/**
- * Pinta los datos del emisor tanto en la tarjeta
- * como en el formulario.
- */
-function mostrarEmisor(emisor) {
-
-    document.getElementById('displayNombre').textContent =
-        emisor.nombre || '';
-
-    document.getElementById('displayCif').textContent =
-        emisor.cif || '';
-
-    document.getElementById('displayDireccion').textContent =
-        emisor.direccion || '';
-
-    document.getElementById('displayEmail').textContent =
-        emisor.email || '';
-
-    document.getElementById('displayTelefono').textContent =
-        emisor.telefono || '';
-
-
-    document.getElementById('inputNombre').value =
-        emisor.nombre || '';
-
-    document.getElementById('inputCif').value =
-        emisor.cif || '';
-
-    document.getElementById('inputDireccion').value =
-        emisor.direccion || '';
-
-    document.getElementById('inputEmail').value =
-        emisor.email || '';
-
-    document.getElementById('inputTelefono').value =
-        emisor.telefono || '';
-}
-
-
-/**
- * Deja los datos vacíos cuando todavía
- * no existe ningún emisor.
- */
-function limpiarDatosEmisor() {
-
-    document.getElementById('displayNombre').textContent =
-        'Sin configurar';
-
-    document.getElementById('displayCif').textContent =
-        '';
-
-    document.getElementById('displayDireccion').textContent =
-        '';
-
-    document.getElementById('displayEmail').textContent =
-        '';
-
-    document.getElementById('displayTelefono').textContent =
-        '';
-
-
-    document.getElementById('inputNombre').value =
-        '';
-
-    document.getElementById('inputCif').value =
-        '';
-
-    document.getElementById('inputDireccion').value =
-        '';
-
-    document.getElementById('inputEmail').value =
-        '';
-
-    document.getElementById('inputTelefono').value =
-        '';
-}
-
-
-/**
- * Muestra un mensaje Bootstrap en la parte superior
- * de la tarjeta del emisor.
- */
-function mostrarMensaje(mensaje, tipo) {
-
-    const tarjeta = document.getElementById('tarjetaEmisor');
-
-    if (!tarjeta) {
-        return;
     }
 
 
-    // Eliminamos mensajes anteriores.
-    const mensajesAnteriores =
-        tarjeta.querySelectorAll('.mensaje-emisor');
+    /*
+     * Evento de envío del formulario.
+     */
+    if (formEditarEmisor) {
 
-    mensajesAnteriores.forEach(elemento => {
-        elemento.remove();
-    });
+        formEditarEmisor.addEventListener(
+            "submit",
+            async (event) => {
 
+                event.preventDefault();
 
-    const alerta = document.createElement('div');
-
-    alerta.className =
-        `alert alert-${tipo} alert-dismissible fade show mensaje-emisor`;
-
-    alerta.setAttribute('role', 'alert');
-
-    alerta.innerHTML = `
-        ${mensaje}
-        <button
-            type="button"
-            class="btn-close"
-            data-bs-dismiss="alert"
-            aria-label="Cerrar">
-        </button>
-    `;
+                await guardarEmisor();
+            }
+        );
+    }
 
 
-    tarjeta.prepend(alerta);
+    /*
+     * Muestra mensajes visibles.
+     */
+    function mostrarAviso(mensaje, error = false) {
 
-
-    // El mensaje desaparece automáticamente después de 5 segundos.
-    setTimeout(() => {
-
-        if (alerta && alerta.parentNode) {
-
-            alerta.remove();
+        if (!avisoEmisor) {
+            return;
         }
 
-    }, 5000);
-}
+        avisoEmisor.textContent = mensaje;
+
+        if (error) {
+            avisoEmisor.classList.add("error");
+        } else {
+            avisoEmisor.classList.remove("error");
+        }
+    }
+
+
+    /*
+     * Mensajes para lectores de pantalla.
+     */
+    function anunciar(mensaje) {
+
+        if (!anuncios) {
+            return;
+        }
+
+        anuncios.textContent = "";
+
+        setTimeout(() => {
+            anuncios.textContent = mensaje;
+        }, 50);
+    }
+
+
+    /*
+     * Cuando se abre el modal de edición volvemos a cargar
+     * los datos actuales para asegurarnos de que el formulario
+     * contiene la información más reciente.
+     */
+    const modalEditarEmisor =
+        document.getElementById("modalEditarEmisor");
+
+    if (modalEditarEmisor) {
+
+        modalEditarEmisor.addEventListener(
+            "show.bs.modal",
+            () => {
+
+                cargarEmisor();
+
+                /*
+                 * Nunca mantenemos seleccionado un archivo
+                 * anterior al abrir el formulario.
+                 */
+                if (inputFoto) {
+                    inputFoto.value = "";
+                }
+            }
+        );
+    }
+
+
+    /*
+     * Carga inicial.
+     */
+    cargarEmisor();
+
+});

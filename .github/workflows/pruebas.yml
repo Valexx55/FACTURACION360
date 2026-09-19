@@ -1,0 +1,50 @@
+# Ejecuta las pruebas en cada pull request y en cada push a master.
+#
+# Por que hace falta: hasta ahora las pruebas solo se ejecutaban si alguien se
+# acordaba de lanzarlas en su maquina. Master ha llegado a estar en rojo sin que
+# nadie se enterara, porque no habia forma de enterarse.
+#
+# Con esto, una PR que rompa algo sale marcada en rojo en GitHub antes de que
+# nadie la revise, y el que la abrio lo ve sin tener que preguntar.
+
+name: Pruebas
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Traerse el codigo
+        uses: actions/checkout@v4
+
+      - name: Preparar Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          # Guarda las dependencias de Maven entre ejecuciones. Sin esto cada
+          # ejecucion se descarga Spring Boot entero y tarda varios minutos.
+          cache: maven
+
+      - name: Ejecutar las pruebas
+        working-directory: facturacion360
+        # Las pruebas de integracion contra MySQL se saltan solas: llevan un
+        # @EnabledIfSystemProperty que solo las activa si se les pasa el puerto.
+        # Aqui no hay base de datos, y no hace falta.
+        run: ./mvnw --batch-mode --no-transfer-progress test
+
+      - name: Guardar los informes si algo falla
+        # Sin esto, cuando una prueba falla solo se ve el resumen y hay que
+        # reproducirlo en local para saber que aserción se rompió.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes-de-pruebas
+          path: facturacion360/target/surefire-reports/
+          retention-days: 7

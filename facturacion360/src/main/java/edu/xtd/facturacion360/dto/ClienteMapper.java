@@ -28,8 +28,8 @@ public class ClienteMapper {
 					normalizar(clienteRequest.nifCif()),
 					clienteRequest.direccion(),
 					clienteRequest.codigoPostal(),
-					clienteRequest.poblacion(),
-					clienteRequest.provincia(),
+					limpiarTexto(clienteRequest.poblacion()),
+					limpiarTexto(clienteRequest.provincia()),
 					clienteRequest.telefono(),
 					clienteRequest.email(),
 					null);
@@ -84,6 +84,33 @@ public class ClienteMapper {
 	 * @param documento lo que vino en la petición
 	 * @return el mismo documento listo para guardar, o null si no venía
 	 */
+	/**
+	 * Deja un nombre de lugar sin espacios sobrantes, respetando como se escribio.
+	 *
+	 * Se aplica a poblacion y provincia porque son las dos que alimentan los desplegables
+	 * del filtro, que salen de un SELECT DISTINCT: un espacio de mas convierte «Madrid » en
+	 * una provincia distinta de «Madrid», y las dos aparecen en la lista.
+	 *
+	 * <p>De las mayusculas NO se encarga esto, y es a proposito: la collation de la tabla es
+	 * utf8mb4_0900_ai_ci, que ya compara ignorando mayusculas y acentos, asi que «madrid» y
+	 * «Madrid» ya se agrupan solos. Lo que esas collations <b>no</b> ignoran es el espacio
+	 * final —son NO PAD, al reves que las antiguas—, y por eso el trim si hace falta.</p>
+	 *
+	 * <p>Tampoco se pasa a mayusculas como en {@link #normalizar(String)}: ahi tiene sentido
+	 * porque un NIF se escribe asi, pero una provincia en mayusculas quedaria gritando en la
+	 * ficha y en el desplegable.</p>
+	 *
+	 * <p>No se aplica a nombre ni direccion aunque tambien podrian traer espacios: esos dos
+	 * no se usan como clave de agrupacion ni de filtro, asi que un espacio de mas se ve feo
+	 * pero no duplica nada. Si algun dia se filtra por ellos, tendran que pasar por aqui.</p>
+	 *
+	 * @param valor lo que vino en la peticion
+	 * @return el mismo texto sin espacios en los extremos y sin repetirlos dentro, o null
+	 */
+	private static String limpiarTexto(String valor) {
+		return valor == null ? null : valor.trim().replaceAll("\s+", " ");
+	}
+
 	private static String normalizar(String documento) {
 		return documento == null ? null : documento.trim().toUpperCase();
 	}

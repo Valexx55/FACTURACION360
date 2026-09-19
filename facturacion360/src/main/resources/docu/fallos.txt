@@ -1,0 +1,318 @@
+================================================================================
+FACTURACION360 - AUDITORIA DEL PROYECTO
+Revisado el 19/09/2026 sobre origin/master (cfa4577) y las cinco ramas subidas.
+================================================================================
+
+COMO LEER ESTO
+--------------
+Cada punto lleva el comando con el que se comprueba. Lo que no se ha podido
+demostrar esta en la seccion de DUDAS del final, no aqui.
+
+Se dice de quien es cada cosa, y no para senalar: para que cada uno sepa que le
+toca y nadie toque el fichero de otro sin avisar.
+
+NO se repite nada de fallos_master.txt, salvo para decir que ya esta resuelto.
+NO se incluye nada que ya este asignado en el codeshare.
+
+
+================================================================================
+1 - GRAVE - HAY CLIENTES QUE YA NO SE PUEDEN EDITAR
+================================================================================
+
+Desde que entro el validador de NIF/CIF (PR #41), un cliente cuya letra de
+control este mal NO se puede volver a guardar: el PUT devuelve 400 para siempre.
+
+Y esto estaba avisado por escrito ANTES de implementarlo. En
+docu/DOCUMENTACION_ANGEL.md, seccion "Limitaciones conocidas":
+
+    Tres de los siete identificadores fiscales son invalidos [...] Con un
+    @Pattern, esos tres clientes no se podrian volver a guardar nunca desde el
+    formulario de edicion: el PUT devolveria 400 para siempre.
+
+Los tres que nombra:
+
+    cliente  5   48765432P   le tocaria la G
+    cliente 16   12345678Q   le tocaria la Z
+    cliente  6   G6975841    siete digitos tras la letra; un CIF lleva ocho
+
+Se implemento igual, que estuvo bien porque la validacion hacia falta, pero el
+saneado de datos que el propio documento pedia no se hizo.
+
+IMPORTANTE, para no asustar a nadie: esos clientes NO estan en el volcado
+compartido. El .sql solo crea las tablas y mete una fila, la del emisor. Viven en
+la base local de cada uno, asi que a quien monto su base desde cero no le afecta.
+
+    Comprobar si te afecta, sobre TU base:
+      SELECT idcliente, nombre, nif_cif FROM clientes;
+    y pasar cada uno por la pantalla de edicion. El que devuelva 400 es de estos.
+
+De quien: el validador es de Angel. Los datos semilla, de quien monto el alta.
+Hay que decidir si se sanean y quien lo hace.
+
+
+================================================================================
+2 - SEPARAR PROVINCIAS EN UNA TABLA - LLEVA DOS MESES PERDIDO
+================================================================================
+
+docu/todo_mejoras.txt lo escribio Val el 20/07 y tiene dos puntos:
+
+    1) PAGINACION CONSULTA CLIENTES                   -> HECHO
+    2) SEPARAR PROVINCIAS EN UNA TABLA INDEPENDIENTE  -> sin hacer
+
+El punto 2 nunca llego al codeshare, asi que lleva dos meses sin que nadie lo
+mire y sin que nadie sepa que existe.
+
+    Comprobar:
+      grep -c "CREATE TABLE .provincia" docu/backupFacturacion360v2.sql   -> 0
+
+Hoy provincia es una columna varchar(15) de clientes, y el desplegable sale de
+SELECT DISTINCT provincia FROM clientes (ClienteRepositoryJdbcImpl:182).
+
+LEER EL ANALISIS DEL FINAL ANTES DE HACERLO. No es tan buena idea como parece.
+
+De quien: sin asignar.
+
+
+================================================================================
+3 - LA ULTIMA EDICION GANA, Y NADIE SE ENTERA
+================================================================================
+
+Si dos personas abren el mismo cliente y guardan, la segunda pisa lo de la
+primera sin ningun aviso.
+
+Esta documentado como limitacion conocida en DOCUMENTACION_ANGEL.md, pero no
+tiene dueno ni linea en el codeshare, asi que en la practica esta olvidado.
+
+Arreglarlo bien pide una columna de version en la tabla: el UPDATE llevaria
+WHERE version = ?, y cero filas afectadas significaria "alguien ha guardado antes
+que tu", o sea un 409. Es cambio de esquema, asi que afecta a los seis.
+
+    Comprobar que no existe:
+      grep -n version docu/backupFacturacion360v2.sql
+    La unica linea que sale es "Server version 8.4.10", que es la cabecera
+    del volcado. Columna no hay.
+
+Con un usuario a la vez no se nota. Con la demo delante de varias personas, si.
+
+De quien: sin asignar. Es decision de equipo por ser cambio de esquema.
+
+
+================================================================================
+4 - ACCESIBILIDAD - SE PERDIO EL aria-current
+================================================================================
+
+Ninguna de las cinco paginas le dice a un lector de pantalla cual es la pagina
+actual. La clase active solo pinta; no se anuncia.
+
+El atributo SI estuvo puesto y se lo llevo un merge. El comentario que lo explica
+sigue en clientes.html:52, huerfano, diciendo exactamente lo que ya no se hace.
+
+OJO CON COMO SE CLASIFICA ESTO: no es un punto nuevo. Esta dentro de la barra de
+navegacion (clientes.html:48-56), que es justo lo que unifico Gonzalo y que el
+codeshare da por terminado con un visto. O sea que es una REGRESION de un trabajo
+ya cerrado, no una mejora pendiente, y lo suyo es que la mire quien hizo esa parte.
+
+    Comprobar:
+      grep -rn "aria-current" src/main/resources/static/*.html
+      -> una sola aparicion, y esta DENTRO del comentario
+
+De quien: Gonzalo, por ser parte de la barra que unifico. El atributo original lo
+habia puesto Angel. Es una linea por pagina, en las cinco.
+
+
+================================================================================
+5 - NUEVE FICHEROS DE LOG VERSIONADOS
+================================================================================
+
+    facturacion360/carpeta1/f.log
+    facturacion360/carpeta1/f.log.2026-07-23.0.gz
+    ... y seis .gz mas
+
+Son de una configuracion antigua. Hoy logback escribe en logs/, que SI esta en el
+.gitignore, asi que estos no se regeneran: es peso muerto que no se va a limpiar
+solo.
+
+    Comprobar:
+      grep LOG_FILE src/main/resources/logback-spring.xml   -> logs/f.log
+      git ls-files | grep carpeta1                          -> 9 ficheros
+
+Entraron con la PR #40. Se borran y ya.
+
+
+================================================================================
+6 - UN FICHERO DE BLOQUEO DE DRAW.IO, COMMITEADO
+================================================================================
+
+    docu/.$Diagrama Navegacion Pantallas Clientes.drawio.dtmp
+
+Es el temporal que draw.io crea mientras tienes un diagrama abierto. Se colo en un
+commit y ahi sigue.
+
+    Comprobar:
+      git ls-files | grep dtmp
+
+Se borra. Y conviene anadir *.dtmp al .gitignore, porque se va a repetir cada vez
+que alguien abra un diagrama.
+
+
+================================================================================
+7 - EL ESQUEMA ER LLEVA DOS MESES DESFASADO
+================================================================================
+
+    docu/ESQUEMA ER.png   ultimo cambio: 16/07/2026
+
+Desde esa fecha el esquema ha cambiado al menos dos veces: la columna emisor.logo
+(volcado v2, 16/09) y la tabla desglose_impositivo mas las dos columnas fiscales
+de conceptos (PR #43, pendiente de integrar).
+
+    Comprobar:
+      git log -1 --format=%ad --date=short -- "docu/ESQUEMA ER.png"
+
+Es la unica documentacion grafica de la base de datos que tenemos, asi que quien
+la consulte hoy se lleva una idea equivocada.
+
+De quien: el diagrama es de Val.
+
+
+================================================================================
+8 - DOCUMENTOS QUE YA NO DESCRIBEN AL PROYECTO
+================================================================================
+
+docu/fallos_master.txt   RESUELTO ENTERO
+    Reportaba dos endpoints que el frontend llamaba y que no existian. Los dos
+    existen hoy: /cliente/listar-ultimos y /factura/{id}/detalle.
+        grep -rn "listar-ultimos" src/main/java --include=*Controller.java
+    Dejarlo como esta hace pensar que hay un problema abierto. O se archiva, o se
+    le pone una cabecera diciendo que esta resuelto.
+
+docu/todo_mejoras.txt   MEDIO RESUELTO
+    El punto 1, la paginacion, esta hecho. Ver el punto 2 de este documento.
+
+docu/DOCUMENTACION_ANGEL.md   UNA SECCION DESFASADA
+    "Limitaciones conocidas" dice que el NIF/CIF solo se valida por longitud y
+    propone escribir un validador con la letra de control. Ese validador existe
+    desde la PR #41.
+    De quien: de Angel.
+
+docu/facturas-numeracion-conceptos.md   UNA AFIRMACION QUE YA NO SE SOSTIENE
+    Dice "61 pruebas Java, cero fallos, BUILD SUCCESS". Hoy master tiene 110
+    pruebas y UNA falla, y es de ese mismo trabajo:
+    FacturaControllerTests.edicionValidaIdEstadoYConceptosAntesDeEscribir
+    espera 400 y recibe 404.
+        ./mvnw -q test
+    De quien: el documento y la prueba son de Fran.
+
+docu/protocoloGit.txt   CORRECTO, CON UN MATIZ
+    El flujo esta bien explicado. Pero manda "git add ." tres veces, y asi es como
+    se han colado los logs y el .dtmp de los puntos 5 y 6. Vale la pena cambiarlo
+    por anadir los ficheros a mano, o al menos avisar de mirar git status antes.
+
+
+================================================================================
+9 - COSAS QUE NO TIENEN DUENO Y NO ESTAN EN LA LISTA
+================================================================================
+
+SIN INTEGRACION CONTINUA
+    No hay .github/workflows. Las pruebas solo se ejecutan si alguien se acuerda,
+    y ahora mismo master esta en rojo sin que nadie lo sepa.
+        ls .github/workflows   -> no existe
+
+LA CONTRASENA DE LA BASE DE DATOS, EN GITHUB
+    src/main/resources/application.properties, versionado:
+        spring.datasource.username=root
+        spring.datasource.password=root
+    Para clase puede dar igual, pero conviene saber que se esta haciendo en vez de
+    descubrirlo.
+
+UN println CON DATOS DEL CLIENTE
+    ClienteMapper.java:34 saca el cliente entero por consola en cada alta y cada
+    edicion: NIF, direccion, email y telefono. Es el unico println de todo el
+    main y, al no pasar por el logger, no se puede apagar por configuracion.
+        grep -rn "System.out.print" src/main/java
+    De quien: de Val.
+
+buscar() SIN LIMIT
+    FacturaRepositoryJdbcImpl.buscar() no lleva LIMIT, asi que con la busqueda
+    vacia se trae la tabla entera de facturas. Y eso es justo lo que pasa al
+    abrir facturas.html.
+    De quien: de Fran.
+
+
+================================================================================
+COMPROBADO Y DESCARTADO - NO SON FALLOS
+================================================================================
+
+Se dicen para que nadie pierda el tiempo mirandolos otra vez.
+
+- El NIF del emisor del volcado (G78661923) ES VALIDO. Suma 37, digito de control
+  3, coincide. Si se anade el @Valid al EmisorController, el emisor semilla pasa.
+
+- El telefono del Emisor SI cuadra con su columna: el patron admite 13 caracteres
+  como maximo, +34 mas nueve digitos, contra un varchar(15).
+
+- logs/ SI esta en el .gitignore raiz. El problema de los logs es solo el resto de
+  carpeta1, no que se vayan a repetir.
+
+- Las lineas de Fran, Sergio y Gonzalo del codeshare reflejan bien lo que hay en
+  master. No sobra ni falta ninguna.
+
+
+================================================================================
+ANALISIS - CONVIENE SEPARAR LAS PROVINCIAS EN UNA TABLA?
+================================================================================
+
+Lo pide todo_mejoras.txt desde julio. Mi lectura es que NO, todavia no, y que la
+razon por la que se pidio se puede resolver mas barato.
+
+LO QUE SE GANARIA
+    Un catalogo fijo, sin erratas. Hoy nada impide guardar "Madrid", "madrid " o
+    "Marid", y las tres serian provincias distintas en el desplegable.
+
+LO QUE SE PERDERIA, Y NO ES OBVIO
+    El desplegable del FILTRO saldria peor, no mejor. Hoy sale de
+    SELECT DISTINCT provincia FROM clientes, o sea que solo ofrece provincias que
+    TIENEN clientes: nunca eliges una y te quedas con la tabla vacia. Con un
+    catalogo completo ofreceria las 52 y la mayoria no devolveria nada.
+    Para no empeorarlo habria que mantener las dos cosas a la vez: el catalogo
+    para el formulario de alta y el DISTINCT para el filtro. Eso es mas trabajo,
+    no menos.
+
+Y CON POBLACIONES ES PEOR
+    Provincias son 52 y no cambian. Municipios son mas de 8.000 y cambian. Si se
+    normaliza una cosa y no la otra queda a medias; si se normalizan las dos, hay
+    que traerse un dataset del INE y mantenerlo.
+
+EL COSTE REAL
+    Es cambio de esquema. Con seis bases de datos locales y sin herramienta de
+    migraciones, cada cambio de esquema nos cuesta a los seis.
+
+LO QUE YO HARIA EN SU LUGAR
+    Normalizar al guardar, que es donde esta el problema de verdad. Ya existe
+    ClienteMapper.normalizar(), pero solo se aplica al nifCif:
+
+        ClienteMapper.java:25   normalizar(clienteRequest.nifCif())
+
+    Aplicar un trim y una normalizacion de mayusculas a provincia y poblacion son
+    dos lineas en ese mismo sitio. No tocan el esquema, no afectan a nadie mas y
+    se llevan el grueso del problema: se acaban los "madrid " y "Madrid" como
+    entradas distintas.
+
+    Si despues de eso alguien sigue viendo erratas, entonces si toca el catalogo,
+    y ademas se tendra el dato ya limpio para poblarlo.
+
+CONCLUSION
+    Dejarlo en la lista, pero como "normalizar provincia y poblacion al guardar",
+    que es de una tarde, en vez de "separar en tabla", que es un cambio de esquema
+    con un efecto secundario que empeora el filtro.
+
+
+================================================================================
+DUDAS - NO HE PODIDO DEMOSTRARLAS
+================================================================================
+
+1. No se cuantos clientes con NIF invalido tiene cada uno en su base local. El
+   documento habla de tres de siete en agosto. Puede que ya no existan, o que
+   haya mas. Solo se comprueba mirando cada base.
+
+2. El .dtmp de draw.io puede que este ahi a proposito por alguna razon que no
+   conozco, aunque no se me ocurre cual.

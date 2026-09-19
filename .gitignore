@@ -23,3 +23,7 @@ local.properties
 .recommenders
 mislogs/
 logs/
+
+# Temporales de draw.io: los crea al abrir un diagrama y se cuelan con 'git add .'
+*.dtmp
+.$*

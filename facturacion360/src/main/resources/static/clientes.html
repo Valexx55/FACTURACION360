@@ -160,33 +160,13 @@
              propio: de anunciarla se encarga la región de arriba. Vacía no ocupa (:empty). -->
 		<p id="aviso-clientes" class="aviso-clientes"></p>
 
-		<!--
-            CORRECCION: el div.table-responsive envuelve UNICAMENTE la tabla y
-            se cierra justo despues de cerrarla (uso correcto de Bootstrap: solo
-            la tabla necesita scroll horizontal en movil). Se ha eliminado el
-            div de cierre huerfano que sobraba tras el template (habia un div de
-            cierre de mas) y se ha arreglado la indentacion para que la anidacion
-            quede clara.
-        -->
-		<!-- role="region" + tabindex="0": table-responsive desplaza en horizontal, y una zona
-             que se desplaza tiene que poder recorrerse con el teclado (criterio 2.1.1 de WCAG).
-             Sin el tabindex, quien no usa ratón no puede llegar a las columnas de la derecha.
-             Viene puesto de serie y el JavaScript lo quita cuando la tabla cabe entera y no hay
-             nada que desplazar; así, si el JS fallara, se queda la versión accesible. -->
 		<div class="table-responsive" role="region" tabindex="0"
 			aria-labelledby="titulo-tabla-clientes">
-			<!-- Sin table-striped: Bootstrap raya por nth-of-type y, al insertar las filas de
-                 detalle, la alternancia se descoloca a partir de cada panel abierto. Las filas
-                 las pinta el JavaScript, así que marca él mismo la paridad por cliente. -->
 			<table class="table table-hover align-middle tabla-clientes">
 				<caption id="titulo-tabla-clientes" class="visually-hidden">
 					Clientes registrados, con su CIF, email, teléfono y fecha de alta</caption>
 				<thead class="table-primary-custom">
 					<tr>
-						<!-- Cabeceras pulsables: es el gesto que todo el mundo prueba
-                             primero en una tabla. Van dentro de un <button> real para
-                             que se puedan usar con el teclado. aria-sort lo anuncia a
-                             los lectores de pantalla; el JavaScript lo mantiene al día. -->
 						<th scope="col" aria-sort="none">
 							<button type="button" class="cabecera-ordenable"
 								data-columna="nombre">
@@ -195,9 +175,6 @@
 							</button>
 						</th>
 						<th scope="col">CIF</th>
-						<!-- En móvil se ocultan email y teléfono: seis columnas obligan a
-                             desplazar en horizontal, y estos dos datos siguen estando a un clic
-                             en el panel de detalle. -->
 						<th scope="col" class="d-none d-md-table-cell">Email</th>
 						<th scope="col" class="d-none d-md-table-cell">Teléfono</th>
 						<th scope="col" aria-sort="descending">
@@ -210,21 +187,12 @@
 					</tr>
 				</thead>
 
-				<!-- El cuerpo empieza vacío; el JavaScript lo rellena clonando el template -->
 				<tbody id="tabla-clientes"></tbody>
 			</table>
 		</div>
 
-		<!-- Paginación: el JavaScript activa y desactiva los botones según la página.
-             aria-live="polite" hace que un lector de pantalla anuncie el cambio. -->
 		<nav aria-label="Paginación de clientes"
 			class="d-flex justify-content-between align-items-center mt-3">
-			<!-- OJO: estos botones PAGINAN, no ordenan. Antes se llamaban "Más
-                 recientes"/"Más antiguos", que ahora chocaría con el control de
-                 ordenación por fecha: quien lo leyera no sabría si mueve de página
-                 o cambia el orden. -->
-			<!-- Las flechas son aria-hidden como el resto de iconos de la página: acompañan a
-                 un texto que ya dice lo mismo, y sin esto un lector de pantalla las nombra. -->
 			<button id="btn-anterior" type="button"
 				class="btn btn-outline-secondary" disabled>
 				<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Anterior
@@ -236,24 +204,13 @@
 			</button>
 		</nav>
 
-		<!-- Plantilla oculta: su contenido NO se renderiza hasta que JS lo clona.
-             Puede vivir en cualquier punto del documento; lo dejamos junto a la
-             tabla que rellena para que se lea a la vez. -->
 		<template id="fila-cliente-template">
 			<tr class="fila-cliente">
-				<!-- El nombre es la CABECERA de la fila, no un dato más: con scope="row" un
-                     lector de pantalla dice "García S.L., email: ..." al recorrer las celdas,
-                     en vez de leer valores sueltos sin saber de quién son. -->
 				<th scope="row" class="cliente-nombre"></th>
 				<td class="cliente-cif"></td>
 				<td class="cliente-email d-none d-md-table-cell"></td>
 				<td class="cliente-telefono d-none d-md-table-cell"></td>
 				<td class="cliente-alta"></td>
-				<!-- celda-acciones marca la zona que NO despliega la fila al pulsarla y en la
-                     que no sale el aviso de "Ver detalles": cada botón explica lo suyo.
-                     Los nombres accesibles los completa el JavaScript con el nombre del cliente;
-                     si no, listar los botones de la página da veinte veces "Editar cliente"
-                     sin saber de cuál. -->
 				<td class="text-end celda-acciones">
 					<button type="button"
 						class="btn btn-sm btn-primary-custom-table btn-ver"
@@ -273,14 +230,8 @@
 			</tr>
 		</template>
 
-		<!-- Envoltorio del despliegue: una fila hermana que se inserta justo debajo de la del
-             cliente y ocupa todas las columnas. Va vacía a propósito; dentro se mete el panel
-             de detalle o el de edición según lo que se haya pulsado, de modo que una fila
-             nunca puede tener los dos a la vez contándose cosas distintas. -->
 		<template id="fila-despliegue-template">
 			<tr class="fila-despliegue">
-				<!-- El colspan lo pone el JavaScript contando las cabeceras de la tabla: escrito
-                     aquí a mano, añadir una columna obligaría a acordarse de cambiarlo. -->
 				<td>
 					<div class="despliegue-envoltorio">
 						<div class="despliegue-contenido"></div>
@@ -289,31 +240,12 @@
 			</tr>
 		</template>
 
-		<!-- Panel de DETALLE (solo lectura): los campos que no caben en la tabla.
-
-             role="group" + aria-labelledby: el panel se anuncia con el nombre del cliente al
-             que pertenece ("Viendo detalles de García S.L."). Con varios paneles abiertos a la
-             vez, y estando la fila del cliente ya por encima, sin esto no hay forma de saber
-             de quién son los datos que se están leyendo. El nombre sale del texto que YA se
-             ve, así que no hay dos cadenas que puedan acabar diciendo cosas distintas.
-             El id lo pone el JavaScript con el del cliente: puede haber varios paneles en la
-             página y dos elementos no pueden compartir id. -->
 		<template id="panel-detalle-template">
 			<div class="panel-cliente" role="group">
-				<!-- El estado no se fía solo del color del borde (criterio 1.4.1 de WCAG: la
-                 información no puede depender únicamente del color): aquí se dice con letras. -->
 				<p class="etiqueta-estado etiqueta-detalle">
 					<i class="fa-solid fa-eye" aria-hidden="true"></i> <span
 						class="texto-estado">Viendo detalles</span>
 				</p>
-				<!-- Una LISTA DE DESCRIPCIÓN y no una tabla. Esto son los datos de UN cliente,
-                 pares rótulo/valor, no una rejilla de filas y columnas: <dl> es justo el
-                 elemento que existe para eso. Y sobre todo, este panel vive dentro de un <td>
-                 de la tabla de clientes: con una <table> aquí, un lector de pantalla anuncia
-                 "tabla de 5 columnas" DENTRO de "tabla de 6 columnas" y recorrer las celdas se
-                 vuelve un laberinto. Con la lista dice "Dirección: Calle Mayor 1" y se acabó.
-                 El <div> entre <dl> y <dt>/<dd> lo permite el estándar, y es lo que deja
-                 emparejar cada rótulo con su valor en la rejilla de la hoja de estilos. -->
 				<dl class="datos-cliente">
 					<div class="dato-cliente">
 						<dt>Id</dt>
@@ -339,20 +271,6 @@
 			</div>
 		</template>
 
-		<!-- Panel de BORRADO: la confirmación vive en la propia fila, como el detalle y la
-             edición, y no en un modal que tapa la pantalla. Así se ve a la vez la fila que se
-             va a borrar y la pregunta, y la tabla no tiene dos mecanismos de diálogo
-             distintos conviviendo.
-
-             role="group", el mismo que el detalle y la edición, y NO role="alertdialog"
-             aunque la tentacion sea esa. Ese rol promete un diálogo modal: foco atrapado
-             dentro y cierre con Escape. Aquí no hay ni una cosa ni la otra -los paneles de
-             esta tabla no las tienen-, y anunciar "diálogo" a un lector de pantalla para
-             luego no cumplirlo deja a quien no ve la pantalla pulsando Escape sin que pase
-             nada. El aviso de que esto borra lo da el texto, que se lee entero.
-
-             El nombre accesible lo pone nombrarPanel() apuntando al cartel de estado, igual
-             que en el detalle y en la edición. -->
 		<template id="panel-borrado-template">
 			<div class="panel-cliente panel-borrado" role="group">
 				<p class="etiqueta-estado etiqueta-borrado">
@@ -363,11 +281,6 @@
 					Se eliminará <strong class="borrado-nombre"></strong> (<span
 						class="borrado-nif"></span>). Esta acción no se puede deshacer.
 				</p>
-				<!-- Vacío a propósito: aquí escribe borrarCliente() el motivo cuando el servidor
-                     rechaza el borrado (409 si el cliente tiene facturas). Va con role="alert"
-                     y ya en el documento porque ese rol solo anuncia lo que se escribe DENTRO
-                     de un elemento que estaba antes; insertado con el mensaje ya puesto, el
-                     lector de pantalla no dice nada. -->
 				<p class="alerta-borrado" role="alert"></p>
 				<div class="acciones-borrado">
 					<button type="button"
@@ -380,30 +293,8 @@
 			</div>
 		</template>
 
-		<!-- Panel de EDICIÓN: los mismos ocho campos, repartidos en dos grupos porque en una
-             sola fila las columnas quedarían tan estrechas que no se vería lo que se escribe.
-             Las restricciones (required, maxlength, type) son EXACTAMENTE las de
-             ClienteRequest en el backend: así el navegador corta lo que el servidor rechazaría
-             y no se gasta una petición para recibir un 400.
-
-             NO es una tabla, y esa es la diferencia importante con la versión anterior. Aquí
-             no hay datos tabulares: hay ocho campos de un formulario. Antes iban dentro de una
-             <table> cuyos <th> hacían de rótulos, lo que traía tres problemas:
-
-             1. Una tabla dentro del <td> de otra tabla: el lector de pantalla anunciaba
-                "tabla dentro de tabla" y navegar por celdas se volvía confuso.
-             2. El rótulo solo se asociaba al campo A TRAVÉS de la tabla, no directamente.
-             3. Para nombrar el campo había un aria-label, y en dos casos NO contenía el texto
-                visible ("NIF o CIF" frente a "NIF/CIF", "Correo electrónico" frente a
-                "Email"): quien maneja el ordenador por voz dice lo que lee y no pasaba nada
-                (criterio 2.5.3 de WCAG, el mismo que ya se arregló en el botón "Limpiar").
-
-             Con <label for> los tres desaparecen de una vez: lo visible ES el nombre
-             accesible, así que no pueden divergir nunca. Los <fieldset> con <legend> oculto
-             ocupan el sitio que tenían los <caption> y agrupan los campos igual que antes. -->
+		<!-- Panel de EDICIÓN con placeholders corregidos -->
 		<template id="panel-edicion-template">
-			<!-- autocomplete="off": son datos de OTRA persona, no de quien rellena el
-                 formulario; sin esto el navegador ofrece el nombre y el correo del usuario. -->
 			<form class="formulario-edicion panel-cliente" novalidate
 				autocomplete="off">
 				<p class="etiqueta-estado etiqueta-edicion">
@@ -411,16 +302,7 @@
 						class="texto-estado">Editando</span>
 				</p>
 
-				<!-- Los id llevan el sufijo PLANTILLA a propósito: el JavaScript los sustituye
-                     por el id del cliente al pintar, porque puede haber varios formularios
-                     abiertos a la vez y dos elementos no pueden compartir id. Si alguno se
-                     quedara sin sustituir, el sufijo canta a la vista en el inspector.
-                     El lápiz de cada rótulo es la señal de que ese dato se puede escribir, y
-                     por eso solo existe en este panel y no en el de detalle. Va aria-hidden
-                     porque es decorativo: que el campo sea editable ya lo dice el <input>.
-                     Los asteriscos, igual: se leerían como "asterisco", que no aporta nada, y
-                     lo que anuncia "obligatorio" es el atributo required. -->
-					 <fieldset class="grupo-edicion">
+				 <fieldset class="grupo-edicion">
 
 					 	<legend class="visually-hidden">Datos fiscales del cliente</legend>
 
@@ -440,7 +322,7 @@
 					 			id="campo-nombre-PLANTILLA"
 					 			class="form-control form-control-sm"
 					 			minlength="12"
-								placeholder="Jaime Galvez Martinez"
+								placeholder="Ej. Nombre y Apellidos"
 					 			maxlength="60"
 					 			required>
 
@@ -456,12 +338,11 @@
 					 		<label for="campo-nifCif-PLANTILLA">
 					 			<i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
 
-					 			<span class="texto-etiqueta">DNI o NIF/</span>
+					 			<span class="texto-etiqueta">DNI o NIF</span>
 
 					 			<span class="marca-obligatorio" aria-hidden="true">*</span>
 					 		</label>
 
-							
 							<input
 								type="text"
 								name="nifCif"
@@ -470,7 +351,7 @@
 								minlength="9"
 								maxlength="9"
 								pattern="([0-9]{8}[A-Z]|[XYZ][0-9]{7}[A-Z])"
-								placeholder="12345678Z"
+								placeholder="Introduce DNI"
 								title="Introduce un DNI (12345678Z) o un NIF de extranjero (X1234567L)"
 								required>
 
@@ -495,7 +376,7 @@
 					 			name="email"
 					 			id="campo-email-PLANTILLA"
 					 			class="form-control form-control-sm"
-								placeholder="email@dominio.es"
+								placeholder="ejemplo@ejemplo.com"
 					 			minlength="5"
 					 			maxlength="30">
 
@@ -521,7 +402,7 @@
 					 			class="form-control form-control-sm"
 					 			maxlength="15"
 					 			pattern="(\+34\s?)?[6789][0-9]{8}"
-								placeholder="612345678"
+								placeholder="Nº telefono"
 					 			title="Introduce un teléfono español válido. Ejemplo: 612345678 o +34612345678"
 					 			inputmode="tel">
 
@@ -554,7 +435,7 @@
 					 			name="direccion"
 					 			id="campo-direccion-PLANTILLA"
 					 			class="form-control form-control-sm"
-								placeholder="Calle Mayor 15"
+								placeholder="Calle, número, piso..."
 								minlength="5"
 					 			maxlength="60"
 					 			required>
@@ -581,7 +462,7 @@
 					 			class="form-control form-control-sm"
 					 			minlength="5"
 					 			maxlength="5"
-								placeholder="26123"
+								placeholder="Introduce un CP"
 					 			pattern="[0-9]{5}"
 					 			title="El código postal debe tener 5 números"
 					 			inputmode="numeric">
@@ -610,7 +491,7 @@
 					 			class="form-control form-control-sm"
 					 			maxlength="30"
 								minlength="2"
-								placeholder="Parla"
+								placeholder="Nombre de la población"
 					 			required>
 
 					 		<div class="invalid-feedback">
@@ -633,7 +514,7 @@
 					 		<input
 					 			type="text"
 					 			name="provincia"
-								placeholder="Madrid"
+								placeholder="Nombre de la provincia"
 					 			id="campo-provincia-PLANTILLA"
 					 			class="form-control form-control-sm"
 					 			maxlength="15"
@@ -684,13 +565,6 @@
 		</div>
 	</footer>
 
-
-    <!-- Confirmación de descartar lo escrito sin guardar. Antes era el confirm() del
-         navegador: funcionaba, pero bloquea la página entera mientras está abierto, no se
-         puede dar estilo y en algunos navegadores el usuario puede silenciarlo (y entonces
-         cuenta como un "no", así que la fila no se cerraba nunca). Este es el mismo diálogo
-         que ya usa "Añadir Cliente", con lo que la pantalla habla un solo idioma.
-         El botón de descartar es btn-danger porque lo que hace no se puede deshacer. -->
 	<div class="modal fade" id="modal-descartar" tabindex="-1"
 		aria-labelledby="titulo-descartar" aria-hidden="true">
 		<div class="modal-dialog modal-dialog-centered">
@@ -714,8 +588,6 @@
 			</div>
 		</div>
 	</div>
-
-
 
 	<script
 				src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"

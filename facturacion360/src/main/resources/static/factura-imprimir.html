@@ -9,17 +9,45 @@
     <link rel="stylesheet" href="factura-imprimir.css">
     <!-- Icono que aparece en la pestaña del navegador. -->
     <link rel="icon" href="./img/fav.ico" type="image/x-icon">
+    <!--
+        Estilo dinámico para el formato de papel. Arranca vacío: sin regla @page con "size:",
+        el navegador usa el papel configurado en la impresora. El JS sobreescribe este bloque
+        cuando el usuario elige un formato concreto en el selector.
+    -->
+    <style id="estiloFormatoPapel"></style>
     <script type="module" src="factura-imprimir.js"></script>
 </head>
 <body>
-    <div class="acciones-visor container py-3 d-flex flex-wrap gap-2 justify-content-between">
+    <div class="acciones-visor container py-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
         <a href="facturas.html" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
-        <a id="botonEditarBorrador" class="btn btn-outline-primary d-none">Editar borrador</a>
-        <button id="botonImprimir" type="button" class="btn btn-primary" disabled>
-            <i class="bi bi-printer"></i> Imprimir / Guardar PDF
-        </button>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <a id="botonEditarBorrador" class="btn btn-outline-primary d-none">Editar borrador</a>
+
+            <!--
+                Selector de formato de papel. La opción "Por defecto" deja el @page sin "size:",
+                lo que respeta el papel configurado por el usuario en el diálogo de impresión.
+                Las demás opciones inyectan @page { size: X } mediante JS para que el navegador
+                ajuste la previsualización antes de abrir el diálogo.
+            -->
+            <div class="d-flex align-items-center gap-2">
+                <label for="selectFormatoPapel" class="form-label mb-0 small text-muted text-nowrap">
+                    Formato:
+                </label>
+                <select id="selectFormatoPapel" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Por defecto (impresora)</option>
+                    <option value="A4" selected>A4</option>
+                    <option value="letter">Carta (US Letter)</option>
+                    <option value="A5">A5</option>
+                </select>
+            </div>
+
+            <button id="botonImprimir" type="button" class="btn btn-primary" disabled>
+                <i class="bi bi-printer"></i> Imprimir / Guardar PDF
+            </button>
+        </div>
     </div>
 
     <main id="documentoFactura" class="documento-factura container mb-5" aria-busy="true">
@@ -33,20 +61,61 @@
         <p id="estadoVisor" class="aviso">Cargando factura...</p>
 
         <div id="contenidoFactura" class="d-none">
-            <header class="cabecera-factura align-items-center">
-    <div class="d-flex align-items-center gap-3">
-        <img id="logoEmisor" src="/emisor/logo" alt="Logo emisor" class="logo-emisor" style="height: 100px; width: auto; max-height: 100px;" onerror="this.style.display='none'">
-        <div>
-            <h1 id="nombreEmisorCabecera" class="h4 mb-0 text-primary">Facturación 360</h1>
-            <p class="mb-0 text-muted small">Documento de factura</p>
-        </div>
-    </div>
-    <div class="text-end">
-        <h2 id="numeroFactura" class="h5 mb-1"></h2>
-        <p id="fechaFactura" class="mb-0 small"></p>
-        <p id="estadoFactura" class="mb-0 small text-muted"></p>
-    </div>
-</header>
+            <!--
+                Marca de agua visible solo en borradores. Se muestra tanto en pantalla como
+                en impresión para que el PDF resultante no pueda confundirse con una factura
+                real emitida. aria-hidden="true": es decorativa, el estado ya se comunica
+                por texto en el encabezado de la factura.
+            -->
+            <p id="marcaAgua" class="marca-agua d-none" aria-hidden="true">BORRADOR</p>
+
+            <header class="cabecera-factura d-flex justify-content-between align-items-start gap-4">
+                <div class="d-flex align-items-center gap-3">
+                    <img id="logoEmisor" src="/emisor/logo" alt="Logo emisor"
+                         class="logo-emisor"
+                         style="height: 100px; width: auto; max-height: 100px;"
+                         onerror="this.style.display='none'">
+                    <div>
+                        <h1 id="nombreEmisorCabecera" class="h4 mb-0 text-primary">Facturación 360</h1>
+                        <p class="mb-0 text-muted small">Documento de factura</p>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-start gap-4 ms-auto">
+                    <div class="text-end">
+                        <h2 id="numeroFactura" class="h5 mb-1"></h2>
+                        <p id="fechaFactura" class="mb-0 small"></p>
+                        <p id="estadoFactura" class="mb-0 small text-muted"></p>
+                    </div>
+
+                    <!--
+                        Bloque QR · Orden HAC/1177/2024, art. único, apdo. 3.
+                        Requisitos de impresión:
+                          - Norma ISO/IEC 18004:2015, nivel de corrección M.
+                          - Tamaño: entre 30×30 mm y 40×40 mm.
+                          - Zona de silencio: ≥ 2 mm (se usan 6 mm recomendados).
+                          - Texto encima: «QR tributario:» (distingue este QR del de pago).
+                          - Texto debajo: «VERI*FACTU» con subtexto explicativo.
+                          - Ambos textos con tamaño ≥ al cuerpo de la factura (≥ 9pt).
+                          - Posición: arriba, margen superior derecho.
+                        Solo se muestra si la factura está emitida. El JS oculta este bloque
+                        para borradores y el backend devuelve 404 si se pide el PNG directamente.
+                    -->
+                    <figure id="bloqueQr" class="bloque-verifactu d-none"
+                            aria-label="Código QR de verificación fiscal">
+                        <p class="rotulo-qr">QR tributario:</p>
+                        <img id="imagenQr"
+                             class="qr-verifactu"
+                             src=""
+                             alt="Código QR para verificar esta factura en la sede electrónica de la AEAT"
+                             onerror="this.closest('.bloque-verifactu').classList.add('d-none')">
+                        <figcaption class="leyenda-verifactu">
+                            VERI*FACTU
+                            <small>Factura verificable en la sede electrónica de la AEAT</small>
+                        </figcaption>
+                    </figure>
+                </div>
+            </header>
 
 <div class="datos-partes mb-4">
     <div class="row">
@@ -96,24 +165,26 @@
                  de IVA por si solo no deja comprobar nada. Es ademas el Desglose que exige la
                  AEAT en el registro de Verifactu, asi que lo que se imprime y lo que se
                  declara salen del mismo sitio. -->
-            <section id="bloqueDesglose" class="desglose-factura d-none" aria-labelledby="tituloDesglose">
-                <h2 id="tituloDesglose" class="h6">Desglose del IVA</h2>
-                <table class="table table-sm tabla-desglose">
-                    <thead>
-                        <tr>
-                            <th scope="col" class="text-end">Base imponible</th>
-                            <th scope="col" class="text-end">Tipo</th>
-                            <th scope="col" class="text-end">Cuota</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tablaDesglose"></tbody>
-                </table>
-            </section>
+            <div class="d-flex justify-content-between align-items-start mt-4 mb-4 gap-4 flex-wrap flex-sm-nowrap">
+                <section id="bloqueDesglose" class="desglose-factura flex-grow-1 d-none" aria-labelledby="tituloDesglose">
+                    <h2 id="tituloDesglose" class="h6">Desglose del IVA</h2>
+                    <table class="table table-sm tabla-desglose">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="text-end">Base imponible</th>
+                                <th scope="col" class="text-end">Tipo</th>
+                                <th scope="col" class="text-end">Cuota</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaDesglose"></tbody>
+                    </table>
+                </section>
 
-            <div class="totales-factura ms-auto">
-                <div><span>Subtotal</span><strong id="subtotalFactura"></strong></div>
-                <div><span>IVA</span><strong id="ivaFactura"></strong></div>
-                <div class="total-final"><span>Total</span><strong id="totalFactura"></strong></div>
+                <div class="totales-factura flex-shrink-0" style="width: 320px; max-width: 100%;">
+                    <div><span>Subtotal</span><strong id="subtotalFactura"></strong></div>
+                    <div><span>IVA</span><strong id="ivaFactura"></strong></div>
+                    <div class="total-final"><span>Total</span><strong id="totalFactura"></strong></div>
+                </div>
             </div>
 
             <section id="bloqueObservaciones" class="observaciones-factura d-none" aria-labelledby="tituloObservaciones">

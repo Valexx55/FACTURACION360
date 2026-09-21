@@ -8,6 +8,12 @@ const tablaConceptos = document.getElementById("tablaConceptos");
 const tablaDesglose = document.getElementById("tablaDesglose");
 const bloqueDesglose = document.getElementById("bloqueDesglose");
 
+const bloqueQr      = document.getElementById("bloqueQr");
+const imagenQr      = document.getElementById("imagenQr");
+const marcaAgua     = document.getElementById("marcaAgua");
+const selectFormato = document.getElementById("selectFormatoPapel");
+const estiloHoja    = document.getElementById("estiloFormatoPapel");
+
 // Los avisos de esta pantalla. Aquí la franja es el propio rótulo de estado del visor: el
 // "Cargando factura..." que ya viene escrito en el HTML es un estado, no un evento, así que
 // se queda hasta que la factura carga (limpiar) o hasta que falla (fijar).
@@ -72,6 +78,10 @@ function mostrarDetalle(detalle) {
     contenidoFactura.classList.remove("d-none");
     document.getElementById("documentoFactura").setAttribute("aria-busy", "false");
     botonImprimir.disabled = false;
+
+    const esBorrador = factura.estado === "BORRADOR";
+    marcaAgua.classList.toggle("d-none", !esBorrador);
+    mostrarQr(esBorrador, factura.idFactura);
 }
 
 /**
@@ -132,6 +142,25 @@ function mostrarConceptos(conceptos) {
         }
     }
 }
+
+/**
+ * Muestra el bloque QR si la factura está emitida, o lo oculta si es borrador.
+ *
+ * Los borradores no generan registro de facturación y por tanto no tienen URL
+ * en la sede de la AEAT. Intentar cargar la imagen daría un 404.
+ *
+ * @param {boolean} esBorrador - true si la factura es un borrador
+ * @param {number}  idFactura  - identificador de la factura
+ */
+function mostrarQr(esBorrador, idFactura) {
+    if (esBorrador) {
+        bloqueQr.classList.add("d-none");
+        return;
+    }
+    imagenQr.src = `/verifactu/qr/${idFactura}`;
+    bloqueQr.classList.remove("d-none");
+}
+
 /** Carga los datos de la informacion del emisor */
 async function cargarEmisor() {
     try {
@@ -201,6 +230,20 @@ function mostrarError(mensaje) {
 botonImprimir.addEventListener("click", function () {
     window.print();
 });
+
+/**
+ * Inyecta o elimina la regla @page dinámicamente en el documento.
+ * Si el usuario no elige formato, se deja vacío para respetar la configuración
+ * por defecto del cuadro de diálogo de impresión del navegador.
+ */
+function actualizarFormatoPapel() {
+    estiloHoja.textContent = selectFormato.value
+        ? `@page { size: ${selectFormato.value}; margin: 14mm; }`
+        : "";
+}
+
+selectFormato.addEventListener("change", actualizarFormatoPapel);
+actualizarFormatoPapel();
 
 cargarDetalleFactura();
 cargarEmisor();

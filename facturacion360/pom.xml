@@ -55,6 +55,16 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>3.0.3</version>
 		</dependency>
+
+		<!--
+		    Generación del código QR (ISO/IEC 18004:2015, nivel M) exigido por
+		    la Orden HAC/1177/2024. «javase» incluye «core» de forma transitiva.
+		-->
+		<dependency>
+			<groupId>com.google.zxing</groupId>
+			<artifactId>javase</artifactId>
+			<version>3.5.3</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>

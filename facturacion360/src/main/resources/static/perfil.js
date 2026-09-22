@@ -32,22 +32,23 @@ document.addEventListener('DOMContentLoaded', () => {
  * Carga los datos actuales del emisor desde el backend.
  */
 async function cargarEmisor() {
+    // 1. Buscamos la pantalla de carga y la mostramos quitando 'd-none'
+    const pantallaCarga = document.getElementById('pantallaCarga');
+    if (pantallaCarga) {
+        pantallaCarga.classList.remove('d-none');
+    }
 
     try {
-
         const response = await fetch('/emisor');
 
         // Si todavía no existe ningún emisor,
         // simplemente dejamos el formulario preparado para crear uno.
         if (response.status === 404) {
-
             limpiarDatosEmisor();
-
             return;
         }
 
         if (!response.ok) {
-
             throw new Error(
                 'No se pudo cargar el emisor. Código HTTP: ' +
                 response.status
@@ -55,17 +56,19 @@ async function cargarEmisor() {
         }
 
         const emisor = await response.json();
-
         mostrarEmisor(emisor);
 
     } catch (error) {
-
         console.error('Error al cargar el emisor:', error);
-
         fijar(
             'No se han podido cargar los datos del emisor.',
             { esError: true }
         );
+    } finally {
+        // 2. Pase lo que pase (éxito o error), ocultamos la pantalla de carga al terminar
+        if (pantallaCarga) {
+            pantallaCarga.classList.add('d-none');
+        }
     }
 }
 

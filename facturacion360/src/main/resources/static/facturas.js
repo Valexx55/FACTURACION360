@@ -348,8 +348,17 @@ function volverAFactura() {
     }
 }
 
+function validarClienteFactura() {
+    for (const campo of formularioClienteFactura.querySelectorAll("input")) {
+        campo.value = campo.value.trim();
+    }
+    const valido = validar(formularioClienteFactura);
+    if (!valido) formularioClienteFactura.querySelector("input:invalid")?.focus();
+    return valido;
+}
+
 async function guardarCliente() {
-    if (!guardandoCliente && altaClienteAbierta && formularioClienteFactura.reportValidity()) {
+    if (!guardandoCliente && altaClienteAbierta && validarClienteFactura()) {
         const datos = {};
         for (const campo of ["nombre", "nifCif", "direccion", "codigoPostal", "poblacion", "provincia", "telefono", "email"]) {
             datos[campo] = formularioClienteFactura.elements[campo].value.trim();
@@ -377,14 +386,15 @@ async function guardarCliente() {
             } else if (respuesta.status == 400) {
                 const problema = await respuesta.json().catch(() => ({}));
                 const errores = problema.errores || {};
-                let mensaje = "Revisa los datos del cliente.";
+                const mensaje = "Revisa los datos del cliente.";
                 for (const campo of Object.keys(datos)) {
                     if (errores && typeof errores[campo] == "string") {
-                        mensaje += " " + errores[campo];
+                        marcarCampo(formularioClienteFactura.elements[campo], errores[campo]);
                     }
                 }
                 mostrarErrorAltaCliente(mensaje);
             } else if (respuesta.status == 409) {
+                marcarCampo(formularioClienteFactura.elements.nifCif, "Ya existe un cliente con ese NIF/CIF.");
                 mostrarErrorAltaCliente("Ya existe un cliente con ese NIF/CIF. Vuelve a la factura y búscalo.");
             } else {
                 mostrarErrorAltaCliente("No se pudo confirmar el alta. Conservamos los datos; comprueba si el cliente se creó antes de reintentar.");
@@ -397,6 +407,7 @@ async function guardarCliente() {
             botonGuardarCliente.textContent = "Guardar cliente";
             formularioClienteFactura.setAttribute("aria-busy", "false");
             for (const boton of botonesCerrarFactura) boton.disabled = false;
+            formularioClienteFactura.querySelector(".is-invalid")?.focus();
         }
         if (nuevoCliente) {
             volverAFactura();
@@ -1003,6 +1014,18 @@ busquedaCliente.addEventListener("keydown", function (evento) {
 document.getElementById("botonCambiarCliente").addEventListener("click", cambiarCliente);
 document.getElementById("botonAltaCliente").addEventListener("click", mostrarAltaCliente);
 document.getElementById("botonVolverFactura").addEventListener("click", volverAFactura);
+for (const campo of formularioClienteFactura.querySelectorAll("input")) {
+    const mensajeBase = campo.nextElementSibling.textContent;
+    campo.addEventListener("input", function () {
+        limpiarCampo(campo, mensajeBase);
+    });
+    formularioClienteFactura.addEventListener("reset", function () {
+        limpiarCampo(campo, mensajeBase);
+    });
+}
+formularioClienteFactura.addEventListener("reset", function () {
+    limpiarValidacion(formularioClienteFactura);
+});
 formularioClienteFactura.addEventListener("submit", function (evento) {
     evento.preventDefault();
     guardarCliente();

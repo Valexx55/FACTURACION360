@@ -1,5 +1,7 @@
 package edu.xtd.facturacion360.service;
 
+import java.util.Objects;
+
 import org.springframework.stereotype.Service;
 
 import edu.xtd.facturacion360.dto.Emisor;
@@ -25,7 +27,8 @@ public class EmisorServiceImpl implements EmisorService {
         if (existe) {
 
             // Ya existe → actualizar.
-            guardado = emisorRepository.update(emisor);
+        		
+            guardado = Objects.isNull(emisor.logo()) ? emisorRepository.updateSinFoto(emisor) : emisorRepository.update(emisor);
 
         } else {
 

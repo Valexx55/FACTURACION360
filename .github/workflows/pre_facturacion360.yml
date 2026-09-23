@@ -44,7 +44,7 @@ jobs:
     needs: build
     environment:
       name: preproduccion
-      url: https://facturacion360-test.azurewebsites.net
+      url: https://facturacion360-test-frdra3cwhcafdffp.spaincentral-01.azurewebsites.net/
     permissions:
       id-token: write
       contents: read

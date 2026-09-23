@@ -88,10 +88,11 @@ export function esCancelacion(error) {
  * los datos guardados se vuelven a leer al refrescar la tabla; el cuerpo ni se lee.
  *
  * @param {string} canal nombre del flujo de peticiones (una por fila que se guarda)
- * @param {string} metodo el método HTTP ("PUT")
+ * @param {string} metodo el método HTTP: "POST", "PUT" o "DELETE"
  * @param {string} url la URL a la que se manda
  * @param {Object} cuerpo el objeto que viaja como JSON
- * @return {Promise<number>} el código HTTP de la respuesta
+ * @return {Promise<{estado: number, errores: Object}>} el código HTTP y, si el servidor
+ *         los ha contado, el motivo de cada campo que ha fallado
  */
 export async function enviarJson(canal, metodo, url, cuerpo) {
     peticionesEnVuelo[canal]?.abort();
@@ -106,9 +107,34 @@ export async function enviarJson(canal, metodo, url, cuerpo) {
             signal: controlador.signal,
         });
 
-        return respuesta.status;
+        // El codigo Y los errores por campo. Antes se devolvia solo el codigo y el cuerpo
+        // se tiraba, asi que un 400 solo podia contarse como "revisa los campos marcados",
+        // sin poder decir cual ni por que. El manejador global ya manda ese mapa.
+        return { estado: respuesta.status, errores: await erroresDe(respuesta) };
     } finally {
         cerrarCanal(canal, controlador);
+    }
+}
+
+/**
+ * Los errores por campo que venga contando el servidor, si los cuenta.
+ *
+ * No lanza nunca: si la respuesta fue bien, no trae cuerpo, no es JSON o no lleva el mapa,
+ * devuelve uno vacio. Reventar mientras se maneja un error deja la pantalla muda, que es
+ * peor que quedarse sin el detalle.
+ *
+ * @param {Response} respuesta
+ * @return {Promise<Object>} de nombre de campo a motivo
+ */
+async function erroresDe(respuesta) {
+    if (respuesta.ok) return {};
+
+    try {
+        const problema = await respuesta.json();
+
+        return problema?.errores ?? {};
+    } catch {
+        return {};
     }
 }
 

@@ -17,6 +17,10 @@
 
 <body>
 
+  <!-- Imagen de carga -->
+  <div id="pantallaCarga" class="pantalla-carga d-none">
+        <img src="img/KittyLoading.gif" alt="Cargando datos..." class="spinner-carga">
+    </div>
     <!-- Navegación -->
     <nav class="navbar">
         <div class="container">
@@ -47,6 +51,11 @@
                 <li>
                     <a class="nav-link" href="nosotros.html">Sobre Nosotros</a>
                 </li>
+                <li><a class="nav-link " href="index.html">Inicio</a></li>
+				<li><a class="nav-link active" href="perfil.html">Datos Emisor</a></li>
+                <li><a class="nav-link" href="clientes.html">Clientes</a></li>
+                <li><a class="nav-link" href="facturas.html">Facturas</a></li>
+                <li><a class="nav-link " href="nosotros.html">Sobre Nosotros</a></li>
             </ul>
         </div>
     </nav>
@@ -58,6 +67,16 @@
         <div class="row justify-content-center w-100">
 
             <div class="col-lg-8 col-md-10">
+                <!-- La región viva que lee el lector de pantalla. Está siempre en el
+                     documento, vacía e invisible: una región que aparece con el mensaje ya
+                     dentro NO se anuncia, porque lo que se vigila es el cambio de contenido. -->
+                <p id="anuncios" class="visually-hidden" role="status"></p>
+
+                <!-- Y esta es la franja visible. Sustituye a la alerta que perfil.js creaba y
+                     borraba a mano con innerHTML: ahora la escribe el módulo común, con el
+                     mismo comportamiento que en clientes y en facturas. Vacía no ocupa. -->
+                <p id="aviso-emisor" class="aviso"></p>
+
 
                 <!-- Región para lectores de pantalla -->
                 <p id="anuncios"

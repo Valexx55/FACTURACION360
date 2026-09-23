@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import edu.xtd.facturacion360.validacion.NifCif;
+
 /**
  * Datos que puede enviar un cliente HTTP para crear o actualizar un cliente.
  */
@@ -14,13 +16,20 @@ public record ClienteRequest(
         @Size(max = 60, message = "El nombre no puede superar 60 caracteres")
         String nombre,
 
+        // @NifCif y no un @Pattern: la letra de control no se puede calcular con una
+        // expresion regular, y el patron que habia aqui solo admitia DNI de persona fisica,
+        // asi que no se podia dar de alta a ninguna empresa como cliente.
         @NotBlank(message = "El NIF/CIF es obligatorio")
-        @Pattern(
-                regexp = "^[0-9]{8}[A-Z]$",
-                message = "El DNI debe tener 8 números y una letra mayúscula. Ejemplo: 12345678Z"
-        )
+        @NifCif
         String nifCif,
 
+        // Estos tres campos y los dos de arriba son NOT NULL en la base de datos, y el
+        // formulario los marca obligatorios con su asterisco. Sin el @NotBlank, quien no
+        // pase por el formulario -Postman, curl, otra pantalla- los manda vacios, pasan la
+        // validacion y revienta MySQL; y ese fallo acaba respondiendo <<no se puede realizar
+        // la operacion porque hay datos relacionados>>, que dice lo contrario de lo que pasa:
+        // el problema no es que sobren datos relacionados, es que falta uno obligatorio.
+        @NotBlank(message = "La dirección es obligatoria")
         @Size(max = 90, message = "La dirección no puede superar 90 caracteres")
         String direccion,
 
@@ -31,9 +40,11 @@ public record ClienteRequest(
         )
         String codigoPostal,
 
+        @NotBlank(message = "La población es obligatoria")
         @Size(max = 30, message = "La población no puede superar 30 caracteres")
         String poblacion,
 
+        @NotBlank(message = "La provincia es obligatoria")
         @Size(max = 15, message = "La provincia no puede superar 15 caracteres")
         String provincia,
 

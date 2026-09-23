@@ -10,7 +10,8 @@ import { API_CLIENTE, CAMPOS_CLIENTE, CAMPOS_EDITABLES, DURACION_PLEGADO_MS } fr
 import { columnasVisibles, cuerpoTabla, plantillaDespliegue } from "./dom.js";
 import { clientesEnPagina, filasDesplegadas } from "./estado.js";
 import { esCancelacion, pedirJson, peticionesEnVuelo } from "./api.js";
-import { anunciar, escribirPista, limpiarPistas } from "./avisos.js";
+import { anunciar, escribirPista, fijar, limpiarPistas } from "./avisos.js";
+import { crearAlerta } from "./notificaciones.js";
 import { filaViva, modoDe, panelDe, pintarCeldasFila } from "./fila.js";
 import { etiquetaDe, valoresDe } from "./formulario.js";
 import { confirmarDescarte } from "./dialogo.js";
@@ -18,7 +19,6 @@ import {
     pintarCargando,
     pintarContenidoPanel,
     pintarErrorPanel,
-    pintarPanelDetalle,
 } from "./paneles.js";
 
 /**
@@ -35,7 +35,7 @@ import {
  * sin querer lo que haya cambiado otro.
  *
  * @param {HTMLTableRowElement} fila la fila del cliente
- * @param {string} modo "detalle" o "edicion"
+ * @param {string} modo "detalle", "edicion" o "borrado"
  * @param {Object} opciones
  * @param {boolean} opciones.animar false al reabrir tras repintar la tabla: el panel ya
  *        estaba desplegado y volver a animarlo se vería como un parpadeo
@@ -116,7 +116,7 @@ export async function abrirDespliegue(fila, modo,
  *
  * @param {HTMLTableRowElement} fila la fila del cliente
  * @param {Element} contenido el hueco del panel
- * @param {string} modo "detalle" o "edicion"
+ * @param {string} modo "detalle", "edicion" o "borrado"
  * @param {Object} recibido el cliente tal y como está ahora en la base de datos
  */
 function conciliar(fila, contenido, modo, recibido) {
@@ -135,7 +135,11 @@ function conciliar(fila, contenido, modo, recibido) {
     marcarFila(fila, modo);
 
     if (modo !== "edicion") {
-        pintarPanelDetalle(contenido, recibido);
+        // Se despacha por modo en vez de pintar detalle a secas: "borrado" tambien entra
+        // por aqui -modoDe() lo devuelve, y el boton Reintentar de main.js llama sin la
+        // guarda revalidar:false que si llevan los otros llamantes-, y pintarlo como
+        // detalle convertiria una confirmacion de borrado en una ficha.
+        pintarContenidoPanel(contenido, modo, recibido, null, false);
         anunciar("Los datos de este cliente han cambiado y se han actualizado.");
         return;
     }
@@ -195,7 +199,9 @@ function conciliarFormulario(formulario, recibido) {
 
     // En la alerta del propio formulario, que es donde está mirando: es role="alert" y estaba
     // en el documento desde que se pintó, así que escribir dentro basta para que se anuncie.
-    formulario.querySelector(".alerta-edicion").textContent = partes.join(" ");
+    // Con informar() y no con mostrarError(): decir qué campos se han refrescado no es un
+    // fallo de nadie, y en rojo parecería que algo ha ido mal.
+    crearAlerta(formulario.querySelector(".alerta-formulario")).informar(partes.join(" "));
 }
 
 /**
@@ -208,8 +214,8 @@ function fallaComprobacion(idCliente, error) {
     if (error.estado === 404) {
         // Lo han borrado. Se avisa fuera de la tabla, que es lo único que sobrevive al
         // refresco, y se olvida el panel para que no se reabra sobre una fila que ya no viene.
-        anunciar("Este cliente ya no existe: alguien lo ha eliminado.",
-            { visible: true, esError: true });
+        fijar("Este cliente ya no existe: alguien lo ha eliminado.",
+            { esError: true });
         filasDesplegadas.delete(idCliente);
         document.dispatchEvent(new CustomEvent("clientes:cambiaron"));
         return;

@@ -11,13 +11,23 @@
  * el botón de dirección y las cabeceras de la tabla se contradigan: los dos leen y
  * escriben aquí, y luego se repinta todo desde este objeto.
  */
-export const criterios = {
+/**
+ * Con que criterios arranca la pantalla.
+ *
+ * Esta aparte y congelado porque hay DOS sitios que necesitan saberlo: el arranque y el
+ * boton de limpiar. Estaba escrito en los dos, asi que cambiar el orden inicial en uno
+ * dejaba al otro llevando a un estado distinto, y el boton pasaba a mentir sobre lo que
+ * hace sin que nada avisara.
+ */
+export const CRITERIOS_INICIALES = Object.freeze({
     busqueda: "",
     provincia: "",
     poblacion: "",
     ordenarPor: "fecha_alta",
     direccion: "desc",
-};
+});
+
+export const criterios = { ...CRITERIOS_INICIALES };
 
 /*
  * Filas con el panel desplegado: id del cliente -> { modo, borrador }.
@@ -26,7 +36,8 @@ export const criterios = {
  * del DOM porque la tabla se repinta entera cada vez que se pagina, se busca o se refresca:
  * de aquí se saca qué paneles hay que volver a abrir después.
  *
- *   modo     -> "detalle" (solo lectura) o "edicion" (formulario)
+ *   modo     -> "detalle" (solo lectura), "edicion" (formulario) o "borrado"
+ *               (confirmacion)
  *   borrador -> lo que el usuario tuviera escrito sin guardar cuando se repintó la tabla,
  *               o null. Sin esto, buscar algo con un formulario abierto le borraría lo
  *               tecleado sin avisar.

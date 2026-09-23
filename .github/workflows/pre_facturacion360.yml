@@ -1,4 +1,4 @@
-name: Build and deploy FACTURACION360 to preproduction
+name: Flujo CI/CD Preproducción Facturación 360
 
 on:
   push:

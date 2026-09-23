@@ -1,0 +1,13 @@
+PASOS PARA MODIFICAR EL PROYECTO
+
+1 Análisis: qué hay que hacer
+2 Diseño: cómo lo voy a hacer: qué ficheros tocaré, diagrama de activdad, etc
+3 creación rama local (FIX/FEATURE/CHORE)
+4 Implementar los test
+5 Aprobación personal en local
+6 Subida de la rama --> Ejecuta el CI (gen jar)/CD(nuevo proceso java jar) en el entorno de Test
+7 Test de usuario en entorno de pruebas
+8 Merge origin master (resolver conflictos/add/commit)
+9 Subida la rama actualziada (con los cambios de master)
+10 Nuevos test de usuario en entorno de test --> Ejecuta el CI/CD en el entorno de Test
+11 Pull Request (Integración con master) --> Ejecutaría el CI/CD en Producción

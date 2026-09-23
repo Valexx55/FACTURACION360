@@ -7,11 +7,18 @@ import edu.xtd.facturacion360.dto.Emisor;
 public interface EmisorRepository {
 
     /**
-     * Actualiza el emisor existente.
+     * Actualiza el emisor existente con foto.
      *
      * @return true si se ha actualizado una fila.
      */
     boolean update(Emisor emisor);
+    
+    /**
+     * Actualiza el emisor existente sin Foto.
+     *
+     * @return true si se ha actualizado una fila.
+     */
+    boolean updateSinFoto(Emisor emisor);
 
     /**
      * Crea un nuevo emisor.

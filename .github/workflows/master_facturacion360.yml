@@ -1,4 +1,4 @@
-name: Build and deploy JAR app to Azure Web App - facturacion360
+name: Flujo CI/CD Producción Facturación 360
 
 on:
   push:

@@ -16,7 +16,6 @@
 
    Cuando alguien esté ya editando esas dos páginas: añadir 500 a los tres <link> y borrar
    este @import. Cuatro líneas y queda una sola petición, más rápida. */
-
 :root {
     --primary-color: #4776f7;
     --secondary-color: #0ea5e9;

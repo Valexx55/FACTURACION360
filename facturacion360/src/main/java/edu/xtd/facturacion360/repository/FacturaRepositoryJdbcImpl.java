@@ -1,7 +1,6 @@
 package edu.xtd.facturacion360.repository;
 
 import java.time.LocalDate;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -11,12 +10,14 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import edu.xtd.facturacion360.dto.ClienteFactura;
 import edu.xtd.facturacion360.dto.ConceptoFactura;
+import edu.xtd.facturacion360.dto.DesgloseImpositivo;
 import edu.xtd.facturacion360.dto.Factura;
 import edu.xtd.facturacion360.dto.SugerenciaConcepto;
 
@@ -44,6 +45,9 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 	@Autowired
 	ConceptoFacturaRowMapper conceptoFacturaRowMapper;
 
+	@Autowired
+	DesgloseImpositivoRowMapper desgloseImpositivoRowMapper;
+
 	@Override
 	public Factura insertar(Factura factura) {
 		String sqlInsertar = "INSERT INTO facturas "
@@ -62,8 +66,15 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 				factura.importeIva(),
 				factura.total());
 		} catch (DuplicateKeyException error) {
-			if (esColisionDeNumero(error)) {
+			if (RestriccionSql.duplicado(error, "num_factura_UNIQUE")) {
 				throw new NumeroFacturaDuplicadoException(error);
+			}
+			throw error;
+		} catch (DataIntegrityViolationException error) {
+			// Va DESPUES del catch de arriba a proposito: DuplicateKeyException hereda de esta,
+			// asi que ponerla primero se tragaria las colisiones de numero.
+			if (RestriccionSql.padreQueFalta(error, "FK_CLIENTE")) {
+				throw new ClienteInexistenteException(error);
 			}
 			throw error;
 		}
@@ -89,29 +100,15 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 	@Override
 	public void insertarConceptos(int idFactura, List<ConceptoFactura> conceptos) {
 		String sql = "INSERT INTO conceptos (descripcion, cantidad, precio_unitario, descuento, "
-				+ "porcentaje_iva, importe_iva, base_imponible, total, idfactura) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+				+ "porcentaje_iva, importe_iva, base_imponible, total, idfactura, clave_regimen, "
+				+ "calificacion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 		for (ConceptoFactura concepto : conceptos) {
 			jdbcTemplate.update(sql, concepto.descripcion(), concepto.cantidad(), concepto.precioUnitario(),
 					concepto.descuento(), concepto.porcentajeIva(), concepto.importeIva(), concepto.baseImponible(),
-					concepto.total(), idFactura);
+					concepto.total(), idFactura, concepto.claveRegimen(), concepto.calificacion());
 		}
 	}
 
-	private boolean esColisionDeNumero(DuplicateKeyException error) {
-		Throwable causa = error.getCause();
-		while (causa != null) {
-			if (causa instanceof SQLException errorSql) {
-				String mensaje = errorSql.getMessage();
-				if (errorSql.getErrorCode() == 1062 && "23000".equals(errorSql.getSQLState()) && mensaje != null
-						&& (mensaje.endsWith("for key 'num_factura_UNIQUE'")
-								|| mensaje.endsWith("for key 'facturas.num_factura_UNIQUE'"))) {
-					return true;
-				}
-			}
-			causa = causa.getCause();
-		}
-		return false;
-	}
 
 	@Override
 	public List<Factura> buscar(String busqueda) {
@@ -159,8 +156,17 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 		String sql = "UPDATE facturas SET idcliente=?, fecha_emision=?, estado=?, observaciones=?, "
 				+ "subtotal=?, importe_iva=?, total=?, fecha_actualizacion=NOW() "
 				+ "WHERE idfactura=? AND estado='BORRADOR'";
-		return jdbcTemplate.update(sql, factura.idCliente(), factura.fechaEmision(), factura.estado(), factura.observaciones(),
-				factura.subtotal(), factura.importeIva(), factura.total(), factura.idFactura());
+		try {
+			return jdbcTemplate.update(sql, factura.idCliente(), factura.fechaEmision(), factura.estado(), factura.observaciones(),
+					factura.subtotal(), factura.importeIva(), factura.total(), factura.idFactura());
+		} catch (DataIntegrityViolationException error) {
+			// Al editar se puede cambiar el cliente, asi que aqui tambien cabe apuntar a uno
+			// que ya no esta.
+			if (RestriccionSql.padreQueFalta(error, "FK_CLIENTE")) {
+				throw new ClienteInexistenteException(error);
+			}
+			throw error;
+		}
 	}
 
 	@Override
@@ -222,10 +228,38 @@ public class FacturaRepositoryJdbcImpl implements FacturaRepository {
 	}
 	
 	@Override
+	public void insertarDesglose(int idFactura, List<DesgloseImpositivo> desglose) {
+		String sql = "INSERT INTO desglose_impositivo (idfactura, impuesto, clave_regimen, "
+				+ "calificacion, tipo_impositivo, base_imponible, cuota_repercutida) "
+				+ "VALUES (?, ?, ?, ?, ?, ?, ?)";
+		for (DesgloseImpositivo linea : desglose) {
+			jdbcTemplate.update(sql, idFactura, linea.impuesto(), linea.claveRegimen(),
+					linea.calificacion(), linea.tipoImpositivo(), linea.baseImponible(),
+					linea.cuotaRepercutida());
+		}
+	}
+
+	@Override
+	public void eliminarDesglose(int idFactura) {
+		jdbcTemplate.update("DELETE FROM desglose_impositivo WHERE idfactura=?", idFactura);
+	}
+
+	@Override
+	public List<DesgloseImpositivo> buscarDesglose(int idFactura) {
+		// El mismo orden con el que se guardo, que es el que fija CalculadoraDesglose. Si esto
+		// saliera en un orden distinto cada vez, la huella que se firme manana cambiaria sin
+		// que hubiera cambiado ni un importe.
+		String sql = "SELECT impuesto, clave_regimen, calificacion, tipo_impositivo, "
+				+ "base_imponible, cuota_repercutida FROM desglose_impositivo "
+				+ "WHERE idfactura = ? ORDER BY impuesto, clave_regimen, calificacion, tipo_impositivo";
+		return jdbcTemplate.query(sql, desgloseImpositivoRowMapper, idFactura);
+	}
+
+	@Override
 	public List<ConceptoFactura> buscarConceptos(int idFactura) {
 		String sql = "SELECT idconcepto, descripcion, cantidad, precio_unitario, descuento, "
-				+ "porcentaje_iva, importe_iva, base_imponible, total FROM conceptos "
-				+ "WHERE idfactura = ? ORDER BY idconcepto";
+				+ "porcentaje_iva, importe_iva, base_imponible, total, clave_regimen, calificacion "
+				+ "FROM conceptos WHERE idfactura = ? ORDER BY idconcepto";
 		return jdbcTemplate.query(sql, conceptoFacturaRowMapper, idFactura);
 	}
 }

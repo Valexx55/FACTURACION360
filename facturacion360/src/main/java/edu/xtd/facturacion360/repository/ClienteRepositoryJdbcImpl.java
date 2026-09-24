@@ -13,7 +13,8 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -94,6 +95,22 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	 * un fallo real: {@link #escaparComodines(String)} lo explica entero.</p>
 	 */
 	private static final String ESCAPE_LIKE = "!";
+
+	/**
+	 * El fragmento de SQL que declara ese carácter, montado con la constante.
+	 *
+	 * <p>Se compone aquí y no se escribe a mano en la consulta porque si no el {@code !}
+	 * acaba en dos sitios y solo uno de ellos es la constante. Cambiarla —que es justo lo
+	 * que invita a hacer el javadoc de arriba, que dedica un párrafo a por qué ese carácter
+	 * concreto— dejaría {@link #escaparComodines(String)} generando {@code #%} mientras la
+	 * consulta sigue diciendo {@code ESCAPE '!'}: el escape pasaría a ser un carácter
+	 * literal, el {@code %} volvería a ser comodín, y buscar «50%» devolvería la tabla
+	 * entera. Sin error y sin excepción: el buscador simplemente dejaría de filtrar.</p>
+	 *
+	 * <p>No abre la puerta a inyección: {@code ESCAPE_LIKE} es un literal de esta clase y
+	 * por aquí no pasa nada que venga del usuario.</p>
+	 */
+	private static final String LIKE_CON_ESCAPE = " LIKE ? ESCAPE '" + ESCAPE_LIKE + "'";
 
 	@Autowired
 	ClienteRowMapper clienteRowMapper;
@@ -240,7 +257,7 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 			// Sin LOWER(): la tabla es utf8mb4_0900_ai_ci, que YA compara ignorando
 			// mayúsculas y acentos ('garcia' encuentra 'García'). Envolver la columna en
 			// LOWER() no cambiaría el resultado y además impediría usar índices.
-			condiciones.add("(nombre LIKE ? ESCAPE '!' OR nif_cif LIKE ? ESCAPE '!')");
+			condiciones.add("(nombre" + LIKE_CON_ESCAPE + " OR nif_cif" + LIKE_CON_ESCAPE + ")");
 			String patron = "%" + escaparComodines(busqueda) + "%";
 			args.add(patron);
 			args.add(patron);
@@ -386,7 +403,10 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	    KeyHolder keyHolder = new GeneratedKeyHolder();
 	    LocalDate fechaAlta = LocalDate.now();
 
-	    int numFilasAfectadas = jdbcTemplate.update(connection -> {
+	    int numFilasAfectadas;
+
+	    try {
+	    numFilasAfectadas = jdbcTemplate.update(connection -> {
 
 	       PreparedStatement ps = connection.prepareStatement(
 	                INSERTAR_CLIENTE,
@@ -406,6 +426,18 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	        return ps;
 
 	    }, keyHolder);
+
+	    } catch (DuplicateKeyException error) {
+	        // Se traduce aqui, que es donde se sabe que indice es cual. Mas arriba solo
+	        // llegaria un DuplicateKeyException identico al del numero de factura.
+	        if (RestriccionSql.duplicado(error, "nif_cif_UNIQUE")) {
+	            throw new NifCifDuplicadoException(error);
+	        }
+
+	        // Si no es la que conocemos, sube tal cual: tragarse lo que no se entiende es
+	        // peor que no haberlo mirado.
+	        throw error;
+	    }
 
 	    
 	    if (numFilasAfectadas == 1) 
@@ -451,7 +483,10 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	    // Ejecutamos la sentencia SQL utilizando JdbcTemplate.
 	    // Cada '?' de la consulta se sustituye por el valor correspondiente
 	    // del objeto Cliente.
-	    int filas = jdbcTemplate.update(
+	    int filas;
+
+	    try {
+	        filas = jdbcTemplate.update(
 	            sql,
 	            cliente.nombre(),
 	            cliente.nifCif(),
@@ -462,7 +497,14 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 	            cliente.telefono(),
 	            cliente.email(),
 	            cliente.idCliente()
-	    );
+	        );
+	    } catch (DuplicateKeyException error) {
+	        if (RestriccionSql.duplicado(error, "nif_cif_UNIQUE")) {
+	            throw new NifCifDuplicadoException(error);
+	        }
+
+	        throw error;
+	    }
 
 	    // Si se ha modificado al menos una fila, devolvemos true.
 	    // Si no se ha modificado ninguna, devolvemos false.
@@ -480,7 +522,19 @@ public class ClienteRepositoryJdbcImpl implements ClienteRepository {
 		boolean borrarOk = false;
 		String instruccionBorrar = "DELETE FROM clientes where idcliente = ?;";
 
-		int filasborradas = jdbcTemplate.update(instruccionBorrar, id);
+		int filasborradas;
+
+		try {
+			filasborradas = jdbcTemplate.update(instruccionBorrar, id);
+		} catch (DataIntegrityViolationException error) {
+			// El manejador global sabe que hay datos relacionados, pero no que son facturas.
+			// Eso lo sabe quien escribio la clave ajena, o sea este fichero.
+			if (RestriccionSql.padreConHijos(error, "FK_CLIENTE")) {
+				throw new ClienteConFacturasException(error);
+			}
+
+			throw error;
+		}
 		if (filasborradas == 1) {
 			borrarOk = true;
 		} 

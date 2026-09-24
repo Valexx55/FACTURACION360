@@ -1,7 +1,20 @@
+import { crearAvisos } from "./js/notificaciones.js";
+import { motivoDe } from "./js/problema.js";
+
 const estadoVisor = document.getElementById("estadoVisor");
 const contenidoFactura = document.getElementById("contenidoFactura");
 const botonImprimir = document.getElementById("botonImprimir");
 const tablaConceptos = document.getElementById("tablaConceptos");
+const tablaDesglose = document.getElementById("tablaDesglose");
+const bloqueDesglose = document.getElementById("bloqueDesglose");
+
+// Los avisos de esta pantalla. Aquí la franja es el propio rótulo de estado del visor: el
+// "Cargando factura..." que ya viene escrito en el HTML es un estado, no un evento, así que
+// se queda hasta que la factura carga (limpiar) o hasta que falla (fijar).
+const { fijar, limpiar } = crearAvisos({
+    franja: estadoVisor,
+    region: document.getElementById("anuncios"),
+});
 
 /** Carga la factura indicada en la dirección de la página. */
 async function cargarDetalleFactura() {
@@ -15,8 +28,7 @@ async function cargarDetalleFactura() {
                 const detalle = await respuesta.json();
                 mostrarDetalle(detalle);
             } else {
-                const mensaje = await respuesta.text();
-                mostrarError(mensaje || "No se pudo cargar la factura.");
+                mostrarError(await motivoDe(respuesta, "No se pudo cargar la factura."));
             }
         } catch (error) {
             console.error("Error al cargar el detalle de la factura", error);
@@ -49,16 +61,49 @@ function mostrarDetalle(detalle) {
     document.getElementById("totalFactura").textContent = formatearImporte(factura.total);
 
     mostrarConceptos(detalle.conceptos);
+    mostrarDesglose(detalle.desglose);
 
     if (factura.observaciones != null && factura.observaciones.trim() != "") {
         document.getElementById("observacionesFactura").textContent = factura.observaciones;
         document.getElementById("bloqueObservaciones").classList.remove("d-none");
     }
 
-    estadoVisor.classList.add("d-none");
+    limpiar();
     contenidoFactura.classList.remove("d-none");
     document.getElementById("documentoFactura").setAttribute("aria-busy", "false");
     botonImprimir.disabled = false;
+}
+
+/**
+ * Pinta el cuadro del IVA agrupado por tipo.
+ *
+ * El desglose lo calcula el SERVIDOR y aqui solo se pinta. No es pereza: la regla de
+ * redondeo -redondear la cuota de cada linea y luego sumar- es la misma que acabara dentro
+ * de la huella que se comunica a Hacienda, y tenerla escrita en dos idiomas es tenerla
+ * escrita dos veces para que se desalineen.
+ *
+ * Si no hay desglose -una factura sin conceptos- el cuadro no se ensena en vez de salir
+ * vacio: un recuadro con cabeceras y nada debajo parece un fallo de carga.
+ *
+ * @param {Array} desglose una linea por tipo impositivo, o nada
+ */
+function mostrarDesglose(desglose) {
+    tablaDesglose.replaceChildren();
+
+    if (!desglose || desglose.length == 0) {
+        bloqueDesglose.classList.add("d-none");
+        return;
+    }
+
+    for (const linea of desglose) {
+        const fila = document.createElement("tr");
+        agregarCelda(fila, formatearImporte(linea.baseImponible), "text-end");
+        agregarCelda(fila, formatearPorcentaje(linea.tipoImpositivo), "text-end");
+        agregarCelda(fila, formatearImporte(linea.cuotaRepercutida), "text-end");
+        tablaDesglose.appendChild(fila);
+    }
+
+    bloqueDesglose.classList.remove("d-none");
 }
 
 /** Rellena la tabla o muestra una fila informativa si la factura no tiene conceptos. */
@@ -86,6 +131,31 @@ function mostrarConceptos(conceptos) {
             tablaConceptos.appendChild(fila);
         }
     }
+}
+/** Carga los datos de la informacion del emisor */
+async function cargarEmisor() {
+    try {
+        const respuesta = await fetch("/emisor");
+        if (respuesta.ok) {
+            const emisor = await respuesta.json();
+            mostrarEmisor(emisor);
+        }
+    } catch (error) {
+        console.error("Error al cargar los datos del emisor", error);
+    }
+}
+/** Muestra los datos de la informacion del emisor */
+function mostrarEmisor(emisor) {
+    if (!emisor) return;
+    
+    // Asignamos los datos únicamente a la sección del recuadro "Emisor"
+    document.getElementById("nombreEmisor").textContent = emisor.nombre || "—";
+    document.getElementById("cifEmisor").textContent = "NIF/CIF: " + (emisor.cif || emisor.nifCif || "—");
+    document.getElementById("direccionEmisor").textContent = emisor.direccion || "—";
+    
+    const tel = emisor.telefono || "";
+    const email = emisor.email || "";
+    document.getElementById("contactoEmisor").textContent = [tel, email].filter(Boolean).join(" · ") || "Sin contacto";
 }
 
 function agregarCelda(fila, texto, clases) {
@@ -124,8 +194,7 @@ function formatearPorcentaje(porcentaje) {
 }
 
 function mostrarError(mensaje) {
-    estadoVisor.textContent = mensaje;
-    estadoVisor.className = "alert alert-danger";
+    fijar(mensaje, { esError: true });
     document.getElementById("documentoFactura").setAttribute("aria-busy", "false");
 }
 
@@ -134,3 +203,4 @@ botonImprimir.addEventListener("click", function () {
 });
 
 cargarDetalleFactura();
+cargarEmisor();

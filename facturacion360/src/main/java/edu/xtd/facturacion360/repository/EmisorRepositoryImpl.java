@@ -16,11 +16,42 @@ public class EmisorRepositoryImpl implements EmisorRepository {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+    
+    
+    
+    @Override
+	public boolean updateSinFoto(Emisor emisor) {
+
+        String sql = 
+        			"""
+                UPDATE `bd_facturacion`.`emisor`
+                SET
+                    `nombre` = ?,
+                    `nif_cif` = ?,
+                    `direccion` = ?,
+                    `email` = ?,
+                    `telefono` = ?
+                WHERE `idemisor` = ?;
+                """;
+
+        int filas = jdbcTemplate.update(
+                sql,
+                emisor.nombre(),
+                emisor.cif(),
+                emisor.direccion(),
+                emisor.email(),
+                emisor.telefono(),
+                ID_EMISOR_PRINCIPAL
+        );
+
+        return filas == 1;
+    }
 
     @Override
     public boolean update(Emisor emisor) {
 
-        String sql = """
+        String sql = 
+        			"""
                 UPDATE `bd_facturacion`.`emisor`
                 SET
                     `nombre` = ?,
@@ -137,4 +168,6 @@ public class EmisorRepositoryImpl implements EmisorRepository {
             //return null;
         }
     }
+
+	
 }

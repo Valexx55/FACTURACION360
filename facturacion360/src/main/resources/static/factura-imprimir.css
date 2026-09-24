@@ -11,9 +11,6 @@ body {
 }
 
 .cabecera-factura {
-    display: flex;
-    justify-content: space-between;
-    gap: 2rem;
     border-bottom: 3px solid #024ebc;
     padding-bottom: 1.5rem;
     margin-bottom: 2rem;
@@ -22,6 +19,64 @@ body {
 .cabecera-factura h1 {
     color: #024ebc;
     font-size: 1.8rem;
+}
+
+/* Bloque QR · Orden HAC/1177/2024 — pantalla */
+.bloque-verifactu {
+    text-align: center;
+    margin: 0;
+    padding: 16px;
+    background: #fff;
+    border: 1px dashed #ced5db;
+}
+
+.qr-verifactu {
+    display: block;
+    width: 132px;
+    height: 132px;
+    margin: 0 auto;
+}
+
+.rotulo-qr {
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 6px;
+    color: #14181d;
+}
+
+.leyenda-verifactu {
+    display: block;
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    margin-top: 6px;
+    color: #14181d;
+}
+
+.leyenda-verifactu small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.65rem;
+    color: #555;
+    margin-top: 2px;
+}
+
+/* Marca de agua BORRADOR */
+.marca-agua {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 6rem;
+    font-weight: 900;
+    color: rgba(200, 0, 0, 0.10);
+    letter-spacing: 0.3em;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    z-index: 100;
 }
 
 .datos-cliente,
@@ -51,14 +106,10 @@ body {
 }
 
 /*
- * El desglose del IVA. Mismo ancho y misma posicion que el cuadro de totales, porque son
- * lo mismo contado con mas detalle: el uno explica de donde sale el IVA del otro. Puestos
- * a distinta anchura o a distinto lado parecerian dos tablas sin relacion.
+ * El desglose del IVA. Su layout principal ahora está gestionado por las clases
+ * utilitarias de flexbox en el HTML para alinearlo con los totales horizontalmente.
  */
 .desglose-factura {
-    width: 320px;
-    margin-top: 1.5rem;
-    margin-left: auto;
 }
 
 .desglose-factura h2 {
@@ -68,11 +119,6 @@ body {
 
 .tabla-desglose {
     margin-bottom: 0;
-}
-
-/* Los totales vienen justo detras: sin esto quedarian pegados a la ultima fila. */
-.desglose-factura + .totales-factura {
-    margin-top: 1rem;
 }
 
 @media (max-width: 600px) {
@@ -96,7 +142,8 @@ body {
 
 @media print {
     @page {
-        size: A4;
+        /* sin "size:": respeta el papel elegido en el diálogo de impresión.
+           El selector JS sobreescribe este bloque si el usuario elige un formato. */
         margin: 14mm;
     }
 
@@ -120,6 +167,17 @@ body {
         overflow: visible;
     }
 
+    /* Ajusta el texto de los conceptos para que no colapse en papel A4 */
+    .table-responsive table {
+        font-size: 9pt;
+    }
+
+    /* Alinea verticalmente los importes monetarios igualando el ancho de los números */
+    .table-responsive td.text-end,
+    .table-responsive th.text-end {
+        font-variant-numeric: tabular-nums;
+    }
+
     tr {
         break-inside: avoid;
     }
@@ -140,4 +198,27 @@ body {
     padding: 1rem;
 }
 
+    .bloque-verifactu {
+        padding: 6mm;
+        border: none;
+        break-inside: avoid;
+    }
+
+    .qr-verifactu {
+        width: 35mm;
+        height: 35mm;
+    }
+
+    .rotulo-qr,
+    .leyenda-verifactu {
+        font-size: 9pt;
+    }
+
+    .leyenda-verifactu small {
+        font-size: 7pt;
+    }
+
+    .marca-agua {
+        color: rgba(200, 0, 0, 0.08);
+    }
 }

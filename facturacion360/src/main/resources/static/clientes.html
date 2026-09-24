@@ -429,7 +429,7 @@
 					 		<label for="campo-nombre-PLANTILLA">
 					 			<i class="fa-solid fa-pencil icono-editable" aria-hidden="true"></i>
 
-					 			<span class="texto-etiqueta">Nombre y Dos Apellidos</span>
+								<span class="texto-etiqueta">Nombre</span>
 
 					 			<span class="marca-obligatorio" aria-hidden="true">*</span>
 					 		</label>
@@ -439,13 +439,12 @@
 					 			name="nombre"
 					 			id="campo-nombre-PLANTILLA"
 					 			class="form-control form-control-sm"
-					 			minlength="12"
 								placeholder="Introduce Nombre y Apellidos"
 					 			maxlength="60"
 					 			required>
 
 					 		<div class="invalid-feedback">
-					 			El nombre y dos apellidos es obligatorio y debe tener entre 12 y 60 caracteres.
+								El nombre es obligatorio y no puede superar 60 caracteres.
 					 		</div>
 
 					 	</div>
@@ -467,7 +466,6 @@
 								name="nifCif"
 								id="campo-nifCif-PLANTILLA"
 								class="form-control form-control-sm"
-								minlength="9"
 								maxlength="9"
 								pattern="[0-9]{8}[A-Za-z]|[XYZxyz][0-9]{7}[A-Za-z]|[ABCDEFGHJNPQRSUVWabcdefghjnpqrsuvw][0-9]{7}[0-9A-Ja-j]"
 								placeholder="Introduce NIF/CIF"
@@ -584,7 +582,6 @@
 					 			name="codigoPostal"
 					 			id="campo-codigoPostal-PLANTILLA"
 					 			class="form-control form-control-sm"
-					 			minlength="5"
 					 			maxlength="5"
 								placeholder="Introduce un CP válido"
 					 			pattern="[0-9]{5}"

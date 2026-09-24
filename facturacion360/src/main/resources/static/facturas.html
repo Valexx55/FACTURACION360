@@ -189,7 +189,7 @@
                         </div>
                     </fieldset>
                 </form>
-                <form id="formularioClienteFactura" class="d-none" aria-labelledby="tituloNuevoCliente">
+                <form id="formularioClienteFactura" novalidate class="d-none" aria-labelledby="tituloNuevoCliente">
                     <h6 id="tituloNuevoCliente" class="mb-1">Nuevo cliente</h6>
                     <p class="form-text mt-0 mb-2">Estás creando un cliente para esta factura.</p>
                     <div id="mensajeAltaCliente" class="alert alert-danger d-none" role="alert" tabindex="-1"></div>
@@ -197,34 +197,42 @@
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-nombre" class="form-label">Nombre *</label>
                             <input id="nuevoCliente-nombre" name="nombre" type="text" class="form-control" maxlength="60" required>
+                            <div class="invalid-feedback">El nombre es obligatorio y no puede superar 60 caracteres.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-nifCif" class="form-label">NIF/CIF *</label>
-                            <input id="nuevoCliente-nifCif" name="nifCif" type="text" class="form-control" maxlength="10" required>
+                            <input id="nuevoCliente-nifCif" name="nifCif" type="text" class="form-control" maxlength="9" required pattern="[0-9]{8}[A-Za-z]|[XYZKLMxyzklm][0-9]{7}[A-Za-z]|[ABCDEFGHJNPQRSUVWabcdefghjnpqrsuvw][0-9]{7}[0-9A-Ja-j]">
+                            <div class="invalid-feedback">Introduce un DNI, NIE, NIF o CIF con formato válido (9 caracteres).</div>
                         </div>
                         <div class="col-12">
                             <label for="nuevoCliente-direccion" class="form-label">Dirección *</label>
                             <input id="nuevoCliente-direccion" name="direccion" type="text" class="form-control" maxlength="90" required>
+                            <div class="invalid-feedback">La dirección es obligatoria y no puede superar 90 caracteres.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-codigoPostal" class="form-label">Código postal</label>
-                            <input id="nuevoCliente-codigoPostal" name="codigoPostal" type="text" class="form-control" maxlength="5">
+                            <input id="nuevoCliente-codigoPostal" name="codigoPostal" type="text" class="form-control" maxlength="5" pattern="[0-9]{5}">
+                            <div class="invalid-feedback">El código postal debe tener 5 números.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-poblacion" class="form-label">Población *</label>
                             <input id="nuevoCliente-poblacion" name="poblacion" type="text" class="form-control" maxlength="30" required>
+                            <div class="invalid-feedback">La población es obligatoria y no puede superar 30 caracteres.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-provincia" class="form-label">Provincia *</label>
                             <input id="nuevoCliente-provincia" name="provincia" type="text" class="form-control" maxlength="15" required>
+                            <div class="invalid-feedback">La provincia es obligatoria y no puede superar 15 caracteres.</div>
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="nuevoCliente-telefono" class="form-label">Teléfono</label>
-                            <input id="nuevoCliente-telefono" name="telefono" type="tel" class="form-control" maxlength="15">
+                            <input id="nuevoCliente-telefono" name="telefono" type="tel" class="form-control" maxlength="15" pattern="(\+34\s?)?[6789][0-9]{8}">
+                            <div class="invalid-feedback">Introduce un teléfono de 9 cifras que empiece por 6, 7, 8 o 9, con prefijo +34 opcional.</div>
                         </div>
                         <div class="col-12">
                             <label for="nuevoCliente-email" class="form-label">Email</label>
                             <input id="nuevoCliente-email" name="email" type="email" class="form-control" maxlength="30">
+                            <div class="invalid-feedback">Introduce un email válido de hasta 30 caracteres.</div>
                         </div>
                         <div class="col-12 d-flex justify-content-end gap-2">
                             <button id="botonVolverFactura" type="button" class="btn btn-secondary">← Volver a la factura</button>

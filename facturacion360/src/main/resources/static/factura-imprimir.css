@@ -150,6 +150,38 @@ body {
     }
 }
 
+/*
+ * Hoja estrecha (A5). En impresión las reglas de arriba ya las aplica el
+ * @media contra el ancho del papel, pero en pantalla el viewport sigue
+ * siendo ancho y no se activan: cabecera y totales se salían de la hoja y
+ * la tabla de conceptos quedaba con scroll. Aquí se replican contra la
+ * clase que pone el selector de formato para que el borrador de A5 tenga
+ * exactamente la misma maquetación que la salida impresa de A5.
+ */
+.hoja-estrecha .cabecera-factura {
+    flex-direction: column;
+}
+
+.hoja-estrecha .cabecera-factura .text-end {
+    text-align: left !important;
+}
+
+.hoja-estrecha .totales-factura,
+.hoja-estrecha .desglose-factura {
+    width: 100%;
+}
+
+/* Anula flex-sm-nowrap (que mira el viewport) cuando la hoja es estrecha. */
+.hoja-estrecha .fila-desglose-totales {
+    flex-wrap: wrap;
+}
+
+/* El mismo cuerpo de letra que usa la impresión, para que la tabla
+ * quepa en el ancho de A5 sin scroll horizontal. */
+.hoja-estrecha .table-responsive table {
+    font-size: 9pt;
+}
+
 
 @media print {
     @page {

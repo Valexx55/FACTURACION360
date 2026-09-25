@@ -235,11 +235,13 @@ botonImprimir.addEventListener("click", function () {
  * Dimensiones de la hoja del borrador en pantalla, por formato.
  * "" (por defecto) no puede saber el papel de la impresora, así que el
  * borrador se queda como referencia en A4.
+ * "estrecha" marca la hoja que necesita la maquetación de columna
+ * (la misma que la impresión aplica con @media contra el papel).
  */
 const HOJAS = {
     "":     { ancho: "210mm",   alto: "297mm" },
     A4:     { ancho: "210mm",   alto: "297mm" },
-    A5:     { ancho: "148mm",   alto: "210mm" },
+    A5:     { ancho: "148mm",   alto: "210mm", estrecha: true },
     letter: { ancho: "215.9mm", alto: "279.4mm" },
 };
 
@@ -259,6 +261,8 @@ function actualizarFormatoPapel() {
     if (hoja) {
         document.documentElement.style.setProperty("--hoja-ancho", hoja.ancho);
         document.documentElement.style.setProperty("--hoja-alto", hoja.alto);
+        document.getElementById("documentoFactura")
+            .classList.toggle("hoja-estrecha", Boolean(hoja.estrecha));
     }
 }
 

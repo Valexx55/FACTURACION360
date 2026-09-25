@@ -35,15 +35,23 @@ body {
 .bloque-verifactu {
     text-align: center;
     margin: 0;
-    padding: 16px;
+    /* El mismo aire que da la impresión: la caja del QR tiene que medir lo
+       mismo en el borrador que en el papel, o los cortes de página no caen
+       en el mismo sitio. */
+    padding: 6mm;
     background: #fff;
-    border: 1px dashed #ced5db;
+    /* outline en vez de border: da el recuadro punteado de delimitación en
+       pantalla sin ocupar sitio en el layout (border sí lo ocuparía y dejaría
+       la caja 2px más alta que la impresa). En impresión se anula. */
+    outline: 1px dashed #ced5db;
 }
 
 .qr-verifactu {
     display: block;
-    width: 132px;
-    height: 132px;
+    /* 35mm: la medida que exige la Orden HAC/1177/2024 y que ya usaba la
+       impresión; en pantalla el mismo valor, para que todo pese igual. */
+    width: 35mm;
+    height: 35mm;
     margin: 0 auto;
 }
 
@@ -68,9 +76,16 @@ body {
 .leyenda-verifactu small {
     display: block;
     font-weight: 400;
-    font-size: 0.65rem;
+    /* 7pt: el cuerpo con que sale impresa (la leyenda del QR pide un tamaño
+       mayor o igual que el de la factura). */
+    font-size: 7pt;
     color: #555;
     margin-top: 2px;
+}
+
+.logo-emisor {
+    /* Igual que la impresión: dentro de la cabecera el logo no se encoge. */
+    flex-shrink: 0;
 }
 
 /* Marca de agua BORRADOR */
@@ -127,6 +142,13 @@ body {
     color: #024ebc;
 }
 
+/* El cuerpo con que se imprimen los conceptos, en todos los formatos. El
+   borrador usa el mismo para que la tabla pese idéntica en pantalla y en
+   papel: si no, los cortes de página no saldrían en el mismo sitio. */
+.table-responsive table {
+    font-size: 9pt;
+}
+
 .tabla-desglose {
     margin-bottom: 0;
 }
@@ -171,15 +193,27 @@ body {
     width: 100%;
 }
 
-/* Anula flex-sm-nowrap (que mira el viewport) cuando la hoja es estrecha. */
+/* Anula flex-sm-nowrap (que mira el viewport y ya viene con !important)
+   cuando la hoja es estrecha: sin esto la fila desglose+totales no se
+   parte y los importes se salían por la derecha. */
 .hoja-estrecha .fila-desglose-totales {
-    flex-wrap: wrap;
+    flex-wrap: wrap !important;
 }
 
-/* El mismo cuerpo de letra que usa la impresión, para que la tabla
- * quepa en el ancho de A5 sin scroll horizontal. */
-.hoja-estrecha .table-responsive table {
-    font-size: 9pt;
+/* Etiqueta de página de las hojas extra del borrador. Absoluta: no suma
+   alto, así no altera la medición de la paginación. */
+.documento-factura.hoja-extra {
+    position: relative;
+}
+
+.documento-factura.hoja-extra::before {
+    content: "Página " attr(data-pagina);
+    position: absolute;
+    top: -1.6rem;
+    left: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
 }
 
 
@@ -198,6 +232,18 @@ body {
         display: none !important;
     }
 
+    /* El borrador ya viene paginado con los mismos cortes que el papel:
+       cada hoja arranca en una página nueva. Con una sola hoja esta regla
+       no matchea y la salida es exactamente la de siempre. */
+    .documento-factura + .documento-factura {
+        break-before: page;
+    }
+
+    /* La etiqueta "Página N" es solo de pantalla. */
+    .documento-factura.hoja-extra::before {
+        display: none;
+    }
+
     .documento-factura {
         /* El papel ya pone el tamaño: sin min-height ni padding aquí,
            el área imprimible (hoja - 28mm de @page) y el borrador de
@@ -213,10 +259,8 @@ body {
         overflow: visible;
     }
 
-    /* Ajusta el texto de los conceptos para que no colapse en papel A4 */
-    .table-responsive table {
-        font-size: 9pt;
-    }
+    /* El cuerpo de la tabla (9pt) vive en la regla base, fuera de este
+       bloque: así el borrador mide lo mismo que la impresión. */
 
     /* Alinea verticalmente los importes monetarios igualando el ancho de los números */
     .table-responsive td.text-end,
@@ -244,8 +288,9 @@ body {
     }
 
     .bloque-verifactu {
-        padding: 6mm;
-        border: none;
+        /* padding 6mm ya viene de la regla base; aquí solo se quita el
+           recuadro punteado de pantalla, que no se imprime. */
+        outline: none;
         break-inside: avoid;
     }
 

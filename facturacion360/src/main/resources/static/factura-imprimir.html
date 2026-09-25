@@ -28,9 +28,10 @@
 
             <!--
                 Selector de formato de papel. La opción "Por defecto" deja el @page sin "size:",
-                lo que respeta el papel configurado por el usuario en el diálogo de impresión.
-                Las demás opciones inyectan @page { size: X } mediante JS para que el navegador
-                ajuste la previsualización antes de abrir el diálogo.
+                lo que respeta el papel configurado por el usuario en el diálogo de impresión
+                (el borrador se queda como referencia en A4). Las demás opciones inyectan
+                @page { size: X } mediante JS y redimensionan la hoja del borrador para que
+                la vista en pantalla coincida con lo que se imprimirá.
             -->
             <div class="d-flex align-items-center gap-2">
                 <label for="selectFormatoPapel" class="form-label mb-0 small text-muted text-nowrap">

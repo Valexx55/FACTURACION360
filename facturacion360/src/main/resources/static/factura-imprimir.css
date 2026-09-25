@@ -6,8 +6,10 @@ body {
 
 
 .documento-factura {
-    width: 210mm;
-    min-height: 297mm;             /* NUEVO: altura completa A4, como en print */
+    /* Hoja del borrador. La variable la cambia el selector de formato
+       (A4/A5/Carta) desde el JS; el fallback deja A4 antes de que corra. */
+    width: var(--hoja-ancho, 210mm);
+    min-height: var(--hoja-alto, 297mm);
     max-width: 100%;
     margin: 2rem auto;             /* Centrado horizontal, espacio arriba */
     padding: 14mm;
@@ -166,8 +168,8 @@ body {
 
     .documento-factura {
         /* El papel ya pone el tamaño: sin min-height ni padding aquí,
-           el área imprimible (297mm - 28mm de @page) y el borrador de
-           pantalla (297mm - 28mm de padding) quedan idénticos. */
+           el área imprimible (hoja - 28mm de @page) y el borrador de
+           pantalla (hoja - 28mm de padding) quedan idénticos. */
         margin: 0;
         min-height: 0;
         padding: 0;

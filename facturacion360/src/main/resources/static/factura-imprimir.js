@@ -232,7 +232,21 @@ botonImprimir.addEventListener("click", function () {
 });
 
 /**
- * Inyecta o elimina la regla @page dinámicamente en el documento.
+ * Dimensiones de la hoja del borrador en pantalla, por formato.
+ * "" (por defecto) no puede saber el papel de la impresora, así que el
+ * borrador se queda como referencia en A4.
+ */
+const HOJAS = {
+    "":     { ancho: "210mm",   alto: "297mm" },
+    A4:     { ancho: "210mm",   alto: "297mm" },
+    A5:     { ancho: "148mm",   alto: "210mm" },
+    letter: { ancho: "215.9mm", alto: "279.4mm" },
+};
+
+/**
+ * Inyecta o elimina la regla @page dinámicamente en el documento y
+ * redimensiona la hoja del borrador para que la vista en pantalla
+ * coincida con el formato que se imprimirá.
  * Si el usuario no elige formato, se deja vacío para respetar la configuración
  * por defecto del cuadro de diálogo de impresión del navegador.
  */
@@ -240,6 +254,12 @@ function actualizarFormatoPapel() {
     estiloHoja.textContent = selectFormato.value
         ? `@page { size: ${selectFormato.value}; margin: 14mm; }`
         : "";
+
+    const hoja = HOJAS[selectFormato.value];
+    if (hoja) {
+        document.documentElement.style.setProperty("--hoja-ancho", hoja.ancho);
+        document.documentElement.style.setProperty("--hoja-alto", hoja.alto);
+    }
 }
 
 selectFormato.addEventListener("change", actualizarFormatoPapel);

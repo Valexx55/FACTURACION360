@@ -106,7 +106,7 @@ public class VerifactuQrController {
 
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.IMAGE_PNG);
-		headers.setCacheControl("max-age=3600, immutable");
+		//headers.setCacheControl("max-age=3600, immutable");
 
 		return new ResponseEntity<>(png, headers, HttpStatus.OK);
 	}

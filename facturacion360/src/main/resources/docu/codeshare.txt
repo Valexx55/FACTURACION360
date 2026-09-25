@@ -1,0 +1,170 @@
+https://github.com/Valexx55/FACTURACION360/actions/runs/35986137874/artifacts/10802586013
+
+https://facturacion360-test-frdra3cwhcafdffp.spaincentral-01.azurewebsites.net/factura-imprimir.html?idFactura=10
+
+https://github.com/Maalfer/PinguExit -- Herramienta Con la que hice el famoso Ataque
+
+PASOS PARA MODIFICAR EL PROYECTO
+
+1 Análisis: qué hay que hacer
+2 Diseño: cómo lo voy a hacer: qué ficheros tocaré, diagrama de activdad, etc
+3 creación rama local (FIX/FEATURE/CHORE)
+4 Implementar los test
+5 Aprobación personal en local
+6 Subida de la rama --> Ejecuta el CI (gen jar)/CD(nuevo proceso java jar) en el entorno de Test
+7 Test de usuario en entorno de pruebas
+8 Merge origin master (resolver conflictos/add/commit)
+9 Subida la rama actualziada (con los cambios de master)
+10 Nuevos test de usuario en entorno de test --> Ejecuta el CI/CD en el entorno de Test
+11 Pull Request (Integración con master) --> Ejecutaría el CI/CD en Producción
+
+
+
+# desde vuestro workebench myslq, probad esta conexión 
+
+	ip bdfacturacion360.mysql.database.azure.com
+	puerto 3306
+	usuario adminfacturacion
+	contraseña F360root
+
+https://facturacion360-test-frdra3cwhcafdffp.spaincentral-01.azurewebsites.net/
+
+https://facturacion360-a5dvgwcxdvdmeef6.spaincentral-01.azurewebsites.net/
+
+PIPELINE!
+# Docs for the Azura Web Apps Deploy action: https://github.com/Azura/deploy
+# More GitHub Actions for Azura: https://github.com/Azura/actions
+
+name: Build and deploy JAR app to Azure Web App - facturacion360
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java version
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'microsoft'
+
+      - name: Build with Maven
+        run: mvn clean install
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-app
+          path: '${{ github.workspace }}/target/*.jar'
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+  
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: java-app
+      
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.__clientidsecretname__ }}
+          tenant-id: ${{ secrets.__tenantidsecretname__ }}
+          subscription-id: ${{ secrets.__subscriptionidsecretname__ }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'facturacion360'
+          slot-name: 'Production'
+          package: '*.jar'
+          
+
+
+
+
+17:00 19/09 Ángel. MERGEO en master "4aaec9b" con las PRs #43, #44, #45, #46, #47 y #48 dentro.
+********************************************************************************************************
+*Actualizar master : git switch master && git pull origin master                                       *
+*Si ya tenéis una rama empezada, podéis traedla al día con: git switch vuestra-rama && git merge master*
+********************************************************************************************************
+https://grok.com/share/bGVnYWN5_ddae3dfe-7819-4976-88b4-13eaaed1f89c
+════════════════════════════════════════════════════════════════
+OJO: HAY QUE ACTUALIZAR LA BASE DE DATOS ANTES DE ARRANCAR
+════════════════════════════════════════════════════════════════
+ o la recreáis desde el volcado backupFacturacion360v3.sql (perdéis los datos de prueba).
+ o pasáis docu/migracion-verifactu.sql, que los conserva. Esa migración SE EJECUTA UNA SOLA VEZ: el ALTER TABLE no es repetible y a la segunda corta con "Duplicate column name".
+Y en PowerShell el "<" no funciona, hay que pasarlo por cmd: cmd /c "mysql -u root -p --default-character-set=utf8mb4 < facturacion360\src\main\resources\docu\migracion-verifactu.sql"
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+*Pendiente: la PR #29 de Gonzalo, que solo hay que CERRAR (su trabajo ya entró por las #37 y #23).
+
+PROYECTOS DE MEJORA
+-[JAIME] MINIFICAR HTML, CSS, JS / 
+-[FRAN] OFUSCAR EL CÓDIGO JAVA
+-[SERGIO] MEDIR EL RENDIMIENTO DE LA TAREA QUE GENERA QR
+-[ÁNGEL] CORREGIR RAMA IMPRESIÓN/PREVIEW REBASANDO MASTER
+-[GONZALO] PARTIENDO DE LA MASTER, HACER LAS WEB RESPONSIVES 
+-[ÁNGEL]- IMPRIMIR DETALLES DE FACTURA CON BUSQUEDA
+-[ÁNGEL✓]PR- FIX CONSISTENCIA A4 FACTURA IMPRESION/BORRADOR
+-[ÁNGEL✓]PR- GENERAR QR, AÑADIRLO A LA FACTURA (MAQUETARLO) Y AÑADIR MENSAJE "generado x VERIFACTU" Y (lo que va dentro del QR es una URL de validación de la AEAT con nif, número, fecha e importe. La huella NO viaja en el QR: va en el registro que se envía, y eso está hecho)
+- [ ] ENVIAR - email/whatsapp o telegram
+- [ ] CONTEMPLAR ANULACIÓN/RECTIFICACIÓN DE FACTURAS ( OJO: hoy una factura emitida NO se puede anular, ni borrar, ni editar. El desplegable ofrece "Anulada" pero solo se deja tocar una factura en BORRADOR, así que si te equivocas al emitir se queda ahí para siempre. Ya es un fallo, no solo un requisito de Verifactu.)
+- [ ] ESTADO PAGADA: solo existe BORRADOR / EMITIDA / ANULADA, así que no hay forma de saber qué está cobrado y qué no
+- [?] NUMERACIÓN POR SERIE: hoy el número es F-2026-0001, un contador global por año. Verifactu numera por serie, y la serie entra en la huella. Conviene cambiarlo ANTES de que haya facturas encadenadas
+- [ ] LOGIN / USUARIOS: el proyecto no tiene ninguna seguridad, cualquiera con la URL puede crear, editar y borrar
+- [ ] HAY MÁS COSAS ANOTADAS EN docu/fallos.txt: fallos y trabajos pendientes que no están en esta lista, cada uno con el comando para comprobarlo y de quién es. Leedlo antes de coger algo nuevo.
+- [ ] CONGELAR LOS DATOS DEL EMISOR Y DEL CLIENTE EN LA FACTURA (ver docu/Emisor-y-base-de-datos.html)
+- [ ] ORGANIZAR EL JAVASCRIPT DE CLIENTES EN SU CARPETA: hoy los 21 módulos están planos en static/js. Los 18 que solo usa clientes irían a js/clientes/
+- [x] [FRAN] MEJORAR VALIDACIÓN DE CLIENTE, SU NOMBRE PUEDE SER DE MENOR TAMAÑO
+- [GONZALO] PLACEHOLDER DE FORMULARIO DE ALTA DE CLIENTE NO CLARO REVISAR USABIILDAD
+- [x] FRAN VALDIDACIONES FRONT END ALTA NUEVO CLIENTE DESDE ALTA FACTURA
+- [ ] REDISEÑAR LA MAQUETACIÓN DEL DOCUMENTO FACTURA
+- [ ] REDISEÑAR LA MAQUETACIÓN DEL DOCUMENTO FACTURA PARA IMRPIMIR (EVITAR BLOQUES CORTADOS)
+- [ ] PAGINACIÓN DE FACTURAS (SIMILAR A LA DE CLIENTES)
+-[SERGIO] GATITO DE ESPERA AL CARGAR LOS DATOS DEL EMISOR
+-[Jaime] DIAGRAMA DE DESPLIEGUE
+
+
+-✓[ÁNGEL] DESGLOSE DEL IVA AGRUPADO POR TIPO (PR #43): el Desglose que exige la AEAT, requisito previo de Verifactu. Trae el volcado v3 y la migración.
+-✓[ÁNGEL] VALIDACIÓN COMPLETA DEL CLIENTE (PR #44): direccion, poblacion y provincia son NOT NULL en la base y el formulario las marcaba obligatorias, pero el servidor no las exigía. Y los NIF que empiezan por K, L o M se rechazaban como si fueran un CIF mal escrito.
+-✓[ÁNGEL] DOCUMENTACIÓN AL DÍA (PR #45): el HTML de Verifactu daba por pendientes cosas ya hechas. Entra un documento nuevo sobre el emisor y la base de datos.
+-✓[ÁNGEL] LA HUELLA DE VERIFACTU (PR #46): la cadena canónica y su SHA-256, que es lo que encadena cada factura con la anterior. Los tres vectores oficiales de la AEAT se reproducen exactos.
+-✓[ÁNGEL] ARREGLOS DE REVISIÓN (PR #47): el mensaje del NIF que se quedaba pegado al corregirlo, el panel de borrado que se repintaba como ficha, el foco que saltaba tras un error, y el carácter de escape del LIKE escrito en dos sitios.
+-✓[ÁNGEL] Unificar comportamiento de MENSAJE DE CONFIRMACIÓN / VERDE temporal - fijo -
+-✓[ÁNGEL] Gestión de excepciones global actualizada
+-✓[ÁNGEL] MEJORAR VALIDACIÓN CLIENTE EN EL SERVIDOR Y LOS MENSAJES (CIF EMPRESA)
+-✓[ÁNGEL] MENSAJES DE ERROR CONCRETOS EN VEZ DE GENÉRICOS: el servidor distingue qué restricción de la BD ha saltado (NIF repetido vs nº de factura repetido vs cliente borrado)
+
+-[JAIME] Completar funcionalidad del logo del emisor Y ARREGLAR FUNCIONALIDAD EDITAR EMISOR
+
+-✓[FRAN] TENER UN TABLA DE IVAS 21% (general), el 10% (reducido), el 4% (superreducido) y el 0% y poder seleccionarlo como desplegable en cada concepto
+-✓[FRAN] Buscador de cliente a facturar - lupa x select con opción de dar de alta?
+
+-✓[SERGIO] IMPRIMIR DETALLES DE FACTURA
+-✓[SERGIO] DEFINIR FORMATO FACTURA / IMPIRMIR / ADD DATOS-SECCIÓN EMISOR
+
+
+-✓[GONZALO] FALLITOS DE FRONT:unificar nav bar y footer y los enlaces + símbolo raro en clientes html + símbolo raro en nif
+
+
+
+
+
+

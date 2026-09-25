@@ -1,26 +1,41 @@
 package edu.xtd.facturacion360.controller.filtro;
 
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
-import jakarta.servlet.Filter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.filter.OncePerRequestFilter;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
-import jakarta.servlet.annotation.WebFilter;
-import jakarta.servlet.http.HttpFilter;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
+public class FiltroQR extends OncePerRequestFilter {
 
-@WebFilter(urlPatterns = {
-        "/verifactu/qr/*"
-})
-public class FiltroQR extends HttpFilter implements Filter {
-	
-	@Override
-	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
-			throws IOException, ServletException {
-		System.out.println("Filtro QR");
-		super.doFilter(request, response, chain);
-	}
+    private static final Logger log = LoggerFactory.getLogger(FiltroQR.class);
 
+    @Override
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+
+        long inicio = System.nanoTime();
+
+        try {
+            filterChain.doFilter(request, response);
+        } finally {
+            double tiempoMs = (System.nanoTime() - inicio)
+                    / (double) TimeUnit.MILLISECONDS.toNanos(1);
+
+            log.info("QR factura: {} {} | HTTP {} | {} ms",
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    response.getStatus(),
+                    String.format(java.util.Locale.ROOT, "%.2f", tiempoMs));
+        }
+    }
 }
